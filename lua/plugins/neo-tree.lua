@@ -9,6 +9,19 @@ return {
       "antosha417/nvim-lsp-file-operations",
       "folke/snacks.nvim"
     },
+    config = function ()
+	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorador" })
+	require("neo-tree").setup {
+	    filesystem = {
+		filtered_items = {
+		    visible = true,
+		    hide_dotfiles = false,
+		    hide_gitignored = false
+		}
+	    }
+	}
+
+    end
   },
   {
     "Crysthamus/nvim-file-operations",
@@ -28,11 +41,8 @@ return {
         filter_rules = {
           include_current_win = false,
           autoselect_one = true,
-          -- filter using buffer options
           bo = {
-            -- if the file type is one of following, the window will be ignored
             filetype = { "neo-tree", "neo-tree-popup", "notify" },
-            -- if the buffer type is one of following, the window will be ignored
             buftype = { "terminal", "quickfix" },
           },
         },
