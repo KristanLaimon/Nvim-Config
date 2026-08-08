@@ -13,7 +13,7 @@ vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard"
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Ir a la ventana izquierda" })
 vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Ir a la ventana derecha" })
 vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Ir a la ventana de abajo" })
--- vim.keymap.set("n", "<C-k>", "<C-w>k", { desc = "Go to upper window" })
+vim.keymap.set("n", "<C-S-k>", "<C-w>k", { desc = "Ir a la ventana de arriba" })
 
 -- Errors
 vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Ver info del error" })
@@ -120,6 +120,21 @@ local function Configure_Terminal_Toggle()
 		desc = "Toggle Terminal",
 	})
 
+	vim.keymap.set("n", "<C-;>", ToggleTerminal, {
+		noremap = true,
+		silent = true,
+		desc = "Toggle Terminal",
+	})
+
+	vim.keymap.set("t", "<C-;>", function()
+		vim.cmd("stopinsert")
+		ToggleTerminal()
+	end, {
+		noremap = true,
+		silent = true,
+		desc = "Toggle Terminal",
+	})
+
 	-- Make Ctrl+W work naturally inside terminal mode
 	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], {
 		noremap = true,
@@ -140,6 +155,12 @@ local function Configure_Terminal_Toggle()
 end
 Configure_Terminal_Toggle()
 
+-- Ctrl+W closes current buffer (VSCode style tab close).
+-- Dashboard.lua's autocmd shows the menu instead of quitting when
+-- this closes the last listed buffer.
+vim.keymap.set("n", "<C-w>", "<Cmd>bdelete<CR>", { noremap = true, silent = true, desc = "Cerrar buffer actual" })
+
 -- =========== Plugin Specifics =================
 -- Neo-tree
 -- Open/Close (Sidebar)
+vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorador" })

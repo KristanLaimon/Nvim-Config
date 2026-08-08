@@ -1,5 +1,9 @@
 local function enable_transparency()
-    vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
+    if vim.g.neovide then
+        return
+    end
+    vim.api.nvim_set_hl(0, "Normal", { bg = "#1b1b1d" })
+    vim.api.nvim_set_hl(0, "NormalNC", { bg = "#1b1b1d" })
 end
 
 return {
