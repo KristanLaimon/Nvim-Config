@@ -15,4 +15,3 @@ vim.api.nvim_create_user_command("ReloadConfig", function()
 	dofile(vim.env.MYVIMRC)
 	vim.notify("Config reloaded", vim.log.levels.INFO)
 end, {})
-

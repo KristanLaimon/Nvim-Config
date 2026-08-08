@@ -8,9 +8,29 @@ vim.keymap.set("v", "<C-_>", "gc", { remap = true, desc = "Comment selection" })
 
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
---
--- QOL Features
-vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
+-- QOL Features & Clipboard (Ctrl+C = Copiar, Ctrl+V = Pegar del sistema)
+vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copiar al portapapeles" })
+vim.keymap.set(
+	{ "n", "v" },
+	"<C-v>",
+	'"+p',
+	{ noremap = true, silent = true, desc = "Pegar del portapapeles del sistema" }
+)
+vim.keymap.set(
+	{ "i", "c" },
+	"<C-v>",
+	"<C-r>+",
+	{ noremap = true, silent = true, desc = "Pegar del portapapeles del sistema" }
+)
+-- Undo / Redo (Ctrl+Z = Deshacer, Ctrl+Y / Ctrl+Shift+Z = Rehacer)
+vim.keymap.set("n", "<C-z>", "u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
+vim.keymap.set("v", "<C-z>", "<Esc>u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
+vim.keymap.set("i", "<C-z>", "<C-o>u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
+
+vim.keymap.set("n", "<C-y>", "<C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
+vim.keymap.set("n", "<C-S-z>", "<C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
+vim.keymap.set("i", "<C-y>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
+vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
 
 -- Movements across panels & split windows
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
@@ -30,20 +50,187 @@ local function trigger_signature_help()
 	end
 end
 
-vim.keymap.set({ "n", "i", "v" }, "<C-j>", trigger_signature_help, { noremap = true, silent = true, desc = "Show parameter signature help" })
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<C-j>",
+	trigger_signature_help,
+	{ noremap = true, silent = true, desc = "Show parameter signature help" }
+)
 
 -- Errors / Diagnostics
-vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagnostic info" })
-vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
-vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_prev, { desc = "Next diagnostic" })
+local function show_diagnostic_float()
+	vim.diagnostic.open_float({ border = "rounded", scope = "cursor", focusable = true })
+end
 
--- Go to Definition with Alt+k (and jump back with Ctrl+o)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<A-k>",
+	show_diagnostic_float,
+	{ noremap = true, silent = true, desc = "Show detailed diagnostic info" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<M-k>",
+	show_diagnostic_float,
+	{ noremap = true, silent = true, desc = "Show detailed diagnostic info" }
+)
+vim.keymap.set("n", "<leader>k", show_diagnostic_float, { desc = "Show diagnostic info" })
+vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
+vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_next, { desc = "Next diagnostic" })
+
+-- VSCode Quick Fix / Suggestions with Ctrl + . (Mini Dropdown at Caret position)
+local function cursor_ui_select(items, opts, on_choice)
+	opts = opts or {}
+	local prompt = opts.prompt or "Acciones de Código Disponibles:"
+	prompt = prompt:gsub("^%s*", ""):gsub("%s*$", "")
+
+	local formatted_items = {}
+	for i, item in ipairs(items) do
+		local text = opts.format_item and opts.format_item(item) or tostring(item)
+		table.insert(formatted_items, string.format("%d. %s", i, text))
+	end
+
+	if #formatted_items == 0 then
+		vim.notify("No hay sugerencias de código disponibles aquí", vim.log.levels.INFO, { title = "LSP Code Actions" })
+		return
+	end
+
+	local max_width = #prompt + 6
+	for _, str in ipairs(formatted_items) do
+		if #str > max_width then
+			max_width = #str
+		end
+	end
+	max_width = math.min(math.max(max_width + 4, 40), 85)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	local lines = { " 💡 " .. prompt, string.rep("─", max_width - 2) }
+	for _, item_str in ipairs(formatted_items) do
+		table.insert(lines, "  " .. item_str)
+	end
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+	-- Crear ventana flotante anclada AL CURSOR (caret position)
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "cursor",
+		row = 1,
+		col = 0,
+		width = max_width,
+		height = #lines,
+		style = "minimal",
+		border = "rounded",
+	})
+
+	pcall(vim.api.nvim_set_option_value, "cursorline", true, { win = win })
+
+	local selected_idx = 1
+	local function set_cursor_pos(idx)
+		selected_idx = math.max(1, math.min(#formatted_items, idx))
+		pcall(vim.api.nvim_win_set_cursor, win, { selected_idx + 2, 2 })
+	end
+	set_cursor_pos(1)
+
+	local function close_win()
+		if vim.api.nvim_win_is_valid(win) then
+			pcall(vim.api.nvim_win_close, win, true)
+		end
+	end
+
+	local function confirm_choice()
+		close_win()
+		if on_choice and items[selected_idx] then
+			on_choice(items[selected_idx], selected_idx)
+		end
+	end
+
+	local keymap_opts = { buffer = buf, noremap = true, silent = true }
+	vim.keymap.set("n", "<CR>", confirm_choice, keymap_opts)
+	vim.keymap.set("n", "j", function()
+		set_cursor_pos(selected_idx + 1)
+	end, keymap_opts)
+	vim.keymap.set("n", "k", function()
+		set_cursor_pos(selected_idx - 1)
+	end, keymap_opts)
+	vim.keymap.set("n", "<Down>", function()
+		set_cursor_pos(selected_idx + 1)
+	end, keymap_opts)
+	vim.keymap.set("n", "<Up>", function()
+		set_cursor_pos(selected_idx - 1)
+	end, keymap_opts)
+	vim.keymap.set("n", "<Esc>", function()
+		close_win()
+		if on_choice then
+			on_choice(nil, nil)
+		end
+	end, keymap_opts)
+	vim.keymap.set("n", "q", function()
+		close_win()
+		if on_choice then
+			on_choice(nil, nil)
+		end
+	end, keymap_opts)
+
+	for i = 1, math.min(9, #formatted_items) do
+		vim.keymap.set("n", tostring(i), function()
+			selected_idx = i
+			confirm_choice()
+		end, keymap_opts)
+	end
+end
+
+local function vscode_quick_fix()
+	local get_cls = vim.lsp.get_clients or vim.lsp.get_active_clients
+	local clients = get_cls({ bufnr = 0 })
+	if not clients or #clients == 0 then
+		vim.notify(
+			"No hay ningún servidor LSP activo para este archivo",
+			vim.log.levels.WARN,
+			{ title = "LSP Code Actions" }
+		)
+		return
+	end
+
+	local orig_select = vim.ui.select
+	vim.ui.select = function(items, opts, on_choice)
+		vim.ui.select = orig_select
+		if not items or #items == 0 then
+			vim.notify(
+				"No hay sugerencias ni acciones de código disponibles aquí",
+				vim.log.levels.INFO,
+				{ title = "LSP Code Actions" }
+			)
+			return
+		end
+		cursor_ui_select(items, opts, on_choice)
+	end
+
+	pcall(vim.lsp.buf.code_action)
+end
+
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<C-.>",
+	vscode_quick_fix,
+	{ noremap = true, silent = true, desc = "Quick Fix / Code Actions (Dropdown at Caret)" }
+)
+
+-- Go to Definition with Alt+j (and jump back with Ctrl+o)
+-- Shows Telescope definitions list if multiple matches exist with live preview (navigable with j/k)
 local function goto_definition()
 	vim.cmd("normal! m'")
 	local get_cls = vim.lsp.get_clients or vim.lsp.get_active_clients
 	local clients = get_cls({ bufnr = 0 })
 	if clients and #clients > 0 then
-		vim.lsp.buf.definition()
+		local has_telescope, builtin = pcall(require, "telescope.builtin")
+		if has_telescope then
+			builtin.lsp_definitions({
+				jump_type = "never",
+				reuse_win = true,
+				show_line = true,
+			})
+		else
+			vim.lsp.buf.definition()
+		end
 	else
 		local ok = pcall(function()
 			vim.cmd("normal! \x1d")
@@ -54,261 +241,85 @@ local function goto_definition()
 	end
 end
 
-vim.keymap.set({ "n", "i", "v" }, "<A-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
-vim.keymap.set({ "n", "i", "v" }, "<M-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
-vim.keymap.set({ "n", "i", "v" }, "<C-S-d>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<A-j>",
+	goto_definition,
+	{ noremap = true, silent = true, desc = "Go to definition" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<M-j>",
+	goto_definition,
+	{ noremap = true, silent = true, desc = "Go to definition" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<C-S-d>",
+	goto_definition,
+	{ noremap = true, silent = true, desc = "Go to definition" }
+)
 
 -- Debugging (DAP) Keybindings
 local function dap_toggle_breakpoint()
 	local ok, dap = pcall(require, "dap")
-	if ok then dap.toggle_breakpoint() end
+	if ok then
+		dap.toggle_breakpoint()
+	end
 end
 local function dap_continue()
 	local ok, dap = pcall(require, "dap")
-	if ok then dap.continue() end
+	if ok then
+		dap.continue()
+	end
 end
 local function dap_terminate()
 	local ok, dap = pcall(require, "dap")
 	if ok then
 		dap.terminate()
-		pcall(function() require("dapui").close() end)
+		pcall(function()
+			require("dapui").close()
+		end)
 	end
 end
 
-vim.keymap.set({ "n", "i", "v" }, "<A-j>", dap_toggle_breakpoint, { noremap = true, silent = true, desc = "Toggle Breakpoint" })
-vim.keymap.set({ "n", "i", "v" }, "<M-j>", dap_toggle_breakpoint, { noremap = true, silent = true, desc = "Toggle Breakpoint" })
-vim.keymap.set({ "n", "i", "v" }, "<C-S-s>", dap_continue, { noremap = true, silent = true, desc = "Start/Continue Debugging" })
-vim.keymap.set({ "n", "i", "v" }, "<C-S-x>", dap_terminate, { noremap = true, silent = true, desc = "Terminate Debugger" })
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<A-b>",
+	dap_toggle_breakpoint,
+	{ noremap = true, silent = true, desc = "Toggle Breakpoint" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<M-b>",
+	dap_toggle_breakpoint,
+	{ noremap = true, silent = true, desc = "Toggle Breakpoint" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<C-S-s>",
+	dap_continue,
+	{ noremap = true, silent = true, desc = "Start/Continue Debugging" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<C-S-x>",
+	dap_terminate,
+	{ noremap = true, silent = true, desc = "Terminate Debugger" }
+)
 
 -- Per-Project Task Manager & Code Runner (Ctrl + Shift + A)
 vim.keymap.set({ "n", "i", "v" }, "<C-S-a>", function()
-	require("config.tasks").run_default_or_menu()
+	require("config.krs.tasks").run_default_or_menu()
 end, { noremap = true, silent = true, desc = "Run Default Project Task" })
 
 vim.keymap.set("n", "<leader>ta", function()
-	require("config.tasks").open_task_menu()
+	require("config.krs.tasks").open_task_menu()
 end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
 
 vim.keymap.set({ "n", "v" }, "<leader>f", function()
 	require("conform").format({ async = true, lsp_fallback = true })
 end, { desc = "Format file or range" })
-
-local function Configure_Terminal_Toggle()
-	-- ============================================================
-	-- Toggle Terminal (multiple, indexed 1-9, <leader>t == 1)
-	-- ============================================================
-	local terminals = {} -- [n] = { buf = ..., win = ... }
-	local code_win = nil
-
-	local function is_valid_win(win)
-		return win and vim.api.nvim_win_is_valid(win)
-	end
-
-	local function is_valid_buf(buf)
-		return buf and vim.api.nvim_buf_is_valid(buf)
-	end
-
-	local function get_term(n)
-		local t = terminals[n]
-		if not t then
-			t = { buf = nil, win = nil }
-			terminals[n] = t
-		end
-		return t
-	end
-
-	-- Force-close a window even if it's the last one in the tab (kills the job instead of erroring)
-	local function ForceCloseWin(win)
-		win = win or vim.api.nvim_get_current_win()
-		if #vim.api.nvim_tabpage_list_wins(0) > 1 then
-			pcall(vim.api.nvim_win_close, win, true)
-		else
-			pcall(vim.api.nvim_buf_delete, vim.api.nvim_win_get_buf(win), { force = true })
-		end
-	end
-
-	function ToggleTerminal(n)
-		n = n or 1
-		local t = get_term(n)
-
-		-- Window may have been closed
-		if t.win and not is_valid_win(t.win) then
-			t.win = nil
-		end
-
-		local current = vim.api.nvim_get_current_win()
-
-		------------------------------------------------------------------
-		-- Currently in this terminal -> return to editor
-		------------------------------------------------------------------
-		if is_valid_win(t.win) and current == t.win then
-			vim.cmd("stopinsert")
-
-			if is_valid_win(code_win) then
-				vim.api.nvim_set_current_win(code_win)
-			else
-				vim.cmd("wincmd p")
-			end
-
-			return
-		end
-
-		------------------------------------------------------------------
-		-- Remember editor window
-		------------------------------------------------------------------
-		code_win = current
-
-		------------------------------------------------------------------
-		-- Terminal open in a different tab -> close it there instead of
-		-- jumping tabs, then reopen below in the current tab
-		------------------------------------------------------------------
-		if is_valid_win(t.win) and vim.api.nvim_win_get_tabpage(t.win) ~= vim.api.nvim_get_current_tabpage() then
-			vim.api.nvim_win_close(t.win, true)
-			t.win = nil
-		end
-
-		------------------------------------------------------------------
-		-- Terminal already visible
-		------------------------------------------------------------------
-		if is_valid_win(t.win) then
-			vim.api.nvim_set_current_win(t.win)
-			vim.cmd("startinsert")
-			return
-		end
-
-		------------------------------------------------------------------
-		-- Create terminal window
-		------------------------------------------------------------------
-		vim.cmd("botright 7split")
-		t.win = vim.api.nvim_get_current_win()
-
-		if is_valid_buf(t.buf) then
-			vim.api.nvim_win_set_buf(t.win, t.buf)
-		else
-			vim.cmd("terminal")
-			t.buf = vim.api.nvim_get_current_buf()
-			-- Keep it out of the bufferline tab strip
-			vim.bo[t.buf].buflisted = false
-
-			vim.keymap.set("n", "<C-w>c", function()
-				ForceCloseWin(t.win)
-			end, { buffer = t.buf, noremap = true, silent = true, desc = "Close terminal" })
-		end
-
-		vim.cmd("startinsert")
-
-		-- Auto-hide: leaving the terminal window hides it
-		local group = vim.api.nvim_create_augroup("AutoHideTerminal" .. n, { clear = true })
-		vim.api.nvim_create_autocmd("WinLeave", {
-			group = group,
-			buffer = t.buf,
-			callback = function()
-				vim.schedule(function()
-					HideTerminal(n)
-				end)
-			end,
-		})
-	end
-
-	function HideTerminal(n)
-		local t = get_term(n or 1)
-		if is_valid_win(t.win) then
-			vim.api.nvim_win_close(t.win, true)
-			t.win = nil
-		end
-	end
-
-	-- Hide whichever terminal the cursor is currently inside
-	local function HideCurrentTerminal()
-		local current = vim.api.nvim_get_current_win()
-		for n, t in pairs(terminals) do
-			if t.win == current then
-				ToggleTerminal(n)
-				return
-			end
-		end
-	end
-
-	-- ============================================================
-	-- Keymaps
-	-- ============================================================
-
-	for n = 1, 9 do
-		local lhs = n == 1 and "<leader>t" or ("<leader>t" .. n)
-
-		vim.keymap.set("n", lhs, function()
-			ToggleTerminal(n)
-		end, { noremap = true, silent = true, desc = "Toggle Terminal " .. n })
-	end
-
-	vim.keymap.set("t", "<leader>t", function()
-		vim.cmd("stopinsert")
-		HideCurrentTerminal()
-	end, {
-		noremap = true,
-		silent = true,
-		desc = "Toggle Terminal",
-	})
-
-	vim.keymap.set("n", "<C-;>", function()
-		ToggleTerminal(1)
-	end, {
-		noremap = true,
-		silent = true,
-		desc = "Toggle Terminal",
-	})
-
-	vim.keymap.set("t", "<C-;>", function()
-		vim.cmd("stopinsert")
-		HideCurrentTerminal()
-	end, {
-		noremap = true,
-		silent = true,
-		desc = "Toggle Terminal",
-	})
-
-	-- Make Ctrl+W work naturally inside terminal mode
-	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], {
-		noremap = true,
-		silent = true,
-	})
-
-	-- Open Workspaces UI with Ctrl+Shift+W
-	vim.keymap.set({ "n", "t" }, "<C-S-w>", function()
-		if vim.fn.mode() == "t" then
-			vim.cmd("stopinsert")
-		end
-		vim.cmd("WorkspaceSelect")
-	end, {
-		noremap = true,
-		silent = true,
-		desc = "Workspaces UI",
-	})
-end
-Configure_Terminal_Toggle()
-
--- Smart buffer close function: ignores Neo-tree and Alpha dashboard
-_G.Neotree_Smart_Quit = function(force)
-	local buf = vim.api.nvim_get_current_buf()
-	local ft = vim.bo[buf].filetype
-	if ft == "neo-tree" or ft == "alpha" then
-		return
-	end
-	if force then
-		pcall(vim.cmd, "bdelete!")
-	else
-		pcall(vim.cmd, "bdelete")
-	end
-end
-
-vim.keymap.set("n", "<C-q>", function() _G.Neotree_Smart_Quit(false) end, { noremap = true, silent = true, desc = "Close current buffer" })
-vim.keymap.set("n", "<leader>q", function() _G.Neotree_Smart_Quit(false) end, { noremap = true, silent = true, desc = "Close current buffer" })
-
--- Alias :q and :q! to smart buffer close (does nothing if inside Neo-tree)
-vim.cmd([[
-  cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
-  cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
-]])
 
 -- Resize window with Ctrl+arrows
 vim.keymap.set(
@@ -336,94 +347,30 @@ local function safe_buf_navigate(cmd)
 	end
 end
 
-vim.keymap.set("n", "<A-h>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Previous buffer" })
-vim.keymap.set("n", "<A-l>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Next buffer" })
-vim.keymap.set("n", "<A-Left>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Previous buffer" })
-vim.keymap.set("n", "<A-Right>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Next buffer" })
-
--- Live preview of :colorscheme while navigating with Tab
-local colorscheme_preview_orig = nil
-vim.api.nvim_create_autocmd("CmdlineChanged", {
-	callback = function()
-		if vim.fn.getcmdtype() ~= ":" then
-			return
-		end
-
-		local cmdline = vim.fn.getcmdline()
-		local name = cmdline:match("^colo%S*%s+(%S+)%s*$")
-
-		if not name then
-			return
-		end
-
-		if colorscheme_preview_orig == nil then
-			colorscheme_preview_orig = vim.g.colors_name
-		end
-
-		pcall(vim.cmd.colorscheme, name)
-	end,
-})
-
-vim.api.nvim_create_autocmd("CmdlineLeave", {
-	callback = function()
-		if vim.fn.getcmdtype() ~= ":" then
-			return
-		end
-
-		local cmdline = vim.fn.getcmdline()
-		local applied = cmdline:match("^colo%S*%s+(%S+)%s*$")
-
-		-- Cancelled (Esc) without confirming -> revert to previous colorscheme
-		if colorscheme_preview_orig and vim.v.event.abort and not applied then
-			pcall(vim.cmd.colorscheme, colorscheme_preview_orig)
-		end
-
-		colorscheme_preview_orig = nil
-	end,
-})
-
--- View current image as pixel art (chafa) in floating window
-vim.keymap.set("n", "<leader>i", function()
-	local path = vim.api.nvim_buf_get_name(0)
-
-	-- If focus is in neo-tree or non-file window, find first visible file buffer
-	if path == "" or vim.fn.filereadable(path) == 0 or vim.bo.filetype == "neo-tree" then
-		path = ""
-		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-			local b = vim.api.nvim_win_get_buf(win)
-			if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
-				local name = vim.api.nvim_buf_get_name(b)
-				if name ~= "" and vim.fn.filereadable(name) == 1 then
-					path = name
-					break
-				end
-			end
-		end
-	end
-
-	if path == "" then
-		vim.notify("No file to display", vim.log.levels.WARN)
-		return
-	end
-
-	local width = math.floor(vim.o.columns * 0.8)
-	local height = math.floor(vim.o.lines * 0.8)
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = math.floor((vim.o.lines - height) / 2),
-		col = math.floor((vim.o.columns - width) / 2),
-		style = "minimal",
-		border = "rounded",
-	})
-
-	vim.fn.termopen(string.format("chafa --size=%dx%d %s", width, height, vim.fn.shellescape(path)))
-	vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = buf, silent = true })
-	vim.keymap.set("n", "<Esc>", "<Cmd>close<CR>", { buffer = buf, silent = true })
-end, { noremap = true, silent = true, desc = "View image (chafa)" })
+vim.keymap.set(
+	"n",
+	"<A-h>",
+	safe_buf_navigate("BufferLineCyclePrev"),
+	{ noremap = true, silent = true, desc = "Previous buffer" }
+)
+vim.keymap.set(
+	"n",
+	"<A-l>",
+	safe_buf_navigate("BufferLineCycleNext"),
+	{ noremap = true, silent = true, desc = "Next buffer" }
+)
+vim.keymap.set(
+	"n",
+	"<A-Left>",
+	safe_buf_navigate("BufferLineCyclePrev"),
+	{ noremap = true, silent = true, desc = "Previous buffer" }
+)
+vim.keymap.set(
+	"n",
+	"<A-Right>",
+	safe_buf_navigate("BufferLineCycleNext"),
+	{ noremap = true, silent = true, desc = "Next buffer" }
+)
 
 -- =========== Plugin Specifics =================
 -- Neo-tree
@@ -469,82 +416,3 @@ vim.keymap.set("n", "<F2>", function()
 		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
 	end)
 end, { noremap = true, silent = true, desc = "Rename file" })
-
--- ============================================================
--- Dynamic Workspace & Project Directory Context Tracking
--- ============================================================
-_G.OpenedFolders = _G.OpenedFolders or {}
-
-local function norm_path(p)
-	if not p or p == "" then
-		return ""
-	end
-	local expanded = vim.fn.fnamemodify(p, ":p")
-	return expanded:gsub("[/\\]$", ""):lower()
-end
-
-function _G.AddOpenedFolder(dir_path)
-	if not dir_path or dir_path == "" then
-		return
-	end
-	local clean = vim.fn.fnamemodify(dir_path, ":p"):gsub("[/\\]$", "")
-	if vim.fn.isdirectory(clean) == 1 then
-		_G.OpenedFolders[clean:lower()] = clean
-	end
-end
-
--- Initialize current directory into OpenedFolders
-_G.AddOpenedFolder(vim.fn.getcwd())
-
--- Listen to DirChanged event (e.g. from Telescope projects or :cd)
-vim.api.nvim_create_autocmd("DirChanged", {
-	group = vim.api.nvim_create_augroup("TrackOpenedFolders", { clear = true }),
-	callback = function(ctx)
-		local dir = (ctx.file and ctx.file ~= "") and ctx.file or vim.fn.getcwd()
-		if _G.AddOpenedFolder then
-			_G.AddOpenedFolder(dir)
-		end
-	end,
-})
-
--- Automatically clean up empty, un-modified, un-named buffers from bufferline when real files are open
-vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
-	group = vim.api.nvim_create_augroup("CleanNoNameBuffers", { clear = true }),
-	callback = function()
-		vim.schedule(function()
-			local bufs = vim.api.nvim_list_bufs()
-			local real_files = 0
-			for _, b in ipairs(bufs) do
-				if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-					local bname = vim.api.nvim_buf_get_name(b)
-					local btype = vim.bo[b].buftype
-					local ftype = vim.bo[b].filetype
-					if bname ~= "" and btype == "" and ftype ~= "alpha" and ftype ~= "neo-tree" then
-						real_files = real_files + 1
-					end
-				end
-			end
-
-			-- Only clean up [No Name] buffers if at least 1 real file buffer is open
-			if real_files > 0 then
-				local visible_bufs = {}
-				for _, win in ipairs(vim.api.nvim_list_wins()) do
-					if vim.api.nvim_win_is_valid(win) then
-						visible_bufs[vim.api.nvim_win_get_buf(win)] = true
-					end
-				end
-
-				for _, b in ipairs(bufs) do
-					if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-						local bname = vim.api.nvim_buf_get_name(b)
-						local btype = vim.bo[b].buftype
-						local modified = vim.bo[b].modified
-						if bname == "" and btype == "" and not modified and not visible_bufs[b] then
-							pcall(vim.api.nvim_buf_delete, b, { force = true })
-						end
-					end
-				end
-			end
-		end)
-	end,
-})

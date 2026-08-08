@@ -21,6 +21,8 @@ require("lazy").setup({
     { import = "plugins.ui" },
     { import = "plugins.editor" },
     { import = "plugins.lsp" },
+    { import = "plugins.krs" },
+
   },
   change_detection = { notify = false },
   performance = {

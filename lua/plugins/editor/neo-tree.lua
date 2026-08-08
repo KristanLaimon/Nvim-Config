@@ -85,44 +85,15 @@ return {
 		filtered_items = {
 		    visible = true,
 		    hide_dotfiles = false,
-		    hide_gitignored = false
-		}
-	    }
+		    hide_gitignored = false,
+		},
+	    },
 	}
-
-	function _G.Neotree_Smart_Quit(force)
-		if vim.bo.filetype == "neo-tree" then
-			local code_win = nil
-			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-				local buf = vim.api.nvim_win_get_buf(win)
-				local ft = vim.bo[buf].filetype
-				local bt = vim.bo[buf].buftype
-				if ft ~= "neo-tree" and bt == "" then
-					code_win = win
-					break
-				end
-			end
-
-			if code_win then
-				vim.api.nvim_set_current_win(code_win)
-				local cmd = force and "bdelete!" or "bdelete"
-				pcall(vim.cmd, cmd)
-			else
-				vim.cmd(force and "qall!" or "qall")
-			end
-		else
-			local cmd = force and "bdelete!" or "bdelete"
-			pcall(vim.cmd, cmd)
-		end
-	end
-
-	vim.cmd([[
-		cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q' && &filetype ==# 'neo-tree') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
-		cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!' && &filetype ==# 'neo-tree') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
-	]])
-
     end
   },
+
+
+
   {
     "Crysthamus/nvim-file-operations",
     event = { "BufReadPre", "BufNewFile" },

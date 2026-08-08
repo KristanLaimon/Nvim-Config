@@ -9,7 +9,8 @@ vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
 
--- Performance Optimizations
+-- Performance & Clipboard Optimizations
+vim.opt.clipboard = "unnamedplus" -- Use system clipboard by default
 vim.opt.updatetime = 250       -- Faster CursorHold and diagnostic updates
 vim.opt.timeoutlen = 300       -- Snappier keybindings completion
 vim.opt.redrawtime = 1500      -- Prevent redraw freeze on huge files
@@ -17,6 +18,7 @@ vim.opt.synmaxcol = 300        -- Limit syntax highlight column length for speed
 vim.opt.swapfile = false       -- Disable swapfile I/O overhead
 vim.opt.writebackup = false    -- Disable backup file creation
 vim.opt.undofile = true        -- Save undo history to file efficiently
+
 
 if vim.fn.has("wsl") == 1 or vim.fn.has("unix") == 1 then
   vim.opt.shell = "bash"
@@ -108,8 +110,13 @@ end
 
 setup_path_env()
 
--- GUI & Font configuration with persistence
-require("config.font").setup()
+-- GUI & Font configuration with persistence (KRS Modules)
+require("config.krs.font").setup()
+require("config.krs.terminal").setup()
+require("config.krs.image_viewer").setup()
+require("config.krs.colorscheme_preview").setup()
+require("config.krs.buffer_cleaner").setup()
+
 
 
 

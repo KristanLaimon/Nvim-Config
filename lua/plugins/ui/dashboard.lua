@@ -6,18 +6,28 @@ return {
 		local dashboard = require("alpha.themes.dashboard")
 
 		dashboard.section.header.val = {
-			[[                                                ]],
-			[[            /\   /\                             ]],
-			[[           ( ..   .. )      _  __ ____  ____    ]],
-			[[            \  Y  /        | |/ /|  _ \/ ___|   ]],
-			[[         /\_/\   /\_/\     | ' / | |_) \___ \   ]],
-			[[        (  o o     o o)    | . \ |  _ < ___) |  ]],
-			[[         \  ~   ~  /       |_|\_\|_| \_\____/   ]],
-			[[          \___^___/                             ]],
-			[[                                                ]],
+			[[																																															]],
+			[[             /\     /\                                                    /\  /\							]],
+			[[            ( ..   .. )                                                  ( .. ..)							]],
+			[[             \ Y  /                                                       \ Y  /							]],
+			[[          /\_/\   /\_/\    _  __ ____  ____   _____  _____   __     __     /\_/\/\_/\					]],
+			[[         (   o o     o o   | |/ /|  _ \/ ___| |  __ \|  __ \  \ \   / /    (o o   o o)				]],
+			[[          \   ~   ~   /    | ' / | |_) \___ \ | |  | | |  | |  \ \ / /     \   ~  ~ /					]],
+			[[           \___^___/       | . \ |  _ < ___) || |  | | |  | |   \ V /       \___^__/					]],
+			[[                           |_|\_\|_| \_\____/ |_|  |_|_|  |_|    \_/													]],
+			[[																																						                 ]],
 		}
 
+		-- Highlight Naranja para el arte ASCII del Header
+		local function set_header_hl()
+			vim.api.nvim_set_hl(0, "AlphaHeaderOrange", { fg = "#FF8800", bold = true })
+		end
+		set_header_hl()
+		vim.api.nvim_create_autocmd("ColorScheme", { callback = set_header_hl })
+		dashboard.section.header.opts.hl = "AlphaHeaderOrange"
+
 		dashboard.section.buttons.val = {
+
 			dashboard.button("p", "  Recent projects", ":Telescope projects<CR>"),
 			dashboard.button("e", "  Plugins/Extensions", ":Lazy<CR>"),
 			dashboard.button("m", "  Lsps/Languages", ":Mason<CR>"),

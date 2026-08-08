@@ -2,11 +2,12 @@ return {
 	{
 		"mfussenegger/nvim-dap",
 		keys = {
-			{ "<A-j>", desc = "Toggle Breakpoint" },
-			{ "<M-j>", desc = "Toggle Breakpoint" },
+			{ "<A-b>", desc = "Toggle Breakpoint" },
+			{ "<M-b>", desc = "Toggle Breakpoint" },
 			{ "<C-S-s>", desc = "Start/Continue Debugging" },
 			{ "<C-S-x>", desc = "Terminate Debugger" },
 		},
+
 		dependencies = {
 			"rcarriga/nvim-dap-ui",
 			"nvim-neotest/nvim-nio",
