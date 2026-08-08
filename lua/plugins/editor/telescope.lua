@@ -1,7 +1,15 @@
 return {
 	'nvim-telescope/telescope.nvim',
+	cmd = 'Telescope',
+	keys = {
+		{ '<C-k>', mode = { 'n', 'i' }, desc = 'Telescope find files' },
+		{ '<C-f>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
+		{ '<leader>fh', desc = 'Telescope help tags' },
+		{ '<C-S-o>', mode = { 'n', 'i' }, desc = 'Telescope open folder' },
+	},
 	dependencies = { 'nvim-lua/plenary.nvim', 'ahmedkhalf/project.nvim' },
 	config = function()
+
 		local builtin = require('telescope.builtin')
 		local pickers = require('telescope.pickers')
 		local finders = require('telescope.finders')

@@ -287,16 +287,28 @@ local function Configure_Terminal_Toggle()
 end
 Configure_Terminal_Toggle()
 
--- Close current buffer (VSCode tab close style: Ctrl+q or <leader>q)
-local function close_current_buffer()
-	if vim.bo.filetype == "neo-tree" or vim.bo.filetype == "alpha" then
+-- Smart buffer close function: ignores Neo-tree and Alpha dashboard
+_G.Neotree_Smart_Quit = function(force)
+	local buf = vim.api.nvim_get_current_buf()
+	local ft = vim.bo[buf].filetype
+	if ft == "neo-tree" or ft == "alpha" then
 		return
 	end
-	vim.cmd("bdelete")
+	if force then
+		pcall(vim.cmd, "bdelete!")
+	else
+		pcall(vim.cmd, "bdelete")
+	end
 end
 
-vim.keymap.set("n", "<C-q>", close_current_buffer, { noremap = true, silent = true, desc = "Close current buffer" })
-vim.keymap.set("n", "<leader>q", close_current_buffer, { noremap = true, silent = true, desc = "Close current buffer" })
+vim.keymap.set("n", "<C-q>", function() _G.Neotree_Smart_Quit(false) end, { noremap = true, silent = true, desc = "Close current buffer" })
+vim.keymap.set("n", "<leader>q", function() _G.Neotree_Smart_Quit(false) end, { noremap = true, silent = true, desc = "Close current buffer" })
+
+-- Alias :q and :q! to smart buffer close (does nothing if inside Neo-tree)
+vim.cmd([[
+  cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
+  cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
+]])
 
 -- Resize window with Ctrl+arrows
 vim.keymap.set(

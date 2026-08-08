@@ -2,6 +2,10 @@ return {
   {
     "NeogitOrg/neogit",
     branch = "master",
+    cmd = "Neogit",
+    keys = {
+      { "<C-S-g>", desc = "Toggle Git Sidebar" },
+    },
     dependencies = {
       "nvim-lua/plenary.nvim",
       "sindrets/diffview.nvim",
@@ -55,6 +59,8 @@ return {
       end
 
       vim.keymap.set("n", "<C-S-g>", toggle_neogit, { noremap = true, silent = true, desc = "Toggle Git Sidebar" })
+      toggle_neogit()
     end,
   },
 }
+

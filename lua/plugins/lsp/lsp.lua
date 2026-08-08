@@ -1,6 +1,8 @@
 return {
 	{
 		"neovim/nvim-lspconfig",
+		event = { "BufReadPre", "BufNewFile" },
+		cmd = { "LspInfo", "LspInstall", "LspStart" },
 		dependencies = {
 			"williamboman/mason.nvim",
 			"williamboman/mason-lspconfig.nvim",
@@ -22,7 +24,9 @@ return {
 
 							workspace = {
 								checkThirdParty = false,
-								library = vim.api.nvim_get_runtime_file("", true),
+								library = {
+									vim.env.VIMRUNTIME,
+								},
 							},
 
 							completion = {
@@ -55,7 +59,6 @@ return {
 				underline = true,
 			})
 
-
 			opts.servers.jsonls.settings = {
 				json = {
 					schemas = require("schemastore").json.schemas(),
@@ -63,8 +66,11 @@ return {
 				},
 			}
 
+			local has_blink, blink = pcall(require, "blink.cmp")
 			for server, config in pairs(opts.servers) do
-				config.capabilities = require("blink.cmp").get_lsp_capabilities(config.capabilities)
+				if has_blink then
+					config.capabilities = blink.get_lsp_capabilities(config.capabilities)
+				end
 				vim.lsp.config(server, config)
 				vim.lsp.enable(server)
 			end
@@ -72,6 +78,7 @@ return {
 	},
 	{
 		"saghen/blink.cmp",
+		event = { "BufReadPre", "BufNewFile", "InsertEnter" },
 		dependencies = { "rafamadriz/friendly-snippets" },
 		version = "*",
 		opts = {
@@ -101,3 +108,4 @@ return {
 		opts_extend = { "sources.default" },
 	},
 }
+

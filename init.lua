@@ -1,3 +1,7 @@
+if vim.loader then
+	vim.loader.enable()
+end
+
 require("config.options")
 require("config.keybinds")
 require("config.lazy")
@@ -11,3 +15,4 @@ vim.api.nvim_create_user_command("ReloadConfig", function()
 	dofile(vim.env.MYVIMRC)
 	vim.notify("Config reloaded", vim.log.levels.INFO)
 end, {})
+

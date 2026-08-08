@@ -9,6 +9,15 @@ vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
 
+-- Performance Optimizations
+vim.opt.updatetime = 250       -- Faster CursorHold and diagnostic updates
+vim.opt.timeoutlen = 300       -- Snappier keybindings completion
+vim.opt.redrawtime = 1500      -- Prevent redraw freeze on huge files
+vim.opt.synmaxcol = 300        -- Limit syntax highlight column length for speed
+vim.opt.swapfile = false       -- Disable swapfile I/O overhead
+vim.opt.writebackup = false    -- Disable backup file creation
+vim.opt.undofile = true        -- Save undo history to file efficiently
+
 if vim.fn.has("wsl") == 1 or vim.fn.has("unix") == 1 then
   vim.opt.shell = "bash"
 elseif vim.fn.has("win32") == 1 then
@@ -18,44 +27,53 @@ elseif vim.fn.has("win32") == 1 then
   vim.opt.shellquote = ""
 end
 
--- Ensure PATH includes Node.js (installer exe, nvm, fnm, pnpm, volta, scoop, etc.) and CLI tools for GUI clients
+-- Fast PATH environment configuration (cached & using libuv for zero startup overhead)
 local function setup_path_env()
+  if vim.g._path_setup_done then
+    return
+  end
+  vim.g._path_setup_done = true
+
   local is_win = vim.fn.has("win32") == 1
   local sep = is_win and ";" or ":"
   local current_path = vim.env.PATH or ""
+
+  local appdata = vim.env.APPDATA or ""
+  local localappdata = vim.env.LOCALAPPDATA or ""
+  local userprofile = vim.env.USERPROFILE or ""
+  local uv = vim.uv or vim.loop
+
+  local function is_dir(path)
+    if not path or path == "" then return false end
+    local stat = uv.fs_stat(path)
+    return stat and stat.type == "directory" or false
+  end
 
   local candidate_paths = {}
 
   if is_win then
     candidate_paths = {
-      -- fnm (Fast Node Manager)
-      vim.fn.expand("$APPDATA/fnm/aliases/default"),
-      -- nvm-windows
+      appdata .. "\\fnm\\aliases\\default",
       vim.env.NVM_SYMLINK,
       vim.env.NVM_HOME,
       "C:\\Program Files\\nodejs",
       "C:\\Program Files (x86)\\nodejs",
-      vim.fn.expand("$APPDATA/npm"),
-      -- pnpm (Global / Node installs via pnpm)
+      appdata .. "\\npm",
       vim.env.PNPM_HOME,
-      vim.fn.expand("$LOCALAPPDATA/pnpm"),
-      vim.fn.expand("$APPDATA/pnpm"),
-      -- Volta
+      localappdata .. "\\pnpm",
+      appdata .. "\\pnpm",
       vim.env.VOLTA_HOME and (vim.env.VOLTA_HOME .. "\\bin"),
-      vim.fn.expand("$LOCALAPPDATA/volta/bin"),
-      vim.fn.expand("$USERPROFILE/.volta/bin"),
-      -- Scoop & Chocolatey
-      vim.fn.expand("$USERPROFILE/scoop/shims"),
-      vim.fn.expand("$USERPROFILE/scoop/apps/nodejs/current"),
-      vim.fn.expand("$USERPROFILE/scoop/apps/nodejs-lts/current"),
+      localappdata .. "\\volta\\bin",
+      userprofile .. "\\.volta\\bin",
+      userprofile .. "\\scoop\\shims",
+      userprofile .. "\\scoop\\apps\\nodejs\\current",
+      userprofile .. "\\scoop\\apps\\nodejs-lts\\current",
       "C:\\ProgramData\\chocolatey\\bin",
-      -- Bun / Deno / Yarn
-      vim.fn.expand("$USERPROFILE/.bun/bin"),
-      vim.fn.expand("$USERPROFILE/.deno/bin"),
-      vim.fn.expand("$LOCALAPPDATA/Yarn/bin"),
-      -- Cargo / Go
-      vim.fn.expand("$USERPROFILE/.cargo/bin"),
-      vim.fn.expand("$USERPROFILE/go/bin"),
+      userprofile .. "\\.bun\\bin",
+      userprofile .. "\\.deno\\bin",
+      localappdata .. "\\Yarn\\bin",
+      userprofile .. "\\.cargo\\bin",
+      userprofile .. "\\go\\bin",
     }
   else
     local home = vim.fn.expand("~")
@@ -77,7 +95,7 @@ local function setup_path_env()
   end
 
   for _, path in ipairs(candidate_paths) do
-    if path and path ~= "" and vim.fn.isdirectory(path) == 1 then
+    if is_dir(path) then
       local normalized = is_win and path:gsub("/", "\\") or path
       if not current_path:find(normalized, 1, true) then
         current_path = normalized .. sep .. current_path
@@ -92,5 +110,6 @@ setup_path_env()
 
 -- GUI & Font configuration with persistence
 require("config.font").setup()
+
 
 

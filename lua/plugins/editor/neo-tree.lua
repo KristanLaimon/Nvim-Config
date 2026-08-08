@@ -52,6 +52,11 @@ return {
   {
     "nvim-neo-tree/neo-tree.nvim",
     branch = "v3.x",
+    cmd = "Neotree",
+    keys = {
+      { "<C-S-Space>", ":Neotree toggle<CR>", desc = "Toggle Explorer" },
+      { "<leader>e", ":Neotree toggle<CR>", desc = "Toggle Explorer" },
+    },
     dependencies = {
       "nvim-lua/plenary.nvim",
       "MunifTanjim/nui.nvim",
@@ -120,9 +125,9 @@ return {
   },
   {
     "Crysthamus/nvim-file-operations",
-    -- branch = "compat" -- if you are on Neovim <= 0.10
+    event = { "BufReadPre", "BufNewFile" },
     dependencies = {
-      "nvim-neo-tree/neo-tree.nvim", -- makes sure that this loads after Neo-tree.
+      "nvim-neo-tree/neo-tree.nvim",
     },
     config = function()
       require("nvim-file-operations").setup()
@@ -131,6 +136,7 @@ return {
   {
     "s1n7ax/nvim-window-picker",
     version = "2.*",
+    lazy = true,
     config = function()
       require("window-picker").setup({
         filter_rules = {
@@ -145,3 +151,4 @@ return {
     end,
   },
 }
+

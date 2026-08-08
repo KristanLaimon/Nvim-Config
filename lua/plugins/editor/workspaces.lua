@@ -599,8 +599,9 @@ _G.Workspaces = M
 
 local plugin_spec = {
 	"nvim-lua/plenary.nvim",
-	lazy = false,
+	event = "VeryLazy",
 	config = function()
+
 		-- Setup User Commands
 		vim.api.nvim_create_user_command("WorkspaceSave", function(opts)
 			M.save_workspace(opts.args ~= "" and opts.args or nil)
