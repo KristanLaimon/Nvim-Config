@@ -6,6 +6,9 @@ vim.keymap.set("n", "<leader>cd", vim.cmd.Ex)
 vim.keymap.set("n", "<C-_>", "gcc", { remap = true, desc = "Comment line" })
 vim.keymap.set("v", "<C-_>", "gc", { remap = true, desc = "Comment selection" })
 
+vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Guardar archivo" })
+
+--
 -- QOL Features
 vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
 
@@ -204,16 +207,16 @@ local function Configure_Terminal_Toggle()
 		silent = true,
 	})
 
-	-- Close current window with Ctrl+Shift+W (force: no :q! needed, even for the last window)
+	-- Open Workspaces UI with Ctrl+Shift+W
 	vim.keymap.set({ "n", "t" }, "<C-S-w>", function()
 		if vim.fn.mode() == "t" then
 			vim.cmd("stopinsert")
 		end
-		ForceCloseWin()
+		vim.cmd("WorkspaceSelect")
 	end, {
 		noremap = true,
 		silent = true,
-		desc = "Close current window",
+		desc = "Workspaces UI",
 	})
 end
 Configure_Terminal_Toggle()
@@ -229,14 +232,35 @@ vim.keymap.set("n", "<C-w>", function()
 end, { noremap = true, silent = true, desc = "Cerrar buffer actual" })
 
 -- Resize ventana con Ctrl+flechas
-vim.keymap.set("n", "<C-Right>", "<Cmd>vertical resize -2<CR>", { noremap = true, silent = true, desc = "Ventana más angosta" })
-vim.keymap.set("n", "<C-Left>", "<Cmd>vertical resize +2<CR>", { noremap = true, silent = true, desc = "Ventana más ancha" })
+vim.keymap.set(
+	"n",
+	"<C-Right>",
+	"<Cmd>vertical resize -2<CR>",
+	{ noremap = true, silent = true, desc = "Ventana más angosta" }
+)
+vim.keymap.set(
+	"n",
+	"<C-Left>",
+	"<Cmd>vertical resize +2<CR>",
+	{ noremap = true, silent = true, desc = "Ventana más ancha" }
+)
 vim.keymap.set("n", "<C-Up>", "<Cmd>resize +2<CR>", { noremap = true, silent = true, desc = "Ventana más alta" })
 vim.keymap.set("n", "<C-Down>", "<Cmd>resize -2<CR>", { noremap = true, silent = true, desc = "Ventana más baja" })
 
--- Cambiar buffers con Alt+h/l
-vim.keymap.set("n", "<A-h>", "<Cmd>bprevious<CR>", { noremap = true, silent = true, desc = "Buffer anterior" })
-vim.keymap.set("n", "<A-l>", "<Cmd>bnext<CR>", { noremap = true, silent = true, desc = "Buffer siguiente" })
+-- Cambiar buffers con Alt+h/l o Alt+flechas (deshabilitado en neo-tree)
+local function safe_buf_navigate(cmd)
+	return function()
+		if vim.bo.filetype == "neo-tree" then
+			return
+		end
+		vim.cmd(cmd)
+	end
+end
+
+vim.keymap.set("n", "<A-h>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Buffer anterior" })
+vim.keymap.set("n", "<A-l>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Buffer siguiente" })
+vim.keymap.set("n", "<A-Left>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Buffer anterior" })
+vim.keymap.set("n", "<A-Right>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Buffer siguiente" })
 
 -- Preview en vivo de :colorscheme mientras se navega con Tab
 local colorscheme_preview_orig = nil

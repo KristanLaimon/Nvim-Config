@@ -18,6 +18,12 @@ return {
           diffview = true,
           telescope = true,
         },
+        mappings = {
+          status = {
+            ["<cr>"] = "VSplitOpen",
+            ["d"] = "PeekFile",
+          },
+        },
       })
 
       -- Neogit's vsplit opens on splitright side; force it hard right + fixed width.

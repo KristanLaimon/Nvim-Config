@@ -1,6 +1,6 @@
-require('config.options')
-require('config.keybinds')
-require('config.lazy')
+require("config.options")
+require("config.keybinds")
+require("config.lazy")
 
 vim.api.nvim_create_user_command("ReloadConfig", function()
 	for name, _ in pairs(package.loaded) do
@@ -11,8 +11,3 @@ vim.api.nvim_create_user_command("ReloadConfig", function()
 	dofile(vim.env.MYVIMRC)
 	vim.notify("Config reloaded", vim.log.levels.INFO)
 end, {})
-
-
-
-
-
