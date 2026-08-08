@@ -2,14 +2,15 @@ return {
 	'nvim-telescope/telescope.nvim',
 	cmd = 'Telescope',
 	keys = {
-		{ '<C-k>', mode = { 'n', 'i' }, desc = 'Telescope find files' },
-		{ '<C-f>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
-		{ '<leader>fh', desc = 'Telescope help tags' },
-		{ '<C-S-o>', mode = { 'n', 'i' }, desc = 'Telescope open folder' },
+		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files' },
+		{ '<C-f>', '<cmd>Telescope live_grep<CR>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
+		{ '<leader>fh', '<cmd>Telescope help_tags<CR>', desc = 'Telescope help tags' },
+		{ '<C-S-o>', '<cmd>TelescopeOpenFolder<CR>', mode = { 'n', 'i' }, desc = 'Telescope open folder' },
 	},
 	dependencies = { 'nvim-lua/plenary.nvim', 'ahmedkhalf/project.nvim' },
 	config = function()
 
+		local telescope = require('telescope')
 		local builtin = require('telescope.builtin')
 		local pickers = require('telescope.pickers')
 		local finders = require('telescope.finders')
@@ -17,6 +18,8 @@ return {
 		local actions = require('telescope.actions')
 		local action_state = require('telescope.actions.state')
 		local themes = require('telescope.themes')
+
+		telescope.setup({})
 
 		vim.keymap.set('n', '<C-k>', builtin.find_files, { desc = 'Telescope find files' })
 		vim.keymap.set('i', '<C-k>', builtin.find_files, { desc = 'Telescope find files' })
@@ -197,6 +200,9 @@ return {
 			}), {}):find()
 		end
 
+		vim.api.nvim_create_user_command('TelescopeOpenFolder', function()
+			open_folder_picker()
+		end, {})
 		vim.keymap.set({ 'n', 'i' }, '<C-S-o>', open_folder_picker, { desc = 'Telescope open folder' })
-	end
+	end,
 }

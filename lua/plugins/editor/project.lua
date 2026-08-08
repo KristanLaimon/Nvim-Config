@@ -2,7 +2,7 @@ return {
 	'ahmedkhalf/project.nvim',
 	event = 'VeryLazy',
 	keys = {
-		{ '<C-S-r>', desc = 'Telescope recent projects' },
+		{ '<C-S-r>', '<cmd>Telescope projects<CR>', desc = 'Telescope recent projects' },
 	},
 	dependencies = { 'nvim-telescope/telescope.nvim' },
 	config = function()

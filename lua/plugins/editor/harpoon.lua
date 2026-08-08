@@ -2,18 +2,6 @@ return {
 	{
 		"ThePrimeagen/harpoon",
 		branch = "harpoon2",
-		keys = {
-			{ "<leader>ha", desc = "Harpoon add file" },
-			{ "<leader>hh", desc = "Harpoon menu" },
-			{ "<leader>1", desc = "Harpoon item 1" },
-			{ "<leader>2", desc = "Harpoon item 2" },
-			{ "<leader>3", desc = "Harpoon item 3" },
-			{ "<leader>hd", desc = "Harpoon delete current" },
-			{ "<leader>hm", desc = "Harpoon move current up" },
-			{ "<C-S-P>", desc = "Harpoon previous" },
-			{ "<C-S-N>", desc = "Harpoon next" },
-			{ "<leader>fl", desc = "Harpoon telescope list" },
-		},
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"nvim-telescope/telescope.nvim",

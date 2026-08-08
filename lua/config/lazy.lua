@@ -22,7 +22,7 @@ require("lazy").setup({
     { import = "plugins.editor" },
     { import = "plugins.lsp" },
     { import = "plugins.krs" },
-
+    { import = "plugins.miscelanea" },
   },
   change_detection = { notify = false },
   performance = {
