@@ -3,6 +3,7 @@ return {
     dependencies = { 'nvim-telescope/telescope.nvim' },
     config = function()
         require('project_nvim').setup({
+            manual_mode = true,
             manual_gc = false,
             detection_methods = { 'pattern', 'lsp' },
             patterns = {

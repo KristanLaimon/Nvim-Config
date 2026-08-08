@@ -391,6 +391,100 @@ vim.keymap.set("n", "<F2>", function()
 	end)
 end, { noremap = true, silent = true, desc = "Rename file" })
 
+-- ============================================================
+-- Dynamic Workspace & Project Directory Context Tracking
+-- ============================================================
+_G.OpenedFolders = _G.OpenedFolders or {}
+
+local function norm_path(p)
+	if not p or p == "" then
+		return ""
+	end
+	local expanded = vim.fn.fnamemodify(p, ":p")
+	return expanded:gsub("[/\\]$", ""):lower()
+end
+
+function _G.AddOpenedFolder(dir_path)
+	if not dir_path or dir_path == "" then
+		return
+	end
+	local clean = vim.fn.fnamemodify(dir_path, ":p"):gsub("[/\\]$", "")
+	if vim.fn.isdirectory(clean) == 1 then
+		_G.OpenedFolders[clean:lower()] = clean
+	end
+end
+
+-- Initialize current directory into OpenedFolders
+_G.AddOpenedFolder(vim.fn.getcwd())
+
+-- Listen to DirChanged event (e.g. from Telescope projects or :cd)
+vim.api.nvim_create_autocmd("DirChanged", {
+	group = vim.api.nvim_create_augroup("TrackOpenedFolders", { clear = true }),
+	callback = function(ctx)
+		if ctx.file and ctx.file ~= "" then
+			_G.AddOpenedFolder(ctx.file)
+		else
+			_G.AddOpenedFolder(vim.fn.getcwd())
+		end
+	end,
+})
+
+local function get_buffer_root_dir(filepath)
+	if not filepath or filepath == "" then
+		return nil
+	end
+
+	local norm_file = norm_path(filepath)
+	local file_dir = vim.fn.fnamemodify(filepath, ":p:h")
+
+	-- 1. Check if filepath is inside any registered OpenedFolder (longest match first)
+	local best_match = nil
+	local best_len = 0
+	for norm_dir, orig_dir in pairs(_G.OpenedFolders or {}) do
+		if norm_file:sub(1, #norm_dir) == norm_dir then
+			local next_char = norm_file:sub(#norm_dir + 1, #norm_dir + 1)
+			if next_char == "" or next_char == "/" or next_char == "\\" then
+				if #norm_dir > best_len then
+					best_match = orig_dir
+					best_len = #norm_dir
+				end
+			end
+		end
+	end
+
+	if best_match then
+		return best_match
+	end
+
+	-- 2. Search upwards from file_dir for project root markers
+	local root_markers = {
+		".git",
+		"go.mod",
+		"package.json",
+		"Cargo.toml",
+		"pyproject.toml",
+		"Makefile",
+		"tsconfig.json",
+		"pom.xml",
+		"build.gradle",
+		".sln",
+	}
+	local match = vim.fs.find(root_markers, { upward = true, path = file_dir })
+	if match and #match > 0 then
+		local found_root = vim.fs.dirname(match[1])
+		if found_root and found_root ~= "" then
+			local root_clean = vim.fn.fnamemodify(found_root, ":p"):gsub("[/\\]$", "")
+			_G.AddOpenedFolder(root_clean)
+			return root_clean
+		end
+	end
+
+	-- 3. Fallback to containing directory
+	local fallback_dir = vim.fn.fnamemodify(file_dir, ":p"):gsub("[/\\]$", "")
+	_G.AddOpenedFolder(fallback_dir)
+	return fallback_dir
+end
+
 -- Automatically switch working directory (and Neo-tree root) when changing active buffer/tab
 vim.api.nvim_create_autocmd("BufEnter", {
 	group = vim.api.nvim_create_augroup("AutoProjectCwd", { clear = true }),
@@ -413,33 +507,31 @@ vim.api.nvim_create_autocmd("BufEnter", {
 			return
 		end
 
-		local file_dir = vim.fn.fnamemodify(name, ":p:h")
-		local root_dir = nil
-
-		-- Check project_nvim first
-		local ok_proj, proj_api = pcall(require, "project_nvim.project")
-		if ok_proj and proj_api.get_project_root then
-			root_dir = proj_api.get_project_root()
+		local target_dir = get_buffer_root_dir(name)
+		if not target_dir or target_dir == "" then
+			return
 		end
 
-		-- Fallback search for common project markers
-		if not root_dir or root_dir == "" then
-			local root_markers = { ".git", "go.mod", "package.json", "Cargo.toml", "pyproject.toml", "Makefile", "tsconfig.json" }
-			local match = vim.fs.find(root_markers, { upward = true, path = file_dir })
-			if match and #match > 0 then
-				root_dir = vim.fs.dirname(match[1])
-			end
-		end
-
-		if not root_dir or root_dir == "" then
-			root_dir = file_dir
-		end
-
-		root_dir = vim.fn.fnamemodify(root_dir, ":p"):gsub("[/\\]$", "")
 		local current_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p"):gsub("[/\\]$", "")
 
-		if root_dir:lower() ~= current_cwd:lower() and vim.fn.isdirectory(root_dir) == 1 then
-			pcall(vim.api.nvim_set_current_dir, root_dir)
+		if target_dir:lower() ~= current_cwd:lower() and vim.fn.isdirectory(target_dir) == 1 then
+			pcall(vim.api.nvim_set_current_dir, target_dir)
+
+			-- If Neo-tree sidebar is open, update displayed directory
+			local neotree_is_open = false
+			for _, win in ipairs(vim.api.nvim_list_wins()) do
+				if vim.api.nvim_win_is_valid(win) then
+					local b = vim.api.nvim_win_get_buf(win)
+					if vim.bo[b].filetype == "neo-tree" then
+						neotree_is_open = true
+						break
+					end
+				end
+			end
+
+			if neotree_is_open then
+				pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target_dir))
+			end
 		end
 	end,
 })

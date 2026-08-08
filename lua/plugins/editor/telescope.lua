@@ -78,6 +78,9 @@ return {
 
 				pcall(vim.api.nvim_set_current_dir, dir_path)
 				add_to_recent_projects(dir_path)
+				if _G.AddOpenedFolder then
+					_G.AddOpenedFolder(dir_path)
+				end
 
 				local curr_buf = vim.api.nvim_get_current_buf()
 				local is_alpha = vim.bo[curr_buf].filetype == 'alpha'
