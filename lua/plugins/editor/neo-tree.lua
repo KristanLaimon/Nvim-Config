@@ -6,17 +6,18 @@ local function load_saved_width()
     local content = f:read("*a")
     f:close()
     local w = tonumber(content)
-    if w and w >= 15 and w <= 150 then
+    if w and w >= 18 and w <= 60 then
       return w
     end
   end
-  return 24
+  return 30
 end
 
 local saved_width = load_saved_width()
 
 local function save_width(w)
-  if type(w) == "number" and w >= 15 and w <= 150 and w ~= saved_width then
+  local max_allowed = math.min(60, math.floor((vim.o.columns or 80) * 0.45))
+  if type(w) == "number" and w >= 18 and w <= max_allowed and w ~= saved_width then
     saved_width = w
     local f = io.open(width_file, "w")
     if f then
@@ -30,11 +31,12 @@ local group = vim.api.nvim_create_augroup("NeoTreeWidthSaver", { clear = true })
 vim.api.nvim_create_autocmd("WinResized", {
   group = group,
   callback = function()
-    local windows = vim.v.event.windows
-    if not windows or #windows == 0 then
-      windows = vim.api.nvim_tabpage_list_wins(0)
+    local wins = vim.api.nvim_tabpage_list_wins(0)
+    -- Only save sidebar width if there are multiple windows in the tabpage
+    if #wins <= 1 then
+      return
     end
-    for _, winid in ipairs(windows) do
+    for _, winid in ipairs(wins) do
       if vim.api.nvim_win_is_valid(winid) then
         local bufnr = vim.api.nvim_win_get_buf(winid)
         if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].filetype == "neo-tree" then
@@ -60,10 +62,9 @@ return {
     config = function ()
 	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
 	require("neo-tree").setup {
+	    close_if_last_window = true,
 	    window = {
-		width = function()
-		  return saved_width
-		end,
+		width = saved_width,
 		mappings = {
 		    ["<C-n>"] = "add",
 		    ["<C-S-n>"] = "add_directory",
@@ -83,6 +84,37 @@ return {
 		}
 	    }
 	}
+
+	function _G.Neotree_Smart_Quit(force)
+		if vim.bo.filetype == "neo-tree" then
+			local code_win = nil
+			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+				local buf = vim.api.nvim_win_get_buf(win)
+				local ft = vim.bo[buf].filetype
+				local bt = vim.bo[buf].buftype
+				if ft ~= "neo-tree" and bt == "" then
+					code_win = win
+					break
+				end
+			end
+
+			if code_win then
+				vim.api.nvim_set_current_win(code_win)
+				local cmd = force and "bdelete!" or "bdelete"
+				pcall(vim.cmd, cmd)
+			else
+				vim.cmd(force and "qall!" or "qall")
+			end
+		else
+			local cmd = force and "bdelete!" or "bdelete"
+			pcall(vim.cmd, cmd)
+		end
+	end
+
+	vim.cmd([[
+		cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q' && &filetype ==# 'neo-tree') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
+		cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!' && &filetype ==# 'neo-tree') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
+	]])
 
     end
   },

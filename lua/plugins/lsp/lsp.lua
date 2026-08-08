@@ -55,6 +55,7 @@ return {
 				underline = true,
 			})
 
+
 			opts.servers.jsonls.settings = {
 				json = {
 					schemas = require("schemastore").json.schemas(),
@@ -84,6 +85,10 @@ return {
 			completion = {
 				menu = { auto_show = true },
 				documentation = { auto_show = false },
+			},
+			signature = {
+				enabled = true,
+				window = { border = "rounded" },
 			},
 			sources = { default = { "lsp", "path", "snippets", "buffer" } },
 			fuzzy = {

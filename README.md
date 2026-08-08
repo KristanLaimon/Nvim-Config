@@ -171,7 +171,7 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 |---|---|---|
 | `<C-h>` | n | Move focus to left window |
 | `<C-l>` | n | Move focus to right window |
-| `<C-j>` | n | Move focus to bottom window |
+| `<C-S-j>` | n | Move focus to bottom window |
 | `<C-S-k>` | n | Move focus to top window |
 | `<C-Right>` | n | Make window narrower (vertical -2) |
 | `<C-Left>` | n | Make window wider (vertical +2) |
@@ -185,6 +185,7 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | Shortcut | Mode | Action |
 |---|---|---|
 | `<A-k>` / `<M-k>` | n, v | **Go to Definition** of symbol/method under cursor |
+| `<C-j>` | n, i, v | **Show Parameter Signature Help** (types & argument names inside `(...)`) |
 | `<C-o>` | n | **Jump Back** to previous cursor location (Vim jump list) |
 | `<leader>k` | n | Show diagnostic error info floating under cursor |
 | `<leader>u` | n | Jump to previous diagnostic |

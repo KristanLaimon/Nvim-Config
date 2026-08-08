@@ -12,11 +12,25 @@ vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silen
 -- QOL Features
 vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
 
--- Movements across panels
+-- Movements across panels & split windows
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
 vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
-vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Move to bottom window" })
 vim.keymap.set("n", "<C-S-k>", "<C-w>k", { desc = "Move to top window" })
+vim.keymap.set("n", "<C-S-j>", "<C-w>j", { desc = "Move to bottom window" })
+
+-- Signature / Parameter Intellisense Help with Ctrl+j
+local function trigger_signature_help()
+	local get_cls = vim.lsp.get_clients or vim.lsp.get_active_clients
+	local clients = get_cls({ bufnr = 0 })
+	if clients and #clients > 0 then
+		pcall(vim.lsp.buf.signature_help, { border = "rounded", focusable = false })
+		pcall(vim.lsp.buf.hover, { border = "rounded" })
+	else
+		vim.notify("No active LSP for parameter help", vim.log.levels.WARN, { title = "LSP Signature Help" })
+	end
+end
+
+vim.keymap.set({ "n", "i", "v" }, "<C-j>", trigger_signature_help, { noremap = true, silent = true, desc = "Show parameter signature help" })
 
 -- Errors / Diagnostics
 vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagnostic info" })
@@ -40,8 +54,9 @@ local function goto_definition()
 	end
 end
 
-vim.keymap.set({ "n", "v" }, "<A-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
-vim.keymap.set({ "n", "v" }, "<M-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+vim.keymap.set({ "n", "i", "v" }, "<A-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+vim.keymap.set({ "n", "i", "v" }, "<M-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+vim.keymap.set({ "n", "i", "v" }, "<C-S-d>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
 
 -- Debugging (DAP) Keybindings
 local function dap_toggle_breakpoint()
@@ -272,15 +287,16 @@ local function Configure_Terminal_Toggle()
 end
 Configure_Terminal_Toggle()
 
--- Ctrl+W closes current buffer (VSCode style tab close).
--- Dashboard.lua's autocmd shows the menu instead of quitting when
--- this closes the last listed buffer.
-vim.keymap.set("n", "<C-w>", function()
-	if vim.bo.filetype == "neo-tree" then
+-- Close current buffer (VSCode tab close style: Ctrl+q or <leader>q)
+local function close_current_buffer()
+	if vim.bo.filetype == "neo-tree" or vim.bo.filetype == "alpha" then
 		return
 	end
 	vim.cmd("bdelete")
-end, { noremap = true, silent = true, desc = "Close current buffer" })
+end
+
+vim.keymap.set("n", "<C-q>", close_current_buffer, { noremap = true, silent = true, desc = "Close current buffer" })
+vim.keymap.set("n", "<leader>q", close_current_buffer, { noremap = true, silent = true, desc = "Close current buffer" })
 
 -- Resize window with Ctrl+arrows
 vim.keymap.set(
@@ -472,117 +488,9 @@ _G.AddOpenedFolder(vim.fn.getcwd())
 vim.api.nvim_create_autocmd("DirChanged", {
 	group = vim.api.nvim_create_augroup("TrackOpenedFolders", { clear = true }),
 	callback = function(ctx)
-		if ctx.file and ctx.file ~= "" then
-			_G.AddOpenedFolder(ctx.file)
-		else
-			_G.AddOpenedFolder(vim.fn.getcwd())
-		end
-	end,
-})
-
-local function get_buffer_root_dir(filepath)
-	if not filepath or filepath == "" then
-		return nil
-	end
-
-	local norm_file = norm_path(filepath)
-	local file_dir = vim.fn.fnamemodify(filepath, ":p:h")
-
-	-- 1. Check if filepath is inside any registered OpenedFolder (longest match first)
-	local best_match = nil
-	local best_len = 0
-	for norm_dir, orig_dir in pairs(_G.OpenedFolders or {}) do
-		if norm_file:sub(1, #norm_dir) == norm_dir then
-			local next_char = norm_file:sub(#norm_dir + 1, #norm_dir + 1)
-			if next_char == "" or next_char == "/" or next_char == "\\" then
-				if #norm_dir > best_len then
-					best_match = orig_dir
-					best_len = #norm_dir
-				end
-			end
-		end
-	end
-
-	if best_match then
-		return best_match
-	end
-
-	-- 2. Search upwards from file_dir for project root markers
-	local root_markers = {
-		".git",
-		"go.mod",
-		"package.json",
-		"Cargo.toml",
-		"pyproject.toml",
-		"Makefile",
-		"tsconfig.json",
-		"pom.xml",
-		"build.gradle",
-		".sln",
-	}
-	local match = vim.fs.find(root_markers, { upward = true, path = file_dir })
-	if match and #match > 0 then
-		local found_root = vim.fs.dirname(match[1])
-		if found_root and found_root ~= "" then
-			local root_clean = vim.fn.fnamemodify(found_root, ":p"):gsub("[/\\]$", "")
-			_G.AddOpenedFolder(root_clean)
-			return root_clean
-		end
-	end
-
-	-- 3. Fallback to containing directory
-	local fallback_dir = vim.fn.fnamemodify(file_dir, ":p"):gsub("[/\\]$", "")
-	_G.AddOpenedFolder(fallback_dir)
-	return fallback_dir
-end
-
--- Automatically switch working directory (and Neo-tree root) when changing active buffer/tab
-vim.api.nvim_create_autocmd("BufEnter", {
-	group = vim.api.nvim_create_augroup("AutoProjectCwd", { clear = true }),
-	callback = function(ctx)
-		local buf = ctx.buf
-		if not vim.api.nvim_buf_is_valid(buf) then
-			return
-		end
-
-		local name = vim.api.nvim_buf_get_name(buf)
-		local buftype = vim.bo[buf].buftype
-		local filetype = vim.bo[buf].filetype
-
-		-- Ignore non-file buffers
-		if name == "" or buftype ~= "" or filetype == "neo-tree" or filetype == "alpha" or filetype == "notify" or filetype == "lazy" or filetype == "TelescopePrompt" then
-			return
-		end
-
-		if vim.fn.filereadable(name) == 0 and vim.fn.isdirectory(vim.fn.fnamemodify(name, ":h")) == 0 then
-			return
-		end
-
-		local target_dir = get_buffer_root_dir(name)
-		if not target_dir or target_dir == "" then
-			return
-		end
-
-		local current_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p"):gsub("[/\\]$", "")
-
-		if target_dir:lower() ~= current_cwd:lower() and vim.fn.isdirectory(target_dir) == 1 then
-			pcall(vim.api.nvim_set_current_dir, target_dir)
-
-			-- If Neo-tree sidebar is open, update displayed directory
-			local neotree_is_open = false
-			for _, win in ipairs(vim.api.nvim_list_wins()) do
-				if vim.api.nvim_win_is_valid(win) then
-					local b = vim.api.nvim_win_get_buf(win)
-					if vim.bo[b].filetype == "neo-tree" then
-						neotree_is_open = true
-						break
-					end
-				end
-			end
-
-			if neotree_is_open then
-				pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target_dir))
-			end
+		local dir = (ctx.file and ctx.file ~= "") and ctx.file or vim.fn.getcwd()
+		if _G.AddOpenedFolder then
+			_G.AddOpenedFolder(dir)
 		end
 	end,
 })
