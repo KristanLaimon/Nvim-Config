@@ -9,4 +9,8 @@ vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
 
+vim.opt.shell = "C:/Program Files/Git/bin/bash.exe"
+vim.opt.shellcmdflag = "-c"
+vim.opt.shellxquote = ""
+
 
