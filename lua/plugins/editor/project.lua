@@ -4,6 +4,24 @@ return {
     config = function()
         require('project_nvim').setup({
             manual_gc = false,
+            detection_methods = { 'pattern', 'lsp' },
+            patterns = {
+                '.git',
+                '_darcs',
+                '.hg',
+                '.bzr',
+                '.svn',
+                'Makefile',
+                'package.json',
+                'go.mod',
+                'Cargo.toml',
+                'pyproject.toml',
+                'tsconfig.json',
+                'pom.xml',
+                'build.gradle',
+            },
+            silent_chdir = true,
+            scope_chdir = 'global',
         })
         require('telescope').load_extension('projects')
 

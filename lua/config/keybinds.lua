@@ -390,3 +390,98 @@ vim.keymap.set("n", "<F2>", function()
 		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
 	end)
 end, { noremap = true, silent = true, desc = "Rename file" })
+
+-- Automatically switch working directory (and Neo-tree root) when changing active buffer/tab
+vim.api.nvim_create_autocmd("BufEnter", {
+	group = vim.api.nvim_create_augroup("AutoProjectCwd", { clear = true }),
+	callback = function(ctx)
+		local buf = ctx.buf
+		if not vim.api.nvim_buf_is_valid(buf) then
+			return
+		end
+
+		local name = vim.api.nvim_buf_get_name(buf)
+		local buftype = vim.bo[buf].buftype
+		local filetype = vim.bo[buf].filetype
+
+		-- Ignore non-file buffers
+		if name == "" or buftype ~= "" or filetype == "neo-tree" or filetype == "alpha" or filetype == "notify" or filetype == "lazy" or filetype == "TelescopePrompt" then
+			return
+		end
+
+		if vim.fn.filereadable(name) == 0 and vim.fn.isdirectory(vim.fn.fnamemodify(name, ":h")) == 0 then
+			return
+		end
+
+		local file_dir = vim.fn.fnamemodify(name, ":p:h")
+		local root_dir = nil
+
+		-- Check project_nvim first
+		local ok_proj, proj_api = pcall(require, "project_nvim.project")
+		if ok_proj and proj_api.get_project_root then
+			root_dir = proj_api.get_project_root()
+		end
+
+		-- Fallback search for common project markers
+		if not root_dir or root_dir == "" then
+			local root_markers = { ".git", "go.mod", "package.json", "Cargo.toml", "pyproject.toml", "Makefile", "tsconfig.json" }
+			local match = vim.fs.find(root_markers, { upward = true, path = file_dir })
+			if match and #match > 0 then
+				root_dir = vim.fs.dirname(match[1])
+			end
+		end
+
+		if not root_dir or root_dir == "" then
+			root_dir = file_dir
+		end
+
+		root_dir = vim.fn.fnamemodify(root_dir, ":p"):gsub("[/\\]$", "")
+		local current_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p"):gsub("[/\\]$", "")
+
+		if root_dir:lower() ~= current_cwd:lower() and vim.fn.isdirectory(root_dir) == 1 then
+			pcall(vim.api.nvim_set_current_dir, root_dir)
+		end
+	end,
+})
+
+-- Automatically clean up empty, un-modified, un-named buffers from bufferline when real files are open
+vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
+	group = vim.api.nvim_create_augroup("CleanNoNameBuffers", { clear = true }),
+	callback = function()
+		vim.schedule(function()
+			local bufs = vim.api.nvim_list_bufs()
+			local real_files = 0
+			for _, b in ipairs(bufs) do
+				if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
+					local bname = vim.api.nvim_buf_get_name(b)
+					local btype = vim.bo[b].buftype
+					local ftype = vim.bo[b].filetype
+					if bname ~= "" and btype == "" and ftype ~= "alpha" and ftype ~= "neo-tree" then
+						real_files = real_files + 1
+					end
+				end
+			end
+
+			-- Only clean up [No Name] buffers if at least 1 real file buffer is open
+			if real_files > 0 then
+				local visible_bufs = {}
+				for _, win in ipairs(vim.api.nvim_list_wins()) do
+					if vim.api.nvim_win_is_valid(win) then
+						visible_bufs[vim.api.nvim_win_get_buf(win)] = true
+					end
+				end
+
+				for _, b in ipairs(bufs) do
+					if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
+						local bname = vim.api.nvim_buf_get_name(b)
+						local btype = vim.bo[b].buftype
+						local modified = vim.bo[b].modified
+						if bname == "" and btype == "" and not modified and not visible_bufs[b] then
+							pcall(vim.api.nvim_buf_delete, b, { force = true })
+						end
+					end
+				end
+			end
+		end)
+	end,
+})

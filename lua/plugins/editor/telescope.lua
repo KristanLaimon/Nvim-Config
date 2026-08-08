@@ -79,8 +79,8 @@ return {
 				pcall(vim.api.nvim_set_current_dir, dir_path)
 				add_to_recent_projects(dir_path)
 
-				-- Open a clean buffer in the new workspace directory
-				vim.cmd('enew')
+				local curr_buf = vim.api.nvim_get_current_buf()
+				local is_alpha = vim.bo[curr_buf].filetype == 'alpha'
 
 				-- Close any remaining Alpha dashboard buffers
 				for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -89,7 +89,11 @@ return {
 					end
 				end
 
-				pcall(vim.cmd, 'Neotree show')
+				if is_alpha then
+					vim.cmd('enew')
+				end
+
+				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
 				vim.notify('📁 Opened folder: ' .. dir_path, vim.log.levels.INFO)
 			end
 
