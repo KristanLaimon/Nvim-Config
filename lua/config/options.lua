@@ -90,4 +90,7 @@ end
 
 setup_path_env()
 
+-- GUI & Font configuration with persistence
+require("config.font").setup()
+
 

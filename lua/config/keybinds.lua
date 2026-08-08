@@ -23,6 +23,57 @@ vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagn
 vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
 vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_prev, { desc = "Next diagnostic" })
 
+-- Go to Definition with Alt+k (and jump back with Ctrl+o)
+local function goto_definition()
+	vim.cmd("normal! m'")
+	local get_cls = vim.lsp.get_clients or vim.lsp.get_active_clients
+	local clients = get_cls({ bufnr = 0 })
+	if clients and #clients > 0 then
+		vim.lsp.buf.definition()
+	else
+		local ok = pcall(function()
+			vim.cmd("normal! \x1d")
+		end)
+		if not ok then
+			vim.notify("No definition found", vim.log.levels.WARN, { title = "LSP" })
+		end
+	end
+end
+
+vim.keymap.set({ "n", "v" }, "<A-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+vim.keymap.set({ "n", "v" }, "<M-k>", goto_definition, { noremap = true, silent = true, desc = "Go to definition" })
+
+-- Debugging (DAP) Keybindings
+local function dap_toggle_breakpoint()
+	local ok, dap = pcall(require, "dap")
+	if ok then dap.toggle_breakpoint() end
+end
+local function dap_continue()
+	local ok, dap = pcall(require, "dap")
+	if ok then dap.continue() end
+end
+local function dap_terminate()
+	local ok, dap = pcall(require, "dap")
+	if ok then
+		dap.terminate()
+		pcall(function() require("dapui").close() end)
+	end
+end
+
+vim.keymap.set({ "n", "i", "v" }, "<A-j>", dap_toggle_breakpoint, { noremap = true, silent = true, desc = "Toggle Breakpoint" })
+vim.keymap.set({ "n", "i", "v" }, "<M-j>", dap_toggle_breakpoint, { noremap = true, silent = true, desc = "Toggle Breakpoint" })
+vim.keymap.set({ "n", "i", "v" }, "<C-S-s>", dap_continue, { noremap = true, silent = true, desc = "Start/Continue Debugging" })
+vim.keymap.set({ "n", "i", "v" }, "<C-S-x>", dap_terminate, { noremap = true, silent = true, desc = "Terminate Debugger" })
+
+-- Per-Project Task Manager & Code Runner (Ctrl + Shift + A)
+vim.keymap.set({ "n", "i", "v" }, "<C-S-a>", function()
+	require("config.tasks").run_default_or_menu()
+end, { noremap = true, silent = true, desc = "Run Default Project Task" })
+
+vim.keymap.set("n", "<leader>ta", function()
+	require("config.tasks").open_task_menu()
+end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+
 vim.keymap.set({ "n", "v" }, "<leader>f", function()
 	require("conform").format({ async = true, lsp_fallback = true })
 end, { desc = "Format file or range" })

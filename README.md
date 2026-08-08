@@ -70,7 +70,7 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | Feature / Custom Plugin | Location | Purpose & Key Features | Keybindings |
 |---|---|---|---|
 | **Workspaces Manager** | [`lua/plugins/editor/workspaces.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/workspaces.lua) | UI session & workspace manager (Harpoon + Telescope hybrid). Persists open buffers, tab layouts, and `cwd` per project with slot shortcuts, rename/overwrite capabilities, and Telescope floating UI. | `<C-S-w>`, `<leader>ws`, `<leader>ww`, `<leader>wm`, `<leader>w1`..`9`, `<C-m>` |
-| **Desktop Folder Browser** | [`lua/plugins/editor/telescope.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/telescope.lua) | Custom Telescope folder picker starting at `~/Desktop`. Allows folder selection, changes `cwd`, opens Neo-tree, and registers folders into recent project history (`<C-S-r>`). Supports drill-down (`<C-l>`) and parent nav (`<C-h>`). | `<C-o>` (n, i) |
+| **Desktop Folder Browser** | [`lua/plugins/editor/telescope.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/telescope.lua) | Custom Telescope folder picker starting at `~/Desktop`. Allows folder selection, changes `cwd`, opens Neo-tree, and registers folders into recent project history (`<C-S-r>`). Supports drill-down (`<C-l>`) and parent nav (`<C-h>`). | `<C-S-o>` (n, i) |
 | **Multi-Terminal Manager** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | 1-9 indexed toggleable terminal system. Opens bottom split terminals, auto-hides when leaving window focus, and manages tab list cleanliness. | `<C-;>`, `<leader>t1`..`9` |
 | **Live Colorscheme Previewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Real-time command-line previewer for `:colorscheme`. Previews colors as you tab through choices and restores previous theme if cancelled (`<Esc>`). | `:colorscheme <Tab>` |
 | **Pixel Art Image Viewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Floating terminal window image viewer powered by `chafa` to render pixel art previews of images within Neovim. | `<leader>i` |
@@ -151,6 +151,9 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | Shortcut | Mode | Action |
 |---|---|---|
 | `<C-s>` | n, v, i | Save current file (`:w`) |
+| `<C-+>` / `<C-=>` | n, i, v, t | **Increase font size** (`+1pt`, saved permanently) |
+| `<C-->` | n, i, v, t | **Decrease font size** (`-1pt`, saved permanently) |
+| `<C-0>` | n, i, v, t | **Reset font size** to default (`14pt`) |
 | `<leader>f` | n, v | Format file or selection (LSP / Conform) |
 | `<F2>` | n | Rename file on disk (or item inside Neo-tree) |
 | `<C-w>` | n | Close current buffer (VSCode tab close style) |
@@ -181,9 +184,28 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
+| `<A-k>` / `<M-k>` | n, v | **Go to Definition** of symbol/method under cursor |
+| `<C-o>` | n | **Jump Back** to previous cursor location (Vim jump list) |
 | `<leader>k` | n | Show diagnostic error info floating under cursor |
 | `<leader>u` | n | Jump to previous diagnostic |
 | `<leader>o` | n | Jump to next diagnostic |
+
+### 🐞 Debugging (DAP)
+
+| Shortcut | Mode | Action |
+|---|---|---|
+| `<A-j>` / `<M-j>` | n, i, v | **Toggle Breakpoint** 🔴 on current line |
+| `<C-S-s>` | n, i, v | **Start / Continue Debugging** 🐞 (opens DAP-UI automatically) |
+| `<C-S-x>` | n, i, v | **Terminate Debugger** (closes debug session and UI) |
+
+---
+
+### 🛠️ Per-Project Task & Script Manager
+
+| Shortcut | Mode | Action |
+|---|---|---|
+| `<C-S-a>` | n, i, v | **Run Default Project Script** (auto-detects `Makefile`/`package.json` with `cwd = project_root`) |
+| `<leader>ta` | n | **Open Task Menu UI** (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
 
 ---
 

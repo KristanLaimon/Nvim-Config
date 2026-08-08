@@ -54,18 +54,46 @@ return {
 			end
 
 			local function add_to_recent_projects(dir_path)
-				dir_path = vim.fn.fnamemodify(dir_path, ':p'):gsub('[/\\]$', '')
+				if not dir_path or dir_path == '' then
+					return
+				end
+				local norm_path = vim.fn.fnamemodify(dir_path, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
+				if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
+					norm_path = norm_path:sub(1, 1):lower() .. norm_path:sub(2)
+				end
+
 				local history_ok, history = pcall(require, 'project_nvim.utils.history')
 				if history_ok then
-					local projects = history.get_recent_projects()
-					local new_projects = { dir_path }
-					for _, p in ipairs(projects) do
-						local norm_p = vim.fn.fnamemodify(p, ':p'):gsub('[/\\]$', '')
-						if norm_p:lower() ~= dir_path:lower() then
-							table.insert(new_projects, p)
+					history.session_projects = history.session_projects or {}
+					local filtered_session = {}
+					for _, p in ipairs(history.session_projects) do
+						local p_norm = p:gsub('\\', '/'):gsub('/$', '')
+						if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
+							p_norm = p_norm:sub(1, 1):lower() .. p_norm:sub(2)
+						end
+						if p_norm:lower() ~= norm_path:lower() then
+							table.insert(filtered_session, p)
 						end
 					end
-					history.write_projects_to_history(new_projects)
+					table.insert(filtered_session, norm_path)
+					history.session_projects = filtered_session
+
+					if history.recent_projects ~= nil then
+						local filtered_recent = {}
+						for _, p in ipairs(history.recent_projects) do
+							local p_norm = p:gsub('\\', '/'):gsub('/$', '')
+							if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
+								p_norm = p_norm:sub(1, 1):lower() .. p_norm:sub(2)
+							end
+							if p_norm:lower() ~= norm_path:lower() then
+								table.insert(filtered_recent, p)
+							end
+						end
+						table.insert(filtered_recent, norm_path)
+						history.recent_projects = filtered_recent
+					end
+
+					history.write_projects_to_history()
 				end
 			end
 
@@ -161,7 +189,6 @@ return {
 			}), {}):find()
 		end
 
-		vim.keymap.set('n', '<C-o>', open_folder_picker, { desc = 'Telescope open folder' })
-		vim.keymap.set('i', '<C-o>', open_folder_picker, { desc = 'Telescope open folder' })
+		vim.keymap.set({ 'n', 'i' }, '<C-S-o>', open_folder_picker, { desc = 'Telescope open folder' })
 	end
 }
