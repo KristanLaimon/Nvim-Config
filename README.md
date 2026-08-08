@@ -12,7 +12,7 @@
 
 ```
 
-A modular, modern, and hyper-fast Neovim configuration for Windows, designed with intuitive keybindings (VSCode + Vim hybrid style), real-time autocompletion, session/workspace management, dynamic terminals, Git integration, and multi-language support via Mason.
+A modular, modern, and hyper-fast Neovim configuration for Windows, Linux, and WSL, designed with intuitive keybindings (VSCode + Vim hybrid style), real-time autocompletion, session/workspace management, dynamic terminals, Git integration, and multi-language support via Mason.
 
 ---
 
@@ -38,7 +38,16 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 ---
 
-## 📦 Installed Plugins
+## 📦 Installed Plugins & Custom Modules
+
+### 🛠️ Custom-Tailored Plugins & Modules
+| Feature / Custom Plugin | Location | Purpose & Key Features | Keybindings |
+|---|---|---|---|
+| **Workspaces Manager** | [`lua/plugins/editor/workspaces.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/workspaces.lua) | UI session & workspace manager (Harpoon + Telescope hybrid). Persists open buffers, tab layouts, and `cwd` per project with slot shortcuts, rename/overwrite capabilities, and Telescope floating UI. | `<C-S-w>`, `<leader>ws`, `<leader>ww`, `<leader>wm`, `<leader>w1`..`9`, `<C-m>` |
+| **Desktop Folder Browser** | [`lua/plugins/editor/telescope.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/telescope.lua) | Custom Telescope folder picker starting at `~/Desktop`. Allows folder selection, changes `cwd`, opens Neo-tree, and registers folders into recent project history (`<C-S-r>`). Supports drill-down (`<C-l>`) and parent nav (`<C-h>`). | `<C-o>` (n, i) |
+| **Multi-Terminal Manager** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | 1-9 indexed toggleable terminal system. Opens bottom split terminals, auto-hides when leaving window focus, and manages tab list cleanliness. | `<C-;>`, `<leader>t1`..`9` |
+| **Live Colorscheme Previewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Real-time command-line previewer for `:colorscheme`. Previews colors as you tab through choices and restores previous theme if cancelled (`<Esc>`). | `:colorscheme <Tab>` |
+| **Pixel Art Image Viewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Floating terminal window image viewer powered by `chafa` to render pixel art previews of images within Neovim. | `<leader>i` |
 
 ### Core & LSP
 | Plugin | Purpose |
@@ -56,7 +65,6 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 ### Editor & Navigation
 | Plugin | Purpose |
 |---|---|
-| `workspaces` *(Custom)* | UI session & workspace manager (Harpoon + Telescope hybrid) |
 | `ThePrimeagen/harpoon` (v2) | Fast file bookmarking and navigation |
 | `nvim-telescope/telescope.nvim` | Powerful Fuzzy Finder |
 | `nvim-tree/neo-tree.nvim` | Sidebar file explorer |
@@ -186,6 +194,7 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 |---|---|---|
 | `<C-k>` | n, i | Find files in project (`find_files`) |
 | `<C-f>` | n, i | Live global text search (`live_grep`) |
+| `<C-o>` | n, i | Open system folder browser at Desktop |
 | `<C-S-r>` | n | Open recent projects list (`projects`) |
 | `<leader>fh` | n | Search help tags (`help_tags`) |
 
