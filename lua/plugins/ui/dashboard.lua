@@ -18,12 +18,9 @@ return {
         }
 
         dashboard.section.buttons.val = {
-            dashboard.button('f', '  Find file', ':Telescope find_files<CR>'),
-            dashboard.button('r', '  Recent files', ':Telescope oldfiles<CR>'),
             dashboard.button('p', '  Recent projects', ':Telescope projects<CR>'),
-            dashboard.button('g', '  Live grep', ':Telescope live_grep<CR>'),
-            dashboard.button('n', '  New file', ':ene <BAR> startinsert<CR>'),
-            dashboard.button('c', '  Config', ':e $MYVIMRC<CR>'),
+            dashboard.button('e', '  Plugins/Extensions', ':Lazy<CR>'),
+            dashboard.button('m', '  Lsps/Languages', ':Mason<CR>'),
             dashboard.button('q', '  Quit', ':qa<CR>'),
         }
 

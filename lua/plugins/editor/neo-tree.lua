@@ -14,6 +14,10 @@ return {
 	require("neo-tree").setup {
 	    window = {
 		width = 24,
+		mappings = {
+		    ["<C-n>"] = "add",
+		    ["<C-S-n>"] = "add_directory",
+		},
 	    },
 	    filesystem = {
 		filtered_items = {

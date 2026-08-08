@@ -91,6 +91,17 @@ local function Configure_Terminal_Toggle()
 		end
 
 		vim.cmd("startinsert")
+
+		-- Auto-hide: salir de la ventana terminal (foco a otro panel) la esconde
+		local group = vim.api.nvim_create_augroup("AutoHideTerminal", { clear = false })
+		vim.api.nvim_clear_autocmds({ group = group, buffer = term_buf })
+		vim.api.nvim_create_autocmd("WinLeave", {
+			group = group,
+			buffer = term_buf,
+			callback = function()
+				vim.schedule(HideTerminal)
+			end,
+		})
 	end
 
 	function HideTerminal()
