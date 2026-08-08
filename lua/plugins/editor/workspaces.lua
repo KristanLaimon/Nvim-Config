@@ -189,7 +189,7 @@ function M.save_workspace(name, callback)
 		if existing_for_cwd then
 			perform_save(existing_for_cwd.name)
 		else
-			vim.ui.input({
+			pcall(vim.ui.input, {
 				prompt = "Name for the new Workspace: ",
 				default = cwd_name .. " - " .. os.date("%H:%M"),
 			}, function(input_name)
@@ -328,7 +328,7 @@ function M.rename_workspace(ws_or_id, callback)
 		return
 	end
 
-	vim.ui.input({ prompt = "New name for '" .. target.name .. "': ", default = target.name }, function(new_name)
+	pcall(vim.ui.input, { prompt = "New name for '" .. target.name .. "': ", default = target.name }, function(new_name)
 		if new_name and new_name ~= "" and new_name ~= target.name then
 			target.name = new_name
 			target.updated_at = os.time()
@@ -350,14 +350,14 @@ function M.close_to_menu()
 
 	local close_all_and_open_alpha = function()
 		pcall(vim.cmd, "Neotree close")
+		pcall(vim.cmd, "only")
+		vim.cmd("Alpha")
+		local alpha_buf = vim.api.nvim_get_current_buf()
 		for _, b in ipairs(vim.api.nvim_list_bufs()) do
-			if vim.api.nvim_buf_is_valid(b) and vim.bo[b].filetype ~= "alpha" then
+			if b ~= alpha_buf and vim.api.nvim_buf_is_valid(b) and vim.bo[b].filetype ~= "alpha" then
 				pcall(vim.api.nvim_buf_delete, b, { force = true })
 			end
 		end
-		vim.schedule(function()
-			vim.cmd("Alpha")
-		end)
 	end
 
 	local choices = {
@@ -366,7 +366,7 @@ function M.close_to_menu()
 		"3. ❌ Cancel",
 	}
 
-	vim.ui.select(choices, {
+	pcall(vim.ui.select, choices, {
 		prompt = "🦊 Close session and return to Main Menu (Dashboard)?",
 	}, function(choice)
 		if not choice or choice:match("^3") then
