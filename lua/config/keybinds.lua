@@ -20,9 +20,9 @@ vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Ver info d
 vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Error anterior" })
 vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_prev, { desc = "Siguiente error" })
 
-vim.keymap.set("n", "<leader>f", function()
-	vim.lsp.buf.format()
-end, { desc = "Format file" })
+vim.keymap.set({ "n", "v" }, "<leader>f", function()
+	require("conform").format({ async = true, lsp_fallback = true })
+end, { desc = "Format file or range" })
 
 local function Configure_Terminal_Toggle()
 	-- ============================================================
