@@ -4,9 +4,11 @@ return {
 		dependencies = {
 			"williamboman/mason.nvim",
 			"williamboman/mason-lspconfig.nvim",
+			"b0o/schemastore.nvim",
 		},
 		opts = {
 			servers = {
+				jsonls = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -46,14 +48,22 @@ return {
 		config = function(_, opts)
 			-- 1. Initialize Mason
 			require("mason").setup()
-			require("mason-lspconfig").setup({ ensure_installed = { "lua_ls" } })
+			require("mason-lspconfig").setup({ ensure_installed = { "lua_ls", "jsonls" } })
 
 			vim.diagnostic.config({
 				virtual_text = true,
 				underline = true,
 			})
 
+			opts.servers.jsonls.settings = {
+				json = {
+					schemas = require("schemastore").json.schemas(),
+					validate = { enable = true },
+				},
+			}
+
 			for server, config in pairs(opts.servers) do
+				config.capabilities = require("blink.cmp").get_lsp_capabilities(config.capabilities)
 				vim.lsp.config(server, config)
 				vim.lsp.enable(server)
 			end
@@ -62,7 +72,7 @@ return {
 	{
 		"saghen/blink.cmp",
 		dependencies = { "rafamadriz/friendly-snippets" },
-		version = "1.*",
+		version = "*",
 		opts = {
 			keymap = {
 				preset = "default",
@@ -76,14 +86,13 @@ return {
 				documentation = { auto_show = false },
 			},
 			sources = { default = { "lsp", "path", "snippets", "buffer" } },
-			fuzzy = { implementation = "prefer_rust_with_warning" },
+			fuzzy = {
+				implementation = "prefer_rust_with_warning",
+				prebuilt_binaries = {
+					download = true,
+				},
+			},
 		},
 		opts_extend = { "sources.default" },
-		config = function()
-			local blink = require("blink.cmp")
-			vim.keymap.set("i", "<C-j>", function()
-				blink.show()
-			end, { silent = true })
-		end,
 	},
 }

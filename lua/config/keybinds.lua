@@ -26,10 +26,9 @@ end, { desc = "Format file" })
 
 local function Configure_Terminal_Toggle()
 	-- ============================================================
-	-- Toggle Terminal
+	-- Toggle Terminal (multiple, indexed 1-9, <leader>t == 1)
 	-- ============================================================
-	local term_buf = nil
-	local term_win = nil
+	local terminals = {} -- [n] = { buf = ..., win = ... }
 	local code_win = nil
 
 	local function is_valid_win(win)
@@ -40,18 +39,40 @@ local function Configure_Terminal_Toggle()
 		return buf and vim.api.nvim_buf_is_valid(buf)
 	end
 
-	function ToggleTerminal()
+	local function get_term(n)
+		local t = terminals[n]
+		if not t then
+			t = { buf = nil, win = nil }
+			terminals[n] = t
+		end
+		return t
+	end
+
+	-- Force-close a window even if it's the last one in the tab (kills the job instead of erroring)
+	local function ForceCloseWin(win)
+		win = win or vim.api.nvim_get_current_win()
+		if #vim.api.nvim_tabpage_list_wins(0) > 1 then
+			pcall(vim.api.nvim_win_close, win, true)
+		else
+			pcall(vim.api.nvim_buf_delete, vim.api.nvim_win_get_buf(win), { force = true })
+		end
+	end
+
+	function ToggleTerminal(n)
+		n = n or 1
+		local t = get_term(n)
+
 		-- Window may have been closed
-		if term_win and not is_valid_win(term_win) then
-			term_win = nil
+		if t.win and not is_valid_win(t.win) then
+			t.win = nil
 		end
 
 		local current = vim.api.nvim_get_current_win()
 
 		------------------------------------------------------------------
-		-- Currently in terminal -> return to editor
+		-- Currently in this terminal -> return to editor
 		------------------------------------------------------------------
-		if is_valid_win(term_win) and current == term_win then
+		if is_valid_win(t.win) and current == t.win then
 			vim.cmd("stopinsert")
 
 			if is_valid_win(code_win) then
@@ -69,10 +90,19 @@ local function Configure_Terminal_Toggle()
 		code_win = current
 
 		------------------------------------------------------------------
+		-- Terminal open in a different tab -> close it there instead of
+		-- jumping tabs, then reopen below in the current tab
+		------------------------------------------------------------------
+		if is_valid_win(t.win) and vim.api.nvim_win_get_tabpage(t.win) ~= vim.api.nvim_get_current_tabpage() then
+			vim.api.nvim_win_close(t.win, true)
+			t.win = nil
+		end
+
+		------------------------------------------------------------------
 		-- Terminal already visible
 		------------------------------------------------------------------
-		if is_valid_win(term_win) then
-			vim.api.nvim_set_current_win(term_win)
+		if is_valid_win(t.win) then
+			vim.api.nvim_set_current_win(t.win)
 			vim.cmd("startinsert")
 			return
 		end
@@ -81,33 +111,52 @@ local function Configure_Terminal_Toggle()
 		-- Create terminal window
 		------------------------------------------------------------------
 		vim.cmd("botright 7split")
-		term_win = vim.api.nvim_get_current_win()
+		t.win = vim.api.nvim_get_current_win()
 
-		if is_valid_buf(term_buf) then
-			vim.api.nvim_win_set_buf(term_win, term_buf)
+		if is_valid_buf(t.buf) then
+			vim.api.nvim_win_set_buf(t.win, t.buf)
 		else
 			vim.cmd("terminal")
-			term_buf = vim.api.nvim_get_current_buf()
+			t.buf = vim.api.nvim_get_current_buf()
+			-- Keep it out of the bufferline tab strip
+			vim.bo[t.buf].buflisted = false
+
+			vim.keymap.set("n", "<C-w>c", function()
+				ForceCloseWin(t.win)
+			end, { buffer = t.buf, noremap = true, silent = true, desc = "Close terminal" })
 		end
 
 		vim.cmd("startinsert")
 
 		-- Auto-hide: salir de la ventana terminal (foco a otro panel) la esconde
-		local group = vim.api.nvim_create_augroup("AutoHideTerminal", { clear = false })
-		vim.api.nvim_clear_autocmds({ group = group, buffer = term_buf })
+		local group = vim.api.nvim_create_augroup("AutoHideTerminal" .. n, { clear = true })
 		vim.api.nvim_create_autocmd("WinLeave", {
 			group = group,
-			buffer = term_buf,
+			buffer = t.buf,
 			callback = function()
-				vim.schedule(HideTerminal)
+				vim.schedule(function()
+					HideTerminal(n)
+				end)
 			end,
 		})
 	end
 
-	function HideTerminal()
-		if is_valid_win(term_win) then
-			vim.api.nvim_win_close(term_win, true)
-			term_win = nil
+	function HideTerminal(n)
+		local t = get_term(n or 1)
+		if is_valid_win(t.win) then
+			vim.api.nvim_win_close(t.win, true)
+			t.win = nil
+		end
+	end
+
+	-- Hide whichever terminal the cursor is currently inside
+	local function HideCurrentTerminal()
+		local current = vim.api.nvim_get_current_win()
+		for n, t in pairs(terminals) do
+			if t.win == current then
+				ToggleTerminal(n)
+				return
+			end
 		end
 	end
 
@@ -115,23 +164,26 @@ local function Configure_Terminal_Toggle()
 	-- Keymaps
 	-- ============================================================
 
-	-- Toggle terminal
-	vim.keymap.set("n", "<leader>t", ToggleTerminal, {
-		noremap = true,
-		silent = true,
-		desc = "Toggle Terminal",
-	})
+	for n = 1, 9 do
+		local lhs = n == 1 and "<leader>t" or ("<leader>t" .. n)
+
+		vim.keymap.set("n", lhs, function()
+			ToggleTerminal(n)
+		end, { noremap = true, silent = true, desc = "Toggle Terminal " .. n })
+	end
 
 	vim.keymap.set("t", "<leader>t", function()
 		vim.cmd("stopinsert")
-		ToggleTerminal()
+		HideCurrentTerminal()
 	end, {
 		noremap = true,
 		silent = true,
 		desc = "Toggle Terminal",
 	})
 
-	vim.keymap.set("n", "<C-;>", ToggleTerminal, {
+	vim.keymap.set("n", "<C-;>", function()
+		ToggleTerminal(1)
+	end, {
 		noremap = true,
 		silent = true,
 		desc = "Toggle Terminal",
@@ -139,7 +191,7 @@ local function Configure_Terminal_Toggle()
 
 	vim.keymap.set("t", "<C-;>", function()
 		vim.cmd("stopinsert")
-		ToggleTerminal()
+		HideCurrentTerminal()
 	end, {
 		noremap = true,
 		silent = true,
@@ -152,12 +204,12 @@ local function Configure_Terminal_Toggle()
 		silent = true,
 	})
 
-	-- Close current window with Ctrl+Shift+W
+	-- Close current window with Ctrl+Shift+W (force: no :q! needed, even for the last window)
 	vim.keymap.set({ "n", "t" }, "<C-S-w>", function()
 		if vim.fn.mode() == "t" then
 			vim.cmd("stopinsert")
 		end
-		vim.cmd("close")
+		ForceCloseWin()
 	end, {
 		noremap = true,
 		silent = true,
@@ -227,7 +279,91 @@ vim.api.nvim_create_autocmd("CmdlineLeave", {
 	end,
 })
 
+-- Ver imagen actual como pixel art (chafa) en ventana flotante
+vim.keymap.set("n", "<leader>i", function()
+	local path = vim.api.nvim_buf_get_name(0)
+
+	-- Si el foco quedó en neo-tree u otra ventana sin archivo, buscar
+	-- la primera ventana visible con un buffer real de archivo.
+	if path == "" or vim.fn.filereadable(path) == 0 or vim.bo.filetype == "neo-tree" then
+		path = ""
+		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+			local b = vim.api.nvim_win_get_buf(win)
+			if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
+				local name = vim.api.nvim_buf_get_name(b)
+				if name ~= "" and vim.fn.filereadable(name) == 1 then
+					path = name
+					break
+				end
+			end
+		end
+	end
+
+	if path == "" then
+		vim.notify("Sin archivo para mostrar", vim.log.levels.WARN)
+		return
+	end
+
+	local width = math.floor(vim.o.columns * 0.8)
+	local height = math.floor(vim.o.lines * 0.8)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = math.floor((vim.o.lines - height) / 2),
+		col = math.floor((vim.o.columns - width) / 2),
+		style = "minimal",
+		border = "rounded",
+	})
+
+	vim.fn.termopen(string.format("chafa --size=%dx%d %s", width, height, vim.fn.shellescape(path)))
+	vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = buf, silent = true })
+	vim.keymap.set("n", "<Esc>", "<Cmd>close<CR>", { buffer = buf, silent = true })
+end, { noremap = true, silent = true, desc = "Ver imagen (chafa)" })
+
 -- =========== Plugin Specifics =================
 -- Neo-tree
 -- Open/Close (Sidebar)
 vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorador" })
+
+-- F2: rename. Dentro de neo-tree usa su rename; en buffer normal renombra el archivo en disco.
+vim.keymap.set("n", "<F2>", function()
+	if vim.bo.filetype == "neo-tree" then
+		vim.api.nvim_feedkeys("r", "m", false)
+		return
+	end
+
+	local old_path = vim.api.nvim_buf_get_name(0)
+	if old_path == "" then
+		vim.notify("Buffer sin archivo, no se puede renombrar", vim.log.levels.WARN)
+		return
+	end
+
+	local dir = vim.fn.fnamemodify(old_path, ":h")
+	local old_name = vim.fn.fnamemodify(old_path, ":t")
+
+	vim.ui.input({ prompt = "Renombrar a: ", default = old_name }, function(new_name)
+		if not new_name or new_name == "" or new_name == old_name then
+			return
+		end
+
+		local new_path = dir .. "/" .. new_name
+
+		if vim.fn.filereadable(new_path) == 1 then
+			vim.notify("Ya existe: " .. new_path, vim.log.levels.ERROR)
+			return
+		end
+
+		vim.cmd("write")
+		local ok, err = os.rename(old_path, new_path)
+		if not ok then
+			vim.notify("Error al renombrar: " .. tostring(err), vim.log.levels.ERROR)
+			return
+		end
+
+		vim.cmd("edit " .. vim.fn.fnameescape(new_path))
+		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
+	end)
+end, { noremap = true, silent = true, desc = "Renombrar archivo" })

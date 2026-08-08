@@ -26,6 +26,17 @@ return {
 
         dashboard.section.footer.val = ''
 
+        -- Wrap alpha.redraw and alpha.draw in pcall to prevent WinResized invalid window id errors when closing splits/explorer
+        local orig_redraw = alpha.redraw
+        alpha.redraw = function(...)
+            return pcall(orig_redraw, ...)
+        end
+
+        local orig_draw = alpha.draw
+        alpha.draw = function(...)
+            return pcall(orig_draw, ...)
+        end
+
         alpha.setup(dashboard.opts)
 
         -- Closing the last real buffer shows the dashboard instead of quitting.
