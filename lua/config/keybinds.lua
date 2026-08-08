@@ -169,7 +169,63 @@ Configure_Terminal_Toggle()
 -- Ctrl+W closes current buffer (VSCode style tab close).
 -- Dashboard.lua's autocmd shows the menu instead of quitting when
 -- this closes the last listed buffer.
-vim.keymap.set("n", "<C-w>", "<Cmd>bdelete<CR>", { noremap = true, silent = true, desc = "Cerrar buffer actual" })
+vim.keymap.set("n", "<C-w>", function()
+	if vim.bo.filetype == "neo-tree" then
+		return
+	end
+	vim.cmd("bdelete")
+end, { noremap = true, silent = true, desc = "Cerrar buffer actual" })
+
+-- Resize ventana con Ctrl+flechas
+vim.keymap.set("n", "<C-Right>", "<Cmd>vertical resize -2<CR>", { noremap = true, silent = true, desc = "Ventana más angosta" })
+vim.keymap.set("n", "<C-Left>", "<Cmd>vertical resize +2<CR>", { noremap = true, silent = true, desc = "Ventana más ancha" })
+vim.keymap.set("n", "<C-Up>", "<Cmd>resize +2<CR>", { noremap = true, silent = true, desc = "Ventana más alta" })
+vim.keymap.set("n", "<C-Down>", "<Cmd>resize -2<CR>", { noremap = true, silent = true, desc = "Ventana más baja" })
+
+-- Cambiar buffers con Alt+h/l
+vim.keymap.set("n", "<A-h>", "<Cmd>bprevious<CR>", { noremap = true, silent = true, desc = "Buffer anterior" })
+vim.keymap.set("n", "<A-l>", "<Cmd>bnext<CR>", { noremap = true, silent = true, desc = "Buffer siguiente" })
+
+-- Preview en vivo de :colorscheme mientras se navega con Tab
+local colorscheme_preview_orig = nil
+vim.api.nvim_create_autocmd("CmdlineChanged", {
+	callback = function()
+		if vim.fn.getcmdtype() ~= ":" then
+			return
+		end
+
+		local cmdline = vim.fn.getcmdline()
+		local name = cmdline:match("^colo%S*%s+(%S+)%s*$")
+
+		if not name then
+			return
+		end
+
+		if colorscheme_preview_orig == nil then
+			colorscheme_preview_orig = vim.g.colors_name
+		end
+
+		pcall(vim.cmd.colorscheme, name)
+	end,
+})
+
+vim.api.nvim_create_autocmd("CmdlineLeave", {
+	callback = function()
+		if vim.fn.getcmdtype() ~= ":" then
+			return
+		end
+
+		local cmdline = vim.fn.getcmdline()
+		local applied = cmdline:match("^colo%S*%s+(%S+)%s*$")
+
+		-- Cancelado (Esc) sin confirmar -> revertir al tema anterior
+		if colorscheme_preview_orig and vim.v.event.abort and not applied then
+			pcall(vim.cmd.colorscheme, colorscheme_preview_orig)
+		end
+
+		colorscheme_preview_orig = nil
+	end,
+})
 
 -- =========== Plugin Specifics =================
 -- Neo-tree

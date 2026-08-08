@@ -1,9 +1,6 @@
-local function enable_transparency()
-    if vim.g.neovide then
-        return
-    end
-    vim.api.nvim_set_hl(0, "Normal", { bg = "#1b1b1d" })
-    vim.api.nvim_set_hl(0, "NormalNC", { bg = "#1b1b1d" })
+local function apply_custom_bg()
+    vim.api.nvim_set_hl(0, "Normal", { bg = "#1e1e1e" })
+    vim.api.nvim_set_hl(0, "NormalNC", { bg = "#1e1e1e" })
 end
 
 return {
@@ -14,7 +11,11 @@ return {
             -- The Doki Theme plugin uses lowercase names for characters.
             -- If 'rei' throws an error, you can find the exact name by typing `:colorscheme ` in Neovim and pressing <Tab>.
             vim.cmd.colorscheme "rei"
-            enable_transparency()
+            apply_custom_bg()
+
+            vim.api.nvim_create_autocmd("ColorScheme", {
+                callback = apply_custom_bg,
+            })
         end
     },
     {

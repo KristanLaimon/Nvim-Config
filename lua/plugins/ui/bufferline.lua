@@ -16,7 +16,7 @@ return {
             },
         }
 
-        vim.keymap.set("n", "gt", "<Cmd>BufferLineCycleNext<CR>", { noremap = true, silent = true, desc = "Siguiente pestaña" })
+        vim.keymap.set("n", "gT", "<Cmd>BufferLineCycleNext<CR>", { noremap = true, silent = true, desc = "Siguiente pestaña" })
         vim.keymap.set("n", "gT", "<Cmd>BufferLineCyclePrev<CR>", { noremap = true, silent = true, desc = "Pestaña anterior" })
     end
 }
