@@ -43,11 +43,24 @@ return {
         vim.api.nvim_create_autocmd("BufDelete", {
             callback = function()
                 vim.schedule(function()
+                    local win = vim.api.nvim_get_current_win()
+                    if not vim.api.nvim_win_is_valid(win) then
+                        return
+                    end
+                    local buf = vim.api.nvim_win_get_buf(win)
+                    local buftype = vim.bo[buf].buftype
+                    local filetype = vim.bo[buf].filetype
+
+                    -- Do not open dashboard if focused in terminal, neo-tree, or alpha
+                    if buftype == "terminal" or filetype == "alpha" or filetype == "neo-tree" then
+                        return
+                    end
+
                     local listed = vim.tbl_filter(function(b)
                         return vim.fn.buflisted(b) == 1 and vim.api.nvim_buf_get_name(b) ~= ""
                     end, vim.api.nvim_list_bufs())
 
-                    if #listed == 0 and vim.bo.filetype ~= "alpha" then
+                    if #listed == 0 then
                         vim.cmd("Alpha")
                     end
                 end)

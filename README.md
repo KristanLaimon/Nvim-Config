@@ -16,6 +16,32 @@ A modular, modern, and hyper-fast Neovim configuration for Windows, Linux, and W
 
 ---
 
+## ⚙️ System Requirements & External Dependencies
+
+To get full functionality (fast fuzzy finding, desktop folder browsing, image previews, LSP auto-installation, Treesitter compiling, and Git integration), install the required CLI tools using **Scoop** on Windows (or your Linux package manager):
+
+### 🚀 Quick Scoop Installation (Windows)
+```powershell
+scoop bucket add main
+scoop bucket add extras
+scoop install neovim git ripgrep fd chafa gcc nodejs-lts go
+```
+
+### 📋 System Dependencies Breakdown
+
+| Tool / CLI | Purpose in Config | Scoop Command (Windows) | Linux / WSL Package |
+|---|---|---|---|
+| **Neovim** (>= 0.10) | Core Neovim editor | `scoop install neovim` | `neovim` |
+| **Git** | Mason, Neogit, Lazy plugin manager | `scoop install git` | `git` |
+| **ripgrep** (`rg`) | Telescope live grep text search (`<C-f>`) | `scoop install ripgrep` | `ripgrep` |
+| **fd** | Telescope Desktop folder browser (`<C-o>`) & fast file finder | `scoop install fd` | `fd-find` / `fd` |
+| **chafa** | Terminal pixel-art image previewer (`<leader>i`) | `scoop install chafa` | `chafa` |
+| **GCC / MinGW** | Compiling Treesitter language parsers | `scoop install gcc` | `gcc` / `build-essential` |
+| **Node.js & npm** | JS/TS LSP (`ts_ls`), JSON, HTML/CSS LSPs & Prettier | `scoop install nodejs-lts` | `nodejs` `npm` |
+| **Go** | Go LSP (`gopls`), `gofumpt`, `goimports` | `scoop install go` | `golang` |
+
+---
+
 ## 🛠️ Languages, LSP, Formatters & Parsers (Mason & Treesitter)
 
 This configuration comes preconfigured to automatically install and manage LSPs, formatters, and syntax highlighting via **Mason**, **Conform**, and **Treesitter**.

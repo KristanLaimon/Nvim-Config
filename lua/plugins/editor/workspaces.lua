@@ -661,13 +661,7 @@ local plugin_spec = {
 			M.select_workspace()
 		end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
 
-		-- <C-m> or <C-S-m>: Close workspace and go to Dashboard Menu with prompt
-		vim.keymap.set({ "n", "i", "v", "t" }, "<C-m>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.close_to_menu()
-		end, { noremap = true, silent = true, desc = "Close and return to Main Menu" })
+		-- <C-S-m>: Close workspace and go to Dashboard Menu with prompt
 
 		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-m>", function()
 			if vim.fn.mode() == "t" then

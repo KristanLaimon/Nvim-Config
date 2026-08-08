@@ -29,13 +29,12 @@ return {
 			local dirs = { curr_dir }
 
 			if vim.fn.executable('fd') == 1 then
-				local cmd = { 'fd', '--type', 'd', '--hidden', '--exclude', '.git', '--exclude', 'node_modules', '--exclude', '.cache', '--max-depth', '3' }
-				local output = vim.fn.systemlist(cmd, curr_dir)
+				local cmd = { 'fd', '.', curr_dir, '--type', 'd', '--hidden', '--exclude', '.git', '--exclude', 'node_modules', '--exclude', '.cache', '--max-depth', '3' }
+				local output = vim.fn.systemlist(cmd)
 				if vim.v.shell_error == 0 then
 					for _, line in ipairs(output) do
 						if line ~= '' then
-							local full = curr_dir .. '/' .. line:gsub('\\', '/')
-							full = full:gsub('[/\\]$', '')
+							local full = line:gsub('\\', '/'):gsub('/$', '')
 							table.insert(dirs, full)
 						end
 					end
@@ -49,7 +48,7 @@ return {
 						hidden = false,
 					})
 					for _, d in ipairs(results) do
-						table.insert(dirs, (d:gsub('\\', '/'):gsub('[/\\]$', '')))
+						table.insert(dirs, (d:gsub('\\', '/'):gsub('/$', '')))
 					end
 				end
 			end
@@ -80,8 +79,14 @@ return {
 				pcall(vim.api.nvim_set_current_dir, dir_path)
 				add_to_recent_projects(dir_path)
 
-				if vim.bo.filetype == 'alpha' then
-					pcall(vim.cmd, 'bdelete')
+				-- Open a clean buffer in the new workspace directory
+				vim.cmd('enew')
+
+				-- Close any remaining Alpha dashboard buffers
+				for _, b in ipairs(vim.api.nvim_list_bufs()) do
+					if vim.api.nvim_buf_is_valid(b) and vim.bo[b].filetype == 'alpha' then
+						pcall(vim.api.nvim_buf_delete, b, { force = true })
+					end
 				end
 
 				pcall(vim.cmd, 'Neotree show')
@@ -93,16 +98,20 @@ return {
 				finder = finders.new_table({
 					results = dirs,
 					entry_maker = function(entry)
-						local rel = entry
-						if entry:lower() == curr_dir:lower() then
-							rel = '. (Current Root: ' .. entry .. ')'
-						elseif entry:sub(1, #curr_dir) == curr_dir then
-							rel = entry:sub(#curr_dir + 2)
+						local norm_entry = entry:gsub('\\', '/'):gsub('/$', '')
+						local norm_curr = curr_dir:gsub('\\', '/'):gsub('/$', '')
+						local rel = norm_entry
+
+						if norm_entry:lower() == norm_curr:lower() then
+							rel = '. (Current Root: ' .. norm_entry .. ')'
+						elseif norm_entry:lower():sub(1, #norm_curr) == norm_curr:lower() then
+							rel = norm_entry:sub(#norm_curr + 2)
 						end
+
 						return {
-							value = entry,
+							value = norm_entry,
 							display = '📁 ' .. rel,
-							ordinal = rel .. ' ' .. entry,
+							ordinal = rel .. ' ' .. norm_entry,
 						}
 					end,
 				}),
