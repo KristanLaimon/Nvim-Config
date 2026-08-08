@@ -10,7 +10,7 @@ return {
       "folke/snacks.nvim"
     },
     config = function ()
-	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorador" })
+	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
 	require("neo-tree").setup {
 	    window = {
 		width = 24,

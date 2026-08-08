@@ -6,22 +6,22 @@ vim.keymap.set("n", "<leader>cd", vim.cmd.Ex)
 vim.keymap.set("n", "<C-_>", "gcc", { remap = true, desc = "Comment line" })
 vim.keymap.set("v", "<C-_>", "gc", { remap = true, desc = "Comment selection" })
 
-vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Guardar archivo" })
+vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
 --
 -- QOL Features
 vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
 
 -- Movements across panels
-vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Ir a la ventana izquierda" })
-vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Ir a la ventana derecha" })
-vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Ir a la ventana de abajo" })
-vim.keymap.set("n", "<C-S-k>", "<C-w>k", { desc = "Ir a la ventana de arriba" })
+vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
+vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
+vim.keymap.set("n", "<C-j>", "<C-w>j", { desc = "Move to bottom window" })
+vim.keymap.set("n", "<C-S-k>", "<C-w>k", { desc = "Move to top window" })
 
--- Errors
-vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Ver info del error" })
-vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Error anterior" })
-vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_prev, { desc = "Siguiente error" })
+-- Errors / Diagnostics
+vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagnostic info" })
+vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
+vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_prev, { desc = "Next diagnostic" })
 
 vim.keymap.set({ "n", "v" }, "<leader>f", function()
 	require("conform").format({ async = true, lsp_fallback = true })
@@ -131,7 +131,7 @@ local function Configure_Terminal_Toggle()
 
 		vim.cmd("startinsert")
 
-		-- Auto-hide: salir de la ventana terminal (foco a otro panel) la esconde
+		-- Auto-hide: leaving the terminal window hides it
 		local group = vim.api.nvim_create_augroup("AutoHideTerminal" .. n, { clear = true })
 		vim.api.nvim_create_autocmd("WinLeave", {
 			group = group,
@@ -229,25 +229,25 @@ vim.keymap.set("n", "<C-w>", function()
 		return
 	end
 	vim.cmd("bdelete")
-end, { noremap = true, silent = true, desc = "Cerrar buffer actual" })
+end, { noremap = true, silent = true, desc = "Close current buffer" })
 
--- Resize ventana con Ctrl+flechas
+-- Resize window with Ctrl+arrows
 vim.keymap.set(
 	"n",
 	"<C-Right>",
 	"<Cmd>vertical resize -2<CR>",
-	{ noremap = true, silent = true, desc = "Ventana más angosta" }
+	{ noremap = true, silent = true, desc = "Make window narrower" }
 )
 vim.keymap.set(
 	"n",
 	"<C-Left>",
 	"<Cmd>vertical resize +2<CR>",
-	{ noremap = true, silent = true, desc = "Ventana más ancha" }
+	{ noremap = true, silent = true, desc = "Make window wider" }
 )
-vim.keymap.set("n", "<C-Up>", "<Cmd>resize +2<CR>", { noremap = true, silent = true, desc = "Ventana más alta" })
-vim.keymap.set("n", "<C-Down>", "<Cmd>resize -2<CR>", { noremap = true, silent = true, desc = "Ventana más baja" })
+vim.keymap.set("n", "<C-Up>", "<Cmd>resize +2<CR>", { noremap = true, silent = true, desc = "Make window taller" })
+vim.keymap.set("n", "<C-Down>", "<Cmd>resize -2<CR>", { noremap = true, silent = true, desc = "Make window shorter" })
 
--- Cambiar buffers con Alt+h/l o Alt+flechas (deshabilitado en neo-tree)
+-- Switch buffers with Alt+h/l or Alt+arrows (disabled in neo-tree)
 local function safe_buf_navigate(cmd)
 	return function()
 		if vim.bo.filetype == "neo-tree" then
@@ -257,12 +257,12 @@ local function safe_buf_navigate(cmd)
 	end
 end
 
-vim.keymap.set("n", "<A-h>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Buffer anterior" })
-vim.keymap.set("n", "<A-l>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Buffer siguiente" })
-vim.keymap.set("n", "<A-Left>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Buffer anterior" })
-vim.keymap.set("n", "<A-Right>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Buffer siguiente" })
+vim.keymap.set("n", "<A-h>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Previous buffer" })
+vim.keymap.set("n", "<A-l>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Next buffer" })
+vim.keymap.set("n", "<A-Left>", safe_buf_navigate("BufferLineCyclePrev"), { noremap = true, silent = true, desc = "Previous buffer" })
+vim.keymap.set("n", "<A-Right>", safe_buf_navigate("BufferLineCycleNext"), { noremap = true, silent = true, desc = "Next buffer" })
 
--- Preview en vivo de :colorscheme mientras se navega con Tab
+-- Live preview of :colorscheme while navigating with Tab
 local colorscheme_preview_orig = nil
 vim.api.nvim_create_autocmd("CmdlineChanged", {
 	callback = function()
@@ -294,7 +294,7 @@ vim.api.nvim_create_autocmd("CmdlineLeave", {
 		local cmdline = vim.fn.getcmdline()
 		local applied = cmdline:match("^colo%S*%s+(%S+)%s*$")
 
-		-- Cancelado (Esc) sin confirmar -> revertir al tema anterior
+		-- Cancelled (Esc) without confirming -> revert to previous colorscheme
 		if colorscheme_preview_orig and vim.v.event.abort and not applied then
 			pcall(vim.cmd.colorscheme, colorscheme_preview_orig)
 		end
@@ -303,12 +303,11 @@ vim.api.nvim_create_autocmd("CmdlineLeave", {
 	end,
 })
 
--- Ver imagen actual como pixel art (chafa) en ventana flotante
+-- View current image as pixel art (chafa) in floating window
 vim.keymap.set("n", "<leader>i", function()
 	local path = vim.api.nvim_buf_get_name(0)
 
-	-- Si el foco quedó en neo-tree u otra ventana sin archivo, buscar
-	-- la primera ventana visible con un buffer real de archivo.
+	-- If focus is in neo-tree or non-file window, find first visible file buffer
 	if path == "" or vim.fn.filereadable(path) == 0 or vim.bo.filetype == "neo-tree" then
 		path = ""
 		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -324,7 +323,7 @@ vim.keymap.set("n", "<leader>i", function()
 	end
 
 	if path == "" then
-		vim.notify("Sin archivo para mostrar", vim.log.levels.WARN)
+		vim.notify("No file to display", vim.log.levels.WARN)
 		return
 	end
 
@@ -345,14 +344,14 @@ vim.keymap.set("n", "<leader>i", function()
 	vim.fn.termopen(string.format("chafa --size=%dx%d %s", width, height, vim.fn.shellescape(path)))
 	vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = buf, silent = true })
 	vim.keymap.set("n", "<Esc>", "<Cmd>close<CR>", { buffer = buf, silent = true })
-end, { noremap = true, silent = true, desc = "Ver imagen (chafa)" })
+end, { noremap = true, silent = true, desc = "View image (chafa)" })
 
 -- =========== Plugin Specifics =================
 -- Neo-tree
 -- Open/Close (Sidebar)
-vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorador" })
+vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
 
--- F2: rename. Dentro de neo-tree usa su rename; en buffer normal renombra el archivo en disco.
+-- F2: rename. Inside neo-tree uses its rename; in normal buffer renames file on disk.
 vim.keymap.set("n", "<F2>", function()
 	if vim.bo.filetype == "neo-tree" then
 		vim.api.nvim_feedkeys("r", "m", false)
@@ -361,14 +360,14 @@ vim.keymap.set("n", "<F2>", function()
 
 	local old_path = vim.api.nvim_buf_get_name(0)
 	if old_path == "" then
-		vim.notify("Buffer sin archivo, no se puede renombrar", vim.log.levels.WARN)
+		vim.notify("Buffer has no file, cannot rename", vim.log.levels.WARN)
 		return
 	end
 
 	local dir = vim.fn.fnamemodify(old_path, ":h")
 	local old_name = vim.fn.fnamemodify(old_path, ":t")
 
-	vim.ui.input({ prompt = "Renombrar a: ", default = old_name }, function(new_name)
+	vim.ui.input({ prompt = "Rename to: ", default = old_name }, function(new_name)
 		if not new_name or new_name == "" or new_name == old_name then
 			return
 		end
@@ -376,18 +375,18 @@ vim.keymap.set("n", "<F2>", function()
 		local new_path = dir .. "/" .. new_name
 
 		if vim.fn.filereadable(new_path) == 1 then
-			vim.notify("Ya existe: " .. new_path, vim.log.levels.ERROR)
+			vim.notify("File already exists: " .. new_path, vim.log.levels.ERROR)
 			return
 		end
 
 		vim.cmd("write")
 		local ok, err = os.rename(old_path, new_path)
 		if not ok then
-			vim.notify("Error al renombrar: " .. tostring(err), vim.log.levels.ERROR)
+			vim.notify("Error renaming file: " .. tostring(err), vim.log.levels.ERROR)
 			return
 		end
 
 		vim.cmd("edit " .. vim.fn.fnameescape(new_path))
 		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
 	end)
-end, { noremap = true, silent = true, desc = "Renombrar archivo" })
+end, { noremap = true, silent = true, desc = "Rename file" })

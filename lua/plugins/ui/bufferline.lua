@@ -20,13 +20,13 @@ return {
 			"n",
 			"gt",
 			"<Cmd>BufferLineCycleNext<CR>",
-			{ noremap = true, silent = true, desc = "Siguiente pestaña" }
+			{ noremap = true, silent = true, desc = "Next tab" }
 		)
 		vim.keymap.set(
 			"n",
 			"gT",
 			"<Cmd>BufferLineCyclePrev<CR>",
-			{ noremap = true, silent = true, desc = "Pestaña anterior" }
+			{ noremap = true, silent = true, desc = "Previous tab" }
 		)
 
 		-- Move active tab order left / right
@@ -34,13 +34,13 @@ return {
 			"n",
 			"<C-A-h>",
 			"<Cmd>BufferLineMovePrev<CR>",
-			{ noremap = true, silent = true, desc = "Mover pestaña a la izquierda" }
+			{ noremap = true, silent = true, desc = "Move tab left" }
 		)
 		vim.keymap.set(
 			"n",
 			"<C-A-l>",
 			"<Cmd>BufferLineMoveNext<CR>",
-			{ noremap = true, silent = true, desc = "Mover pestaña a la derecha" }
+			{ noremap = true, silent = true, desc = "Move tab right" }
 		)
 	end,
 }

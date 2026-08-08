@@ -4,7 +4,7 @@ return {
   ft = "json",
   config = function()
     require("package-info").setup({
-      -- auto-detecta por lockfile (bun.lock, pnpm-lock.yaml, etc); esto es fallback
+      -- Auto-detects via lockfile (bun.lock, pnpm-lock.yaml, etc); this is fallback
       package_manager = "bun",
     })
 
