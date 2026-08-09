@@ -27,7 +27,7 @@ return {
 		dashboard.section.header.opts.hl = "AlphaHeaderOrange"
 
 		dashboard.section.buttons.val = {
-
+			dashboard.button("f", "  Explorador de Archivos (Desktop)", ":TelescopeFileBrowserDesktop<CR>"),
 			dashboard.button("p", "  Recent projects", ":Telescope projects<CR>"),
 			dashboard.button("e", "  Plugins/Extensions", ":Lazy<CR>"),
 			dashboard.button("m", "  Lsps/Languages", ":Mason<CR>"),

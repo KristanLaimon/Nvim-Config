@@ -18,12 +18,17 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 📁 Archivos y Búsqueda
 	-- --------------------------------------------------------------------------
-	{ name = "🔍 Buscar Archivos (Find Files ROBERTO)", keys = "<C-k>", category = "Archivos" },
+	{ name = "🔍 Buscar Archivos (respetando .gitignore)", keys = "<C-k>", category = "Archivos" },
+	{ name = "🔍 Buscar Archivos (sin importar .gitignore)", cmd = "TelescopeFindFilesNoIgnore", category = "Archivos" },
+	{ name = "🔍 Buscar y Abrir Archivo a la Izquierda (Split Left)", keys = "<C-S-h>", category = "Archivos" },
+	{ name = "🔍 Buscar y Abrir Archivo Abajo (Split Down)", keys = "<C-S-j>", category = "Archivos" },
+	{ name = "🔍 Buscar y Abrir Archivo Arriba (Split Up)", keys = "<C-S-k>", category = "Archivos" },
+	{ name = "🔍 Buscar y Abrir Archivo a la Derecha (Split Right)", keys = "<C-S-l>", category = "Archivos" },
 	{ name = "📝 Buscar Texto en Archivos (Live Grep)", keys = "<C-f>", category = "Archivos" },
 	{ name = "📂 Abrir Carpeta (Open Folder)", keys = "<C-S-o>", category = "Archivos" },
 	{ name = "⭐ Proyectos Recientes (Recent Projects)", keys = "<C-S-r>", category = "Archivos" },
-	{ name = "📌 Menú Harpoon", keys = "<leader>hh", category = "Archivos" },
-	{ name = "📌 Añadir Archivo Actual a Harpoon", keys = "<leader>ha", category = "Archivos" },
+	{ name = "📁 Explorador de Archivos (Desktop)", keys = "<C-S-f>", category = "Archivos" },
+	{ name = "🖥️ Alternar Terminal Seleccionada", keys = "<C-;>", category = "Terminal" },
 
 	-- --------------------------------------------------------------------------
 	-- 🦊 Workspaces y Sesiones
@@ -33,8 +38,12 @@ M.commands = {
 	{ name = "🚪 Cerrar Workspace e ir al Menú Principal", cmd = "WorkspaceClose", category = "Workspace" },
 
 	-- --------------------------------------------------------------------------
-	-- 🛠️ Tareas y Ejecución de Código
+	-- 🛠️ Tareas y Ejecución de Código (Estilo IntelliJ)
 	-- --------------------------------------------------------------------------
+	{ name = "🚀 [Play] Menú de Ejecución IntelliJ", keys = "<leader>rp", category = "Tareas" },
+	{ name = "🐞 [Debug] Menú de Depuración IntelliJ", keys = "<leader>rd", category = "Tareas" },
+	{ name = "⚙️ [Profiles] Menú de Perfiles y Tareas IntelliJ", keys = "<leader>rc", category = "Tareas" },
+	{ name = "🚀 Alternar Barra Superior Estilo IntelliJ", cmd = "IntelliJToolbarToggle", category = "Interfaz" },
 	{ name = "🚀 Ejecutar Tarea por Defecto del Proyecto", keys = "<C-S-a>", category = "Tareas" },
 	{ name = "🛠️ Abrir Menú de Tareas del Proyecto", keys = "<leader>ta", category = "Tareas" },
 
@@ -165,7 +174,8 @@ _G.CommandPalette = M
 
 -- Especificación del Plugin para Lazy.nvim
 local plugin_spec = {
-	"nvim-telescope/telescope.nvim",
+	name = "command_palette",
+	dir = vim.fn.stdpath("config"),
 	cmd = "CommandPalette",
 	keys = {
 		{
@@ -184,6 +194,9 @@ local plugin_spec = {
 			mode = { "n", "i", "v", "t" },
 			desc = "Command Palette",
 		},
+	},
+	dependencies = {
+		"nvim-telescope/telescope.nvim",
 	},
 	config = function()
 		vim.api.nvim_create_user_command("CommandPalette", function()

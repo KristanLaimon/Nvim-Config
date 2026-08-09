@@ -205,35 +205,19 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
+| `<C-S-t>` / `<leader>ta` | n, i, v | **Open Task Menu UI** (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
 | `<C-S-a>` | n, i, v | **Run Default Project Script** (auto-detects `Makefile`/`package.json` with `cwd = project_root`) |
-| `<leader>ta` | n | **Open Task Menu UI** (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
 
 ---
 
-### 💻 Integrated Terminal (Multiple Terminals 1-9)
+### 💻 Integrated Terminal (Lazy-Loaded Multi-Terminals 1-9)
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<leader>t` / `<leader>t1` | n | Toggle Terminal #1 (bottom panel) |
-| `<leader>t2` .. `<leader>t9` | n | Toggle Terminal #2 to #9 |
-| `<C-;>` | n, t | Toggle Terminal #1 from any mode |
-| `<C-w>c` | n (in terminal) | Close active terminal window (kills process safely) |
+| `<Alt+1>` .. `<Alt+9>` | n, i, t | **Select & Switch Terminal #1 to #9** (Lazy loaded on demand) |
+| `<C-;>` | n, i, t | **Toggle Currently Selected Terminal** (open/hide bottom panel) |
+| `<C-w>c` | n (in terminal) | Close active terminal window |
 | `<C-w>` | t | Standard window navigation from terminal mode |
-
----
-
-### 📌 Harpoon (v2)
-
-| Shortcut | Mode | Action |
-|---|---|---|
-| `<leader>ha` | n | Add current file to Harpoon |
-| `<leader>hh` | n | Open Harpoon quick menu |
-| `<leader>1` / `<leader>2` / `<leader>3` | n | Jump to file in slot 1, 2, or 3 |
-| `<leader>hd` | n | Remove current file from Harpoon list |
-| `<leader>hm` | n | Move current file up one slot |
-| `<leader>fl` | n | View Harpoon list with preview in Telescope |
-| `<C-S-P>` | n | Jump to previous Harpoon item |
-| `<C-S-N>` | n | Jump to next Harpoon item |
 
 ---
 
@@ -241,7 +225,8 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-k>` | n, i | Find files in project (`find_files`) |
+| `<C-k>` | n, i | Buscar archivos respetando `.gitignore` (`find_files`) |
+| `<C-Alt-k>` / `<C-A-k>` | n, i | Buscar archivos sin importar `.gitignore` (`find_files no_ignore=true`) |
 | `<C-f>` | n, i | Live global text search (`live_grep`) |
 | `<C-o>` | n, i | Open system folder browser at Desktop |
 | `<C-S-r>` | n | Open recent projects list (`projects`) |

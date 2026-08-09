@@ -1,13 +1,44 @@
 return {
 	'nvim-telescope/telescope.nvim',
-	cmd = 'Telescope',
+	cmd = {
+		'Telescope',
+		'TelescopeOpenFolder',
+		'TelescopeFileBrowserDesktop',
+		'TelescopeFindFilesSplitLeft',
+		'TelescopeFindFilesSplitBelow',
+		'TelescopeFindFilesSplitAbove',
+		'TelescopeFindFilesSplitRight',
+		'TelescopeFindFilesNoIgnore',
+	},
 	keys = {
-		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files' },
+		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (excluye .gitignore)' },
+		{ '<C-A-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<C-A-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<C-M-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<C-M-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<A-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<A-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<M-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<M-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<leader>fa', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'v' }, desc = 'Find all files (no .gitignore)' },
 		{ '<C-f>', '<cmd>Telescope live_grep<CR>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
 		{ '<leader>fh', '<cmd>Telescope help_tags<CR>', desc = 'Telescope help tags' },
 		{ '<C-S-o>', '<cmd>TelescopeOpenFolder<CR>', mode = { 'n', 'i' }, desc = 'Telescope open folder' },
+		{ '<C-S-f>', '<cmd>TelescopeFileBrowserDesktop<CR>', mode = { 'n', 'i', 'v' }, desc = 'Open Desktop File Explorer' },
+		{ '<C-S-h>', '<cmd>TelescopeFindFilesSplitLeft<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split left' },
+		{ '<C-S-j>', '<cmd>TelescopeFindFilesSplitBelow<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split below' },
+		{ '<C-S-k>', '<cmd>TelescopeFindFilesSplitAbove<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split above' },
+		{ '<C-S-l>', '<cmd>TelescopeFindFilesSplitRight<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split right' },
+		{ '<C-S-H>', '<cmd>TelescopeFindFilesSplitLeft<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split left' },
+		{ '<C-S-J>', '<cmd>TelescopeFindFilesSplitBelow<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split below' },
+		{ '<C-S-K>', '<cmd>TelescopeFindFilesSplitAbove<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split above' },
+		{ '<C-S-L>', '<cmd>TelescopeFindFilesSplitRight<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split right' },
 	},
-	dependencies = { 'nvim-lua/plenary.nvim', 'ahmedkhalf/project.nvim' },
+	dependencies = {
+		'nvim-lua/plenary.nvim',
+		'ahmedkhalf/project.nvim',
+		'nvim-telescope/telescope-file-browser.nvim',
+	},
 	config = function()
 
 		local telescope = require('telescope')
@@ -19,13 +50,49 @@ return {
 		local action_state = require('telescope.actions.state')
 		local themes = require('telescope.themes')
 
-		telescope.setup({})
+		telescope.setup({
+			defaults = {
+				mappings = {
+					n = {
+						["?"] = function()
+							require("config.krs.context_help").show_help()
+						end,
+					},
+				},
+			},
+		})
 
-		vim.keymap.set('n', '<C-k>', builtin.find_files, { desc = 'Telescope find files' })
-		vim.keymap.set('i', '<C-k>', builtin.find_files, { desc = 'Telescope find files' })
+		local function find_files_gitignore()
+			builtin.find_files({ no_ignore = false })
+		end
+
+		local function find_files_no_ignore()
+			builtin.find_files({ no_ignore = true, hidden = true })
+		end
+
+		vim.api.nvim_create_user_command('TelescopeFindFilesNoIgnore', find_files_no_ignore, { desc = 'Buscar archivos ignorando .gitignore' })
+
+		vim.keymap.set({ 'n', 'i' }, '<C-k>', find_files_gitignore, { desc = 'Telescope find files (excluye .gitignore)' })
+
+		local no_ignore_keys = { '<C-A-k>', '<C-A-K>', '<C-M-k>', '<C-M-K>', '<A-C-k>', '<A-C-K>', '<M-C-k>', '<M-C-K>', '<leader>fa' }
+		for _, key in ipairs(no_ignore_keys) do
+			vim.keymap.set({ 'n', 'i' }, key, find_files_no_ignore, { noremap = true, silent = true, desc = 'Telescope find files (sin importar .gitignore)' })
+		end
+
 		vim.keymap.set('n', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
 		vim.keymap.set('i', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
 		vim.keymap.set('n', '<leader>fh', builtin.help_tags, { desc = 'Telescope help tags' })
+
+		local function normalize_dir_path(path)
+			if not path or path == '' then
+				return ''
+			end
+			local p = vim.fn.fnamemodify(path, ':p')
+			if p:match('^[A-Za-z]:[/\\]$') or p == '/' then
+				return p
+			end
+			return (p:gsub('[/\\]$', ''))
+		end
 
 		local function open_folder_picker(opts)
 			opts = opts or {}
@@ -35,7 +102,7 @@ return {
 			end
 
 			local curr_dir = opts.cwd or desktop_path
-			curr_dir = vim.fn.fnamemodify(curr_dir, ':p'):gsub('[/\\]$', '')
+			curr_dir = normalize_dir_path(curr_dir)
 
 			local dirs = { curr_dir }
 
@@ -68,7 +135,7 @@ return {
 				if not dir_path or dir_path == '' then
 					return
 				end
-				local norm_path = vim.fn.fnamemodify(dir_path, ':p'):gsub('[/\\]$', ''):gsub('\\', '/')
+				local norm_path = normalize_dir_path(dir_path):gsub('\\', '/')
 				if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
 					norm_path = norm_path:sub(1, 1):lower() .. norm_path:sub(2)
 				end
@@ -109,7 +176,7 @@ return {
 			end
 
 			local function open_directory(dir_path)
-				dir_path = vim.fn.fnamemodify(dir_path, ':p'):gsub('[/\\]$', '')
+				dir_path = normalize_dir_path(dir_path)
 				if vim.fn.isdirectory(dir_path) == 0 then
 					vim.notify('Directory does not exist: ' .. dir_path, vim.log.levels.ERROR)
 					return
@@ -200,9 +267,75 @@ return {
 			}), {}):find()
 		end
 
+		pcall(telescope.load_extension, 'file_browser')
+
 		vim.api.nvim_create_user_command('TelescopeOpenFolder', function()
 			open_folder_picker()
 		end, {})
 		vim.keymap.set({ 'n', 'i' }, '<C-S-o>', open_folder_picker, { desc = 'Telescope open folder' })
+
+		vim.api.nvim_create_user_command('TelescopeFileBrowserDesktop', function()
+			require('config.krs.file_explorer').open_desktop_explorer()
+		end, {})
+		vim.keymap.set({ 'n', 'i' }, '<C-S-f>', function()
+			require('config.krs.file_explorer').open_desktop_explorer()
+		end, { desc = 'Open Desktop File Explorer' })
+
+		local function open_find_files_split(direction)
+			local dir_names = {
+				h = 'Izquierda (←)',
+				j = 'Abajo (↓)',
+				k = 'Arriba (↑)',
+				l = 'Derecha (→)',
+			}
+
+			builtin.find_files({
+				prompt_title = ' 🔍 Abrir Archivo a la ' .. (dir_names[direction] or direction) .. ' ',
+				attach_mappings = function(prompt_bufnr, map)
+					actions.select_default:replace(function()
+						local selection = action_state.get_selected_entry()
+						actions.close(prompt_bufnr)
+						if selection and (selection.value or selection[1]) then
+							local filepath = selection.value or selection[1]
+							local cmd
+							if direction == 'h' then
+								cmd = 'leftabove vsplit '
+							elseif direction == 'l' then
+								cmd = 'rightbelow vsplit '
+							elseif direction == 'k' then
+								cmd = 'leftabove split '
+							elseif direction == 'j' then
+								cmd = 'rightbelow split '
+							end
+							if cmd then
+								vim.cmd(cmd .. vim.fn.fnameescape(filepath))
+							end
+						end
+					end)
+					return true
+				end,
+			})
+		end
+
+		vim.api.nvim_create_user_command('TelescopeFindFilesSplitLeft', function() open_find_files_split('h') end, {})
+		vim.api.nvim_create_user_command('TelescopeFindFilesSplitBelow', function() open_find_files_split('j') end, {})
+		vim.api.nvim_create_user_command('TelescopeFindFilesSplitAbove', function() open_find_files_split('k') end, {})
+		vim.api.nvim_create_user_command('TelescopeFindFilesSplitRight', function() open_find_files_split('l') end, {})
+
+		local split_key_modes = { 'n', 'i', 'v' }
+		local split_keymaps = {
+			h = { '<C-S-h>', '<C-S-H>' },
+			j = { '<C-S-j>', '<C-S-J>' },
+			k = { '<C-S-k>', '<C-S-K>' },
+			l = { '<C-S-l>', '<C-S-L>' },
+		}
+
+		for dir, keys_list in pairs(split_keymaps) do
+			for _, k in ipairs(keys_list) do
+				vim.keymap.set(split_key_modes, k, function()
+					open_find_files_split(dir)
+				end, { noremap = true, silent = true, desc = 'Buscar archivo y abrir en split (' .. dir .. ')' })
+			end
+		end
 	end,
 }

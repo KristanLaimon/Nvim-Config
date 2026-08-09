@@ -1,28 +1,16 @@
 -- ============================================================================
 -- 🦊 KRS PLUGIN: Centro de Control de Git Interactivo (Ctrl + Shift + G)
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE MÓDULO?
--- 1. Alternable Garantizado (Toggle / Untoggle):
---      - Presiona <Ctrl+Shift+G> para abrir o cerrar el panel en cualquier momento.
--- 2. Edición Nativa en Vim para Commit & Tag:
---      - Presiona [c] (Title), [m] (Description) o [t] (Tag) para abrir un editor de buffer nativo de Vim.
--- 3. Refresco In-Place Sin Parpadeo (Zero Flicker):
---      - Las actualizaciones de estado (stage, unstage, commit, tag) actualizan el contenido del buffer in-place sin cerrar ni reabrir las ventanas flotantes.
--- 4. Acciones Globales del Panel:
---      - [S] (Shift + s) -> Stage All (Todos los archivos)
---      - [U] (Shift + u) -> Unstage All (Todos los archivos)
---      - [s] -> Stage Seleccionado / [v+s] -> Stage Multi-Selección
---      - [u] -> Unstage Seleccionado / [v+u] -> Unstage Multi-Selección
--- 5. Rendimiento Optimizado (Debounced Preview 40ms & Memoria Caché Lua).
--- 6. Títulos de Secciones en Inglés.
--- ============================================================================
 
 local M = {}
 
 -- Referencias a ventanas abiertas para Toggle/Untoggle
 M.main_win = nil
 M.preview_win = nil
+M.main_buf = nil
+M.preview_buf = nil
 M.diff_cache = {}
+M.line_map = {}
 
 -- Estado interno del formulario de commit
 M.commit_data = {
@@ -30,6 +18,21 @@ M.commit_data = {
 	description = "",
 	tag = "",
 }
+
+-- Namespace para los highlights del Diff estilo VSCode
+local ns_diff = vim.api.nvim_create_namespace("git_center_diff_hl")
+
+-- Configurar los colores estilo VSCode para los cambios + y -
+local function setup_diff_highlights()
+	-- Líneas añadidas (+) -> Fondo verde suave, texto verde claro estilo VSCode
+	vim.api.nvim_set_hl(0, "GitCenterDiffAdd", { bg = "#1c3427", fg = "#a6e3a1", default = true })
+	-- Líneas eliminadas (-) -> Fondo rojo suave, texto rojo claro estilo VSCode
+	vim.api.nvim_set_hl(0, "GitCenterDiffDelete", { bg = "#3b1d22", fg = "#f38ba8", default = true })
+	-- Encabezado de Fragmento/Hunk (@@) -> Fondo azul suave, texto cian/azul bold
+	vim.api.nvim_set_hl(0, "GitCenterDiffHeader", { bg = "#1e293b", fg = "#89dceb", bold = true, default = true })
+	-- Texto de contexto sin cambios
+	vim.api.nvim_set_hl(0, "GitCenterDiffContext", { fg = "#cdd6f4", default = true })
+end
 
 -- Comprobar si el Centro de Git está abierto
 function M.is_open()
@@ -46,6 +49,8 @@ function M.close_git_center()
 	end
 	M.main_win = nil
 	M.preview_win = nil
+	M.main_buf = nil
+	M.preview_buf = nil
 end
 
 -- Alternar abrir/cerrar (Toggle / Untoggle)
@@ -57,30 +62,46 @@ function M.toggle_git_center()
 	end
 end
 
--- Ejecutar comando Git en consola y devolver la salida formateada
-local function run_git_cmd(args, cwd)
+-- Ejecutar comando Git nativo utilizando vim.system (Robusto en Windows/Linux, sin fallos de quoting)
+local function run_git(args, cwd)
 	cwd = cwd or vim.fn.getcwd()
-	local cmd = "git -C " .. vim.fn.shellescape(cwd) .. " " .. args
-	return vim.fn.systemlist(cmd)
+	local cmd = { "git", "-C", cwd }
+
+	if type(args) == "string" then
+		for word in args:gmatch("%S+") do
+			table.insert(cmd, word)
+		end
+	elseif type(args) == "table" then
+		for _, arg in ipairs(args) do
+			table.insert(cmd, arg)
+		end
+	end
+
+	local obj = vim.system(cmd, { text = true }):wait()
+	local stdout = obj.stdout or ""
+	if stdout == "" then
+		return {}
+	end
+	return vim.split(stdout, "[\r\n]+", { trimempty = true })
 end
 
 -- Obtener métricas y metadatos completos de Git
 function M.get_git_info()
 	local cwd = vim.fn.getcwd()
 	if vim.fn.isdirectory(cwd .. "/.git") == 0 then
-		local is_inside = run_git_cmd("rev-parse --is-inside-work-tree")[1]
-		if is_inside ~= "true" then
+		local is_inside = run_git({ "rev-parse", "--is-inside-work-tree" })
+		if not is_inside or is_inside[1] ~= "true" then
 			return nil
 		end
 	end
 
 	-- 1. Branch
-	local branch_output = run_git_cmd("branch --show-current")
+	local branch_output = run_git({ "branch", "--show-current" })
 	local branch = (branch_output and #branch_output > 0 and branch_output[1] ~= "") and branch_output[1] or "HEAD (Detached)"
 
 	-- 2. Lines + and -
-	local numstat = run_git_cmd("diff --numstat")
-	local numstat_cached = run_git_cmd("diff --cached --numstat")
+	local numstat = run_git({ "diff", "--numstat" })
+	local numstat_cached = run_git({ "diff", "--cached", "--numstat" })
 	local added_lines = 0
 	local deleted_lines = 0
 
@@ -100,16 +121,16 @@ function M.get_git_info()
 	end
 
 	-- 3. Staged Files
-	local staged_files = run_git_cmd("diff --name-only --cached")
+	local staged_files = run_git({ "diff", "--name-only", "--cached" })
 
 	-- 4. Unstaged Files
-	local unstaged_files = run_git_cmd("diff --name-only")
+	local unstaged_files = run_git({ "diff", "--name-only" })
 
 	-- 5. Untracked Files
-	local untracked_files = run_git_cmd("ls-files --others --exclude-standard")
+	local untracked_files = run_git({ "ls-files", "--others", "--exclude-standard" })
 
 	-- 6. Linear Git Graph
-	local graph = run_git_cmd("log --graph --oneline --all --decorate --color=never -n 12")
+	local graph = run_git({ "log", "--graph", "--oneline", "--all", "--decorate", "--color=never", "-n", "12" })
 
 	return {
 		branch = branch,
@@ -126,23 +147,26 @@ end
 local function build_panel_content(info, left_width)
 	local lines = {}
 	local line_map = {}
+	local section_lines = {}
 
-	-- HEADER (English)
+	-- HEADER
 	table.insert(lines, string.format(" 🌿 Branch: %s", info.branch))
 	table.insert(lines, string.format(" 📊 Changes: +%d -%d lines", info.added, info.deleted))
 	table.insert(lines, string.format(" 🟢 Staged: %d  |  🔴 Unstaged: %d  |  ❓ Untracked: %d", #info.staged, #info.unstaged, #info.untracked))
 	table.insert(lines, string.rep("═", left_width - 2))
 
-	-- SECTION 1: Commit Box & Tag (English)
-	table.insert(lines, " 📝 [SECTION 1: COMMIT BOX & TAG]")
+	-- SECTION 1: Commit Box & Tag
+	section_lines[1] = #lines + 1
+	table.insert(lines, " 📝 [SECTION 1: COMMIT BOX & TAG] (Press 1)")
 	table.insert(lines, "   [c] Title:       " .. (M.commit_data.title ~= "" and M.commit_data.title or "<Press c to edit in Vim>"))
 	table.insert(lines, "   [m] Description: " .. (M.commit_data.description ~= "" and M.commit_data.description or "<Optional - Press m>"))
 	table.insert(lines, "   [t] Tag:         " .. (M.commit_data.tag ~= "" and M.commit_data.tag or "<Optional - Press t>"))
 	table.insert(lines, "   🚀 [C] Execute Commit & Tag")
 	table.insert(lines, string.rep("─", left_width - 2))
 
-	-- SECTION 2: Staged Files (English)
-	table.insert(lines, string.format(" 🟢 [SECTION 2: STAGED FILES (%d)] ([u] Unstage / [U] Unstage All)", #info.staged))
+	-- SECTION 2: Staged Files
+	section_lines[2] = #lines + 1
+	table.insert(lines, string.format(" 🟢 [SECTION 2: STAGED FILES (%d)] (Press 2 | [u] Unstage / [U] Unstage All)", #info.staged))
 	if #info.staged > 0 then
 		for _, f in ipairs(info.staged) do
 			table.insert(lines, "   ✓ " .. f)
@@ -153,9 +177,10 @@ local function build_panel_content(info, left_width)
 	end
 	table.insert(lines, string.rep("─", left_width - 2))
 
-	-- SECTION 3: Unstaged & Untracked Files (English)
+	-- SECTION 3: Unstaged & Untracked Files
+	section_lines[3] = #lines + 1
 	local total_unstaged = #info.unstaged + #info.untracked
-	table.insert(lines, string.format(" 🔴 [SECTION 3: UNSTAGED & UNTRACKED FILES (%d)] ([s] Stage / [S] Stage All)", total_unstaged))
+	table.insert(lines, string.format(" 🔴 [SECTION 3: UNSTAGED & UNTRACKED FILES (%d)] (Press 3 | [s] Stage / [S] Stage All)", total_unstaged))
 	if #info.unstaged > 0 then
 		for _, f in ipairs(info.unstaged) do
 			table.insert(lines, "   M " .. f)
@@ -173,8 +198,9 @@ local function build_panel_content(info, left_width)
 	end
 	table.insert(lines, string.rep("─", left_width - 2))
 
-	-- SECTION 4: Linear Git Graph (English)
-	table.insert(lines, " 📜 [SECTION 4: LINEAR GIT GRAPH & TAGS]")
+	-- SECTION 4: Linear Git Graph
+	section_lines[4] = #lines + 1
+	table.insert(lines, " 📜 [SECTION 4: LINEAR GIT GRAPH & TAGS] (Press 4)")
 	if info.graph and #info.graph > 0 then
 		for _, g_line in ipairs(info.graph) do
 			table.insert(lines, "   " .. g_line)
@@ -183,10 +209,65 @@ local function build_panel_content(info, left_width)
 		table.insert(lines, "   (no commit history)")
 	end
 
-	return lines, line_map
+	return lines, line_map, section_lines
 end
 
--- Open native Vim buffer editor modal for Title, Description, or Tag
+-- Formateador Estilo VSCode para las diferencias (Omite cabeceras molestas de terminal y solo muestra fragmentos/hunks cambiados)
+local function format_vscode_diff(raw_lines, is_untracked)
+	local formatted = {}
+	local line_types = {}
+
+	if is_untracked then
+		table.insert(formatted, " ─── 📄 New Untracked File ──────────────────────────────────────────")
+		table.insert(line_types, "header")
+		for _, line in ipairs(raw_lines) do
+			table.insert(formatted, "+ " .. line)
+			table.insert(line_types, "add")
+		end
+		return formatted, line_types
+	end
+
+	local in_header = true
+	local hunk_count = 0
+
+	for _, line in ipairs(raw_lines) do
+		-- Omitir ruido de terminal de Git diff
+		if line:match("^diff %--git") or line:match("^index %x+%.%.%x+") or line:match("^%-%-%- a/") or line:match("^%+%+%+ b/") or line:match("^new file mode") or line:match("^deleted file mode") then
+			-- Ignorar líneas de cabecera de consola
+		elseif line:match("^@@ %-%d+,?%d* %+%d+,?%d* @@") then
+			in_header = false
+			hunk_count = hunk_count + 1
+			local hunk_info = line:match("@@ %-%d+,?%d* %+%d+,?%d* @@(.*)") or ""
+			local hunk_range = line:match("(@@ %-%d+,?%d* %+%d+,?%d* @@)") or line
+			local header_str = string.format(" ─── Hunk %d %s %s", hunk_count, hunk_range, hunk_info ~= "" and ("(" .. hunk_info:gsub("^%s*", "") .. ") ") or "")
+			if #header_str < 65 then
+				header_str = header_str .. string.rep("─", 65 - #header_str)
+			end
+			table.insert(formatted, header_str)
+			table.insert(line_types, "header")
+		elseif not in_header then
+			if line:sub(1, 1) == "+" then
+				table.insert(formatted, line)
+				table.insert(line_types, "add")
+			elseif line:sub(1, 1) == "-" then
+				table.insert(formatted, line)
+				table.insert(line_types, "delete")
+			else
+				table.insert(formatted, line)
+				table.insert(line_types, "context")
+			end
+		end
+	end
+
+	if #formatted == 0 then
+		table.insert(formatted, " (no visible changes in this file)")
+		table.insert(line_types, "context")
+	end
+
+	return formatted, line_types
+end
+
+-- Abrir modal del editor nativo de Vim
 local function open_vim_editor_modal(title_label, default_text, on_save)
 	local width = math.floor(vim.o.columns * 0.65)
 	local height = 6
@@ -228,7 +309,7 @@ local function open_vim_editor_modal(title_label, default_text, on_save)
 	vim.cmd("startinsert!")
 end
 
--- Open or Refresh Git Control Center (<Ctrl+Shift+G>)
+-- Abrir o Refrescar el Centro de Git (<Ctrl+Shift+G>)
 function M.open_git_center()
 	if M.is_open() then
 		M.close_git_center()
@@ -241,6 +322,7 @@ function M.open_git_center()
 		return
 	end
 
+	setup_diff_highlights()
 	M.diff_cache = {}
 
 	local total_width = math.floor(vim.o.columns * 0.92)
@@ -252,6 +334,7 @@ function M.open_git_center()
 
 	-- Left Control Panel Window
 	local main_buf = vim.api.nvim_create_buf(false, true)
+	M.main_buf = main_buf
 	M.main_win = vim.api.nvim_open_win(main_buf, true, {
 		relative = "editor",
 		width = left_width,
@@ -260,12 +343,13 @@ function M.open_git_center()
 		col = start_col,
 		style = "minimal",
 		border = "rounded",
-		title = " 🐙 Git Center (Ctrl+Shift+G to untoggle) ",
+		title = " 🐙 Git Center (Ctrl+Shift+J/K Scroll Preview | Tab Focus | Ctrl+Shift+G Close) ",
 		title_pos = "center",
 	})
 
-	-- Right Live Preview Window
+	-- Right Live Preview Window (VSCode Diff)
 	local preview_buf = vim.api.nvim_create_buf(false, true)
+	M.preview_buf = preview_buf
 	M.preview_win = vim.api.nvim_open_win(preview_buf, false, {
 		relative = "editor",
 		width = right_width,
@@ -274,11 +358,14 @@ function M.open_git_center()
 		col = start_col + left_width + 2,
 		style = "minimal",
 		border = "rounded",
-		title = " 👁️ Live Diff Preview (+ / -) ",
+		title = " 👁️ VSCode Live Diff (+ / -) | Ctrl+Shift+J/K: Scroll Text ",
 		title_pos = "center",
 	})
 
-	-- Autocomando de seguridad para limpiar variables cuando la ventana se cierra
+	vim.api.nvim_set_option_value("number", true, { win = M.preview_win })
+	vim.api.nvim_set_option_value("wrap", false, { win = M.preview_win })
+
+	-- Autocomando de seguridad para limpiar variables al cerrar
 	vim.api.nvim_create_autocmd("WinClosed", {
 		pattern = tostring(M.main_win),
 		once = true,
@@ -287,13 +374,14 @@ function M.open_git_center()
 		end,
 	})
 
-	local lines, line_map = build_panel_content(info, left_width)
+	local lines, line_map, section_lines = build_panel_content(info, left_width)
+	M.line_map = line_map
 
 	vim.api.nvim_buf_set_lines(main_buf, 0, -1, false, lines)
 	vim.api.nvim_set_option_value("filetype", "markdown", { buf = main_buf })
 	vim.api.nvim_set_option_value("cursorline", true, { win = M.main_win })
 
-	-- Debounced Live Preview Update
+	-- Actualización del Preview con colores VSCode y filtrado de cabeceras
 	local preview_timer = nil
 	local function update_preview_debounced()
 		if preview_timer then
@@ -311,43 +399,53 @@ function M.open_git_center()
 			end
 
 			local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
-			local item = line_map[row]
+			local item = M.line_map[row]
 
 			if not item or not item.file then
 				vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, { " 💡 Select a staged or unstaged file to view diff." })
+				vim.api.nvim_buf_clear_namespace(preview_buf, ns_diff, 0, -1)
 				return
 			end
 
 			local cache_key = item.type .. ":" .. item.file
 			if not M.diff_cache[cache_key] then
-				local preview_lines = {}
+				local raw_lines = {}
+				local is_untracked = false
+
 				if item.type == "staged" then
-					preview_lines = run_git_cmd("diff --cached --color=never " .. vim.fn.shellescape(item.file))
-					if #preview_lines == 0 then
-						preview_lines = run_git_cmd("diff --cached --no-ext-diff " .. vim.fn.shellescape(item.file))
-					end
+					raw_lines = run_git({ "diff", "--cached", "--color=never", "--", item.file })
 				elseif item.type == "unstaged" then
-					preview_lines = run_git_cmd("diff --color=never " .. vim.fn.shellescape(item.file))
+					raw_lines = run_git({ "diff", "--color=never", "--", item.file })
 				elseif item.type == "untracked" then
+					is_untracked = true
 					if vim.fn.filereadable(item.file) == 1 then
-						preview_lines = vim.fn.readfile(item.file)
+						raw_lines = vim.fn.readfile(item.file)
 					else
-						preview_lines = { " [ New File ]" }
+						raw_lines = { "[ Empty or New File ]" }
 					end
 				end
 
-				if #preview_lines == 0 then
-					if vim.fn.filereadable(item.file) == 0 then
-						preview_lines = { " 🗑️ [ File Deleted ]" }
-					else
-						preview_lines = { " (no visible changes)" }
-					end
-				end
-				M.diff_cache[cache_key] = preview_lines
+				local formatted, line_types = format_vscode_diff(raw_lines, is_untracked)
+				M.diff_cache[cache_key] = { formatted = formatted, line_types = line_types }
 			end
 
-			vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, M.diff_cache[cache_key])
-			vim.api.nvim_set_option_value("filetype", "diff", { buf = preview_buf })
+			local cached_data = M.diff_cache[cache_key]
+			vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, cached_data.formatted)
+			vim.api.nvim_buf_clear_namespace(preview_buf, ns_diff, 0, -1)
+
+			-- Aplicar los highlights de color estilo VSCode línea por línea
+			for i, ltype in ipairs(cached_data.line_types) do
+				local line_idx = i - 1
+				if ltype == "add" then
+					vim.api.nvim_buf_add_highlight(preview_buf, ns_diff, "GitCenterDiffAdd", line_idx, 0, -1)
+				elseif ltype == "delete" then
+					vim.api.nvim_buf_add_highlight(preview_buf, ns_diff, "GitCenterDiffDelete", line_idx, 0, -1)
+				elseif ltype == "header" then
+					vim.api.nvim_buf_add_highlight(preview_buf, ns_diff, "GitCenterDiffHeader", line_idx, 0, -1)
+				elseif ltype == "context" then
+					vim.api.nvim_buf_add_highlight(preview_buf, ns_diff, "GitCenterDiffContext", line_idx, 0, -1)
+				end
+			end
 		end))
 	end
 
@@ -366,8 +464,10 @@ function M.open_git_center()
 			return
 		end
 
-		local new_lines, new_line_map = build_panel_content(cur_info, left_width)
+		local new_lines, new_line_map, new_section_lines = build_panel_content(cur_info, left_width)
+		M.line_map = new_line_map
 		line_map = new_line_map
+		section_lines = new_section_lines
 
 		local cur_pos = vim.api.nvim_win_get_cursor(M.main_win)
 		vim.api.nvim_buf_set_lines(main_buf, 0, -1, false, new_lines)
@@ -388,34 +488,91 @@ function M.open_git_center()
 
 			local files_to_process = {}
 			for r = start_row, end_row do
-				local it = line_map[r]
+				local it = M.line_map[r]
 				if it and it.file then
-					table.insert(files_to_process, vim.fn.shellescape(it.file))
+					table.insert(files_to_process, it.file)
 				end
 			end
 
 			if #files_to_process > 0 then
-				local files_str = table.concat(files_to_process, " ")
 				if action_type == "stage" then
-					run_git_cmd("add " .. files_str)
+					run_git({ "add", "--", unpack(files_to_process) })
 				elseif action_type == "unstage" then
-					run_git_cmd("restore --staged " .. files_str)
+					run_git({ "restore", "--staged", "--", unpack(files_to_process) })
 				end
 			end
 			refresh()
 		end)
 	end
 
-	local key_opts = { buffer = main_buf, noremap = true, silent = true }
+	-- Códigos de teclas nativos exactos para Vim Motion <Ctrl+d> y <Ctrl+u> (Evita bugs de escape octal)
+	local ctrl_d = vim.api.nvim_replace_termcodes("<C-d>", true, false, true)
+	local ctrl_u = vim.api.nvim_replace_termcodes("<C-u>", true, false, true)
 
-	-- UNTOGGLE CON CUALQUIER COMBINACIÓN DE TECLAS DE CERRAR (<C-S-g>, <C-S-G>, <C-g>, q, Esc)
+	-- Función de desplazamiento fluido (Vim Motions Ctrl+d / Ctrl+u nativos) en el visor derecho
+	local function scroll_preview(direction)
+		if not M.preview_win or not vim.api.nvim_win_is_valid(M.preview_win) then return end
+		vim.api.nvim_win_call(M.preview_win, function()
+			if direction == "down" then
+				vim.cmd("normal! " .. ctrl_d)
+			else
+				vim.cmd("normal! " .. ctrl_u)
+			end
+		end)
+	end
+
+	local scroll_down = function() scroll_preview("down") end
+	local scroll_up = function() scroll_preview("up") end
+
+	local key_opts = { buffer = main_buf, noremap = true, silent = true, nowait = true }
+
+	-- NAVEGACIÓN DE DESPLAZAMIENTO DEL VISOR DERECHO CON CTRL+SHIFT+J / CTRL+SHIFT+K
+	local nav_down = { "<C-S-j>", "<C-S-J>", "<C-j>", "<C-J>" }
+	local nav_up = { "<C-S-k>", "<C-S-K>", "<C-k>", "<C-K>" }
+
+	for _, k in ipairs(nav_down) do
+		vim.keymap.set("n", k, scroll_down, { buffer = main_buf, noremap = true, silent = true, nowait = true })
+		vim.keymap.set("n", k, scroll_down, { buffer = preview_buf, noremap = true, silent = true, nowait = true })
+	end
+
+	for _, k in ipairs(nav_up) do
+		vim.keymap.set("n", k, scroll_up, { buffer = main_buf, noremap = true, silent = true, nowait = true })
+		vim.keymap.set("n", k, scroll_up, { buffer = preview_buf, noremap = true, silent = true, nowait = true })
+	end
+
+	-- Alternar foco entre panel izquierdo y visor derecho con <Tab>
+	local tab_toggle = function()
+		if vim.api.nvim_get_current_win() == M.main_win then
+			if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
+				vim.api.nvim_set_current_win(M.preview_win)
+			end
+		else
+			if M.main_win and vim.api.nvim_win_is_valid(M.main_win) then
+				vim.api.nvim_set_current_win(M.main_win)
+			end
+		end
+	end
+	vim.keymap.set("n", "<Tab>", tab_toggle, { buffer = main_buf, noremap = true, silent = true, nowait = true })
+	vim.keymap.set("n", "<Tab>", tab_toggle, { buffer = preview_buf, noremap = true, silent = true, nowait = true })
+
+	-- UNTOGGLE CON CUALQUIER COMBINACIÓN DE TECLAS DE CERRAR
 	local close_keys = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>", "q", "<Esc>" }
 	for _, k in ipairs(close_keys) do
 		vim.keymap.set("n", k, M.close_git_center, key_opts)
 		vim.keymap.set("v", k, M.close_git_center, key_opts)
+		vim.keymap.set("n", k, M.close_git_center, { buffer = preview_buf, noremap = true, silent = true, nowait = true })
 	end
 
-	-- [c]: Edit Commit Title in Native Vim Editor
+	-- [1], [2], [3], [4]: Saltador directo a la Sección 1, 2, 3 o 4
+	for i = 1, 4 do
+		vim.keymap.set("n", tostring(i), function()
+			if section_lines[i] and M.main_win and vim.api.nvim_win_is_valid(M.main_win) then
+				pcall(vim.api.nvim_win_set_cursor, M.main_win, { section_lines[i], 0 })
+			end
+		end, key_opts)
+	end
+
+	-- [c]: Editar Título del Commit
 	vim.keymap.set("n", "c", function()
 		open_vim_editor_modal("Commit Title", M.commit_data.title, function(input)
 			M.commit_data.title = input
@@ -423,7 +580,7 @@ function M.open_git_center()
 		end)
 	end, key_opts)
 
-	-- [m]: Edit Commit Description in Native Vim Editor
+	-- [m]: Editar Descripción del Commit
 	vim.keymap.set("n", "m", function()
 		open_vim_editor_modal("Commit Description", M.commit_data.description, function(input)
 			M.commit_data.description = input
@@ -431,7 +588,7 @@ function M.open_git_center()
 		end)
 	end, key_opts)
 
-	-- [t]: Edit Optional Tag in Native Vim Editor
+	-- [t]: Editar Tag
 	vim.keymap.set("n", "t", function()
 		open_vim_editor_modal("Optional Tag (e.g. v1.0.0)", M.commit_data.tag, function(input)
 			M.commit_data.tag = input
@@ -439,65 +596,82 @@ function M.open_git_center()
 		end)
 	end, key_opts)
 
-	-- [s] in Normal: Stage single file
+	-- [s] en Normal: Stage archivo seleccionado
 	vim.keymap.set("n", "s", function()
 		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
-		local item = line_map[row]
+		local item = M.line_map[row]
 		if item and (item.type == "unstaged" or item.type == "untracked") then
-			run_git_cmd("add " .. vim.fn.shellescape(item.file))
+			run_git({ "add", "--", item.file })
 			refresh()
+			vim.notify("🟢 Staged: " .. item.file, vim.log.levels.INFO, { title = "Git Center" })
+		elseif item and item.type == "staged" then
+			vim.notify("File is already staged", vim.log.levels.WARN, { title = "Git Center" })
 		end
 	end, key_opts)
 
-	-- [s] in Visual: Visual Multi-Stage
+	-- [s] en Visual: Visual Multi-Stage
 	vim.keymap.set("v", "s", function()
 		process_visual_selection("stage")
 	end, key_opts)
 
 	-- [S] (Shift + s): Stage All Files
 	vim.keymap.set({ "n", "v" }, "S", function()
-		run_git_cmd("add .")
+		run_git({ "add", "." })
 		refresh()
+		vim.notify("🟢 Staged all files", vim.log.levels.INFO, { title = "Git Center" })
 	end, key_opts)
 
-	-- [u] in Normal: Unstage single file
+	-- [u] en Normal: Unstage archivo seleccionado (CORREGIDO)
 	vim.keymap.set("n", "u", function()
 		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
-		local item = line_map[row]
+		local item = M.line_map[row]
 		if item and item.type == "staged" then
-			run_git_cmd("restore --staged " .. vim.fn.shellescape(item.file))
+			local res = run_git({ "restore", "--staged", "--", item.file })
+			if #res > 0 and res[1]:match("fatal") then
+				run_git({ "reset", "HEAD", "--", item.file })
+			end
 			refresh()
+			vim.notify("🔴 Unstaged: " .. item.file, vim.log.levels.INFO, { title = "Git Center" })
+		elseif item and (item.type == "unstaged" or item.type == "untracked") then
+			vim.notify("File is not staged", vim.log.levels.WARN, { title = "Git Center" })
+		else
+			vim.notify("Please select a staged file (✓) to unstage", vim.log.levels.WARN, { title = "Git Center" })
 		end
 	end, key_opts)
 
-	-- [u] in Visual: Visual Multi-Unstage
+	-- [u] en Visual: Visual Multi-Unstage (CORREGIDO)
 	vim.keymap.set("v", "u", function()
 		process_visual_selection("unstage")
 	end, key_opts)
 
-	-- [U] (Shift + u): Unstage All Files
+	-- [U] (Shift + u): Unstage All Files (CORREGIDO)
 	vim.keymap.set({ "n", "v" }, "U", function()
-		run_git_cmd("restore --staged .")
+		local res = run_git({ "restore", "--staged", "." })
+		if #res > 0 and res[1]:match("fatal") then
+			run_git({ "reset", "HEAD", "--", "." })
+		end
 		refresh()
+		vim.notify("🔴 Unstaged all files", vim.log.levels.INFO, { title = "Git Center" })
 	end, key_opts)
 
-	-- [C]: Execute Commit & Tag
+	-- [C]: Ejecutar Commit & Tag
 	vim.keymap.set("n", "C", function()
 		if M.commit_data.title == "" then
 			vim.notify("Please enter a commit title first with [c]", vim.log.levels.WARN, { title = "Git Center" })
 			return
 		end
 
-		local commit_cmd = "commit -m " .. vim.fn.shellescape(M.commit_data.title)
+		local commit_args = { "commit", "-m", M.commit_data.title }
 		if M.commit_data.description ~= "" then
-			commit_cmd = commit_cmd .. " -m " .. vim.fn.shellescape(M.commit_data.description)
+			table.insert(commit_args, "-m")
+			table.insert(commit_args, M.commit_data.description)
 		end
 
-		local res = run_git_cmd(commit_cmd)
+		local res = run_git(commit_args)
 		vim.notify("🚀 Commit executed:\n" .. table.concat(res, "\n"), vim.log.levels.INFO, { title = "Git Center" })
 
 		if M.commit_data.tag ~= "" then
-			run_git_cmd("tag " .. vim.fn.shellescape(M.commit_data.tag))
+			run_git({ "tag", M.commit_data.tag })
 			vim.notify("🏷️ Tag created: " .. M.commit_data.tag, vim.log.levels.INFO, { title = "Git Center" })
 		end
 
@@ -507,23 +681,23 @@ function M.open_git_center()
 		refresh()
 	end, key_opts)
 
-	-- [d]: View full Diff in Diffview
+	-- [d]: Ver Diff completo en Diffview
 	vim.keymap.set("n", "d", function()
 		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
-		local item = line_map[row]
+		local item = M.line_map[row]
 		if item and item.file then
 			M.close_git_center()
 			vim.cmd("DiffviewOpen --selected-file=" .. vim.fn.fnameescape(item.file))
 		end
 	end, key_opts)
 
-	-- [r]: Refresh
+	-- [r]: Refrescar
 	vim.keymap.set("n", "r", refresh, key_opts)
 end
 
 _G.GitCenter = M
 
--- Lazy.nvim plugin specification
+-- lazy.nvim plugin spec
 local plugin_spec = {
 	"NeogitOrg/neogit",
 	cmd = { "GitCenter", "Neogit" },

@@ -10,6 +10,19 @@ return {
 		},
 		opts = {
 			servers = {
+				editorconfig_ls = {},
+				taplo = {},
+				yamlls = {
+					settings = {
+						yaml = {
+							schemaStore = {
+								enable = false,
+								url = "",
+							},
+							schemas = require("schemastore").yaml.schemas(),
+						},
+					},
+				},
 				jsonls = {},
 				lua_ls = {
 					settings = {
@@ -52,17 +65,64 @@ return {
 		config = function(_, opts)
 			-- 1. Initialize Mason
 			require("mason").setup()
-			require("mason-lspconfig").setup({ ensure_installed = { "lua_ls", "jsonls" } })
+			require("mason-lspconfig").setup({
+				ensure_installed = { "lua_ls", "jsonls", "editorconfig_ls", "taplo", "yamlls" },
+			})
 
 			vim.diagnostic.config({
 				virtual_text = true,
 				underline = true,
 			})
 
+			local function get_schema_uri(category, filename)
+				local path = vim.fs.normalize(vim.fn.stdpath("config") .. "/schemas/" .. category .. "/" .. filename)
+				return vim.uri_from_fname(path)
+			end
+
 			opts.servers.jsonls.settings = {
 				json = {
-					schemas = require("schemastore").json.schemas(),
+					schemas = require("schemastore").json.schemas({
+						select = {
+							"tsconfig.json",
+							"package.json",
+							"prettierrc.json",
+							".eslintrc",
+							"jsconfig.json",
+							"babelrc.json",
+							"Turborepo",
+							"biome.json",
+						},
+						replace = {
+							["tsconfig.json"] = get_schema_uri("json", "tsconfig.json"),
+							["package.json"] = get_schema_uri("json", "package.json"),
+							["prettierrc.json"] = get_schema_uri("json", "prettierrc.json"),
+							[".eslintrc"] = get_schema_uri("json", "eslintrc.json"),
+							["jsconfig.json"] = get_schema_uri("json", "jsconfig.json"),
+							["babelrc.json"] = get_schema_uri("json", "babelrc.json"),
+							["Turborepo"] = get_schema_uri("json", "turbo.json"),
+						},
+						extra = {
+							{
+								name = "biome.json",
+								description = "Biome configuration schema",
+								fileMatch = { "biome.json", "biome.jsonc" },
+								url = get_schema_uri("json", "biome.json"),
+							},
+						},
+					}),
 					validate = { enable = true },
+				},
+			}
+
+			opts.servers.taplo.settings = {
+				even_better_toml = {
+					schema = {
+						enabled = true,
+						repository = false,
+						associations = {
+							["^bunfig\\.toml$"] = get_schema_uri("toml", "bunfig.json"),
+						},
+					},
 				},
 			}
 
@@ -108,4 +168,3 @@ return {
 		opts_extend = { "sources.default" },
 	},
 }
-

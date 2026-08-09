@@ -33,6 +33,7 @@ return {
 					"json",
 					"yaml",
 					"toml",
+					"editorconfig",
 				},
 				highlight = { enable = true },
 				indent = { enable = true },
@@ -41,12 +42,28 @@ return {
 			local config = require("nvim-treesitter")
 			if config and config.install then
 				pcall(config.install, {
-					"lua", "vim", "vimdoc", "markdown", "markdown_inline",
-					"typescript", "javascript", "tsx", "svelte", "astro", "html", "css",
-					"go", "gomod", "gowork", "gosum", "json", "yaml", "toml",
+					"lua",
+					"vim",
+					"vimdoc",
+					"markdown",
+					"markdown_inline",
+					"typescript",
+					"javascript",
+					"tsx",
+					"svelte",
+					"astro",
+					"html",
+					"css",
+					"go",
+					"gomod",
+					"gowork",
+					"gosum",
+					"json",
+					"yaml",
+					"toml",
+					"editorconfig",
 				})
 			end
 		end
 	end,
 }
-

@@ -3,8 +3,8 @@ vim.g.mapleader = " "
 vim.keymap.set("n", "<leader>cd", vim.cmd.Ex)
 
 -- VSCode Migration (Old habits never die)
-vim.keymap.set("n", "<C-_>", "gcc", { remap = true, desc = "Comment line" })
-vim.keymap.set("v", "<C-_>", "gc", { remap = true, desc = "Comment selection" })
+vim.keymap.set("n", "<C-'>", "gcc", { remap = true, desc = "Comment line" })
+vim.keymap.set("v", "<C-'>", "gc", { remap = true, desc = "Comment selection" })
 
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
@@ -35,8 +35,67 @@ vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { noremap = true, silent = true, de
 -- Movements across panels & split windows
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
 vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
-vim.keymap.set("n", "<C-S-k>", "<C-w>k", { desc = "Move to top window" })
-vim.keymap.set("n", "<C-S-j>", "<C-w>j", { desc = "Move to bottom window" })
+
+-- Open file picker in directional splits with Ctrl + Shift + H/J/K/L
+local function open_find_files_split(direction)
+	local ok, builtin = pcall(require, "telescope.builtin")
+	if not ok then
+		vim.notify("Telescope no está listo", vim.log.levels.ERROR)
+		return
+	end
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
+
+	local dir_names = {
+		h = "Izquierda (←)",
+		j = "Abajo (↓)",
+		k = "Arriba (↑)",
+		l = "Derecha (→)",
+	}
+
+	builtin.find_files({
+		prompt_title = " 🔍 Abrir Archivo a la " .. (dir_names[direction] or direction) .. " ",
+		attach_mappings = function(prompt_bufnr, map)
+			actions.select_default:replace(function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				if selection and (selection.value or selection[1]) then
+					local filepath = selection.value or selection[1]
+					local cmd
+					if direction == "h" then
+						cmd = "leftabove vsplit"
+					elseif direction == "l" then
+						cmd = "rightbelow vsplit"
+					elseif direction == "k" then
+						cmd = "leftabove split"
+					elseif direction == "j" then
+						cmd = "rightbelow split"
+					end
+					if cmd then
+						vim.cmd(cmd .. " " .. vim.fn.fnameescape(filepath))
+					end
+				end
+			end)
+			return true
+		end,
+	})
+end
+
+local split_modes = { "n", "i", "v" }
+local split_binds = {
+	h = { "<C-S-h>", "<C-S-H>" },
+	j = { "<C-S-j>", "<C-S-J>" },
+	k = { "<C-S-k>", "<C-S-K>" },
+	l = { "<C-S-l>", "<C-S-L>" },
+}
+
+for dir, keys in pairs(split_binds) do
+	for _, key in ipairs(keys) do
+		vim.keymap.set(split_modes, key, function()
+			open_find_files_split(dir)
+		end, { noremap = true, silent = true, desc = "Buscar archivo y abrir en split (" .. dir .. ")" })
+	end
+end
 
 -- Signature / Parameter Intellisense Help with Ctrl+j
 local function trigger_signature_help()
@@ -308,7 +367,11 @@ vim.keymap.set(
 	{ noremap = true, silent = true, desc = "Terminate Debugger" }
 )
 
--- Per-Project Task Manager & Code Runner (Ctrl + Shift + A)
+-- Per-Project Task Manager & Code Runner (Ctrl + Shift + T / Ctrl + Shift + A)
+vim.keymap.set({ "n", "i", "v" }, "<C-S-t>", function()
+	require("config.krs.tasks").open_task_menu()
+end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+
 vim.keymap.set({ "n", "i", "v" }, "<C-S-a>", function()
 	require("config.krs.tasks").run_default_or_menu()
 end, { noremap = true, silent = true, desc = "Run Default Project Task" })
@@ -316,6 +379,11 @@ end, { noremap = true, silent = true, desc = "Run Default Project Task" })
 vim.keymap.set("n", "<leader>ta", function()
 	require("config.krs.tasks").open_task_menu()
 end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+
+-- Floating Desktop File Explorer (Ctrl + Shift + F)
+vim.keymap.set({ "n", "i", "v" }, "<C-S-f>", function()
+	require("config.krs.file_explorer").open_desktop_explorer()
+end, { noremap = true, silent = true, desc = "Open Floating Desktop File Explorer" })
 
 vim.keymap.set({ "n", "v" }, "<leader>f", function()
 	require("conform").format({ async = true, lsp_fallback = true })

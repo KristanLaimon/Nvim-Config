@@ -116,6 +116,8 @@ require("config.krs.terminal").setup()
 require("config.krs.image_viewer").setup()
 require("config.krs.colorscheme_preview").setup()
 require("config.krs.buffer_cleaner").setup()
+require("config.krs.file_explorer").setup()
+require("config.krs.context_help").setup()
 
 
 

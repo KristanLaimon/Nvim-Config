@@ -31,30 +31,18 @@ return {
 
 		-- Move active tab order left / right (reordering buffer tabs)
 		local move_left_keys = {
-			"<C-A-h>",
-			"<C-M-h>",
-			"<M-C-h>",
 			"<C-A-Left>",
 			"<A-S-h>",
 			"<A-H>",
 			"<A-S-Left>",
-			"<C-A-k>",
-			"<C-M-k>",
-			"<M-C-k>",
 			"<A-S-k>",
 			"<A-K>",
 		}
 		local move_right_keys = {
-			"<C-A-l>",
-			"<C-M-l>",
-			"<M-C-l>",
 			"<C-A-Right>",
 			"<A-S-l>",
 			"<A-L>",
 			"<A-S-Right>",
-			"<C-A-j>",
-			"<C-M-j>",
-			"<M-C-j>",
 			"<A-S-j>",
 			"<A-J>",
 		}

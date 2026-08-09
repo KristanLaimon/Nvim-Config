@@ -184,7 +184,11 @@ function M.save_workspace(name, callback)
 		end
 
 		save_index(index)
-		vim.notify("¡Workspace '" .. ws_name .. "' guardado con éxito!", vim.log.levels.INFO, { title = "KRS Workspaces" })
+		vim.notify(
+			"¡Workspace '" .. ws_name .. "' guardado con éxito!",
+			vim.log.levels.INFO,
+			{ title = "KRS Workspaces" }
+		)
 		if callback then
 			callback()
 		end
@@ -250,7 +254,11 @@ function M.load_workspace(ws_or_identifier)
 	end
 
 	if vim.fn.filereadable(target.session_file) == 0 then
-		vim.notify("El archivo de sesión no existe: " .. target.session_file, vim.log.levels.ERROR, { title = "KRS Workspaces" })
+		vim.notify(
+			"El archivo de sesión no existe: " .. target.session_file,
+			vim.log.levels.ERROR,
+			{ title = "KRS Workspaces" }
+		)
 		return false
 	end
 
@@ -336,17 +344,21 @@ function M.rename_workspace(ws_or_id, callback)
 		return
 	end
 
-	pcall(vim.ui.input, { prompt = "Nuevo nombre para '" .. target.name .. "': ", default = target.name }, function(new_name)
-		if new_name and new_name ~= "" and new_name ~= target.name then
-			target.name = new_name
-			target.updated_at = os.time()
-			save_index(index)
-			vim.notify("Workspace renombrado a '" .. new_name .. "'", vim.log.levels.INFO, { title = "KRS Workspaces" })
-			if callback then
-				callback()
+	pcall(
+		vim.ui.input,
+		{ prompt = "Nuevo nombre para '" .. target.name .. "': ", default = target.name },
+		function(new_name)
+			if new_name and new_name ~= "" and new_name ~= target.name then
+				target.name = new_name
+				target.updated_at = os.time()
+				save_index(index)
+				vim.notify("Workspace renombrado a '" .. new_name .. "'", vim.log.levels.INFO, { title = "KRS Workspaces" })
+				if callback then
+					callback()
+				end
 			end
 		end
-	end)
+	)
 end
 
 -- Cerrar sesión y volver al Menú Principal (Alpha Dashboard)
@@ -599,8 +611,13 @@ _G.Workspaces = M
 
 -- Especificación del Plugin para Lazy.nvim
 local plugin_spec = {
-	"nvim-lua/plenary.nvim",
+	name = "workspaces",
+	dir = vim.fn.stdpath("config"),
 	event = "VeryLazy",
+	dependencies = {
+		"nvim-lua/plenary.nvim",
+		"nvim-telescope/telescope.nvim",
+	},
 	config = function()
 		-- Comandos de Usuario
 		vim.api.nvim_create_user_command("WorkspaceSave", function(opts)
