@@ -1,5 +1,3 @@
-# 🦊 Neovim Config
-
 ```
 
             /\   /\
@@ -12,68 +10,87 @@
 
 ```
 
-A modular, modern, and hyper-fast Neovim configuration for Windows, Linux, and WSL, designed with intuitive keybindings (VSCode + Vim hybrid style), real-time autocompletion, session/workspace management, dynamic terminals, Git integration, and multi-language support via Mason.
+# 🦊 KrsVim - A orange-fox nvim tailored for fox coders
+
+This is my personal Neovim setup, I think it can be considered a mini-distro, but if you like it go ahead and use it! or fork it. I'm just documenting it here so I remember how it works for my future-self, and in case I broke something while editing this setup haha.
+Expect sharp edges, highly opinionated features, and things wired specifically to how *I* work in my day-to-day
+
+Built for Windows as first-class-support with WSL support layered on top (file browsing, terminals, the works) and it should mostly hold up on plain Linux too, if that's not the case, feel free to open an PR or issue, i'll fix it ASAP 🦊
 
 ---
 
 ## ⚙️ System Requirements & External Dependencies
 
-To get full functionality (fast fuzzy finding, desktop folder browsing, image previews, LSP auto-installation, Treesitter compiling, and Git integration), install the required CLI tools using **Scoop** on Windows (or your Linux package manager):
+For everything to work (fuzzy finding, the floating file explorers, image previews, LSP auto-install, Treesitter parser compiling, Git integration), install these via **Scoop** on Windows (or your distro's package manager on Linux/WSL):
 
-### 🚀 Quick Scoop Installation (Windows)
+### 🚀 Quick Scoop Install (Windows)
 ```powershell
 scoop bucket add main
 scoop bucket add extras
-scoop install neovim git ripgrep fd chafa gcc nodejs-lts go
+scoop install neovim git ripgrep fd chafa gcc nodejs-lts go dotnet-sdk
 ```
 
-### 📋 System Dependencies Breakdown
+### 📋 Dependency Breakdown
 
 | Tool / CLI | Purpose in Config | Scoop Command (Windows) | Linux / WSL Package |
 |---|---|---|---|
-| **Neovim** (>= 0.10) | Core Neovim editor | `scoop install neovim` | `neovim` |
+| **Neovim** (>= 0.10) | Core editor | `scoop install neovim` | `neovim` |
 | **Git** | Mason, Neogit, Lazy plugin manager | `scoop install git` | `git` |
-| **ripgrep** (`rg`) | Telescope live grep text search (`<C-f>`) | `scoop install ripgrep` | `ripgrep` |
-| **fd** | Telescope Desktop folder browser (`<C-o>`) & fast file finder | `scoop install fd` | `fd-find` / `fd` |
-| **chafa** | Terminal pixel-art image previewer (`<leader>i`) | `scoop install chafa` | `chafa` |
-| **GCC / MinGW** | Compiling Treesitter language parsers | `scoop install gcc` | `gcc` / `build-essential` |
-| **Node.js & npm** | JS/TS LSP (`ts_ls`), JSON, HTML/CSS LSPs & Prettier | `scoop install nodejs-lts` | `nodejs` `npm` |
-| **Go** | Go LSP (`gopls`), `gofumpt`, `goimports` | `scoop install go` | `golang` |
+| **ripgrep** (`rg`) | Telescope live grep (`<C-f>`) | `scoop install ripgrep` | `ripgrep` |
+| **fd** | Faster file finding for Telescope | `scoop install fd` | `fd-find` / `fd` |
+| **chafa** | Terminal image previewer (`<leader>i`) | `scoop install chafa` | `chafa` |
+| **GCC / MinGW** | Compiling Treesitter parsers | `scoop install gcc` | `gcc` / `build-essential` |
+| **Node.js & npm** | JS/TS LSP (`ts_ls`), JSON/HTML/CSS LSPs, Prettier | `scoop install nodejs-lts` | `nodejs npm` |
+| **Go** | `gopls`, `gofumpt`, `goimports` | `scoop install go` | `golang` |
+| **.NET SDK** (`dotnet`) | C# LSP (`omnisharp`), Nuget package manager | `scoop install dotnet-sdk` | `dotnet-sdk` |
+| **WSL** *(optional, Windows only)* | WSL file explorer & auto-WSL terminals | `wsl --install` | — |
 
 ---
 
 ## 🛠️ Languages, LSP, Formatters & Parsers (Mason & Treesitter)
 
-This configuration comes preconfigured to automatically install and manage LSPs, formatters, and syntax highlighting via **Mason**, **Conform**, and **Treesitter**.
-
-### 🛠️ Pre-configured Tools Managed by Mason
+Mason, Conform and Treesitter are preconfigured to install and manage everything below automatically — no manual `:MasonInstall` needed.
 
 | Language / Environment | LSP Server | Formatters (Conform) | Treesitter Parser |
 |---|---|---|---|
 | **Lua** | `lua_ls` | `stylua` | `lua` |
 | **JSON** | `jsonls` *(SchemaStore auto)* | `prettierd` / `prettier` | `json` |
-| **JavaScript / TS / React** | `ts_ls` *(LSP)* | `prettierd` / `prettier` | `javascript`, `typescript`, `tsx` |
+| **JavaScript / TS / React** | `ts_ls` | `prettierd` / `prettier` | `javascript`, `typescript`, `tsx` |
 | **HTML / CSS** | `cssls` / `html` | `prettierd` / `prettier` | `html`, `css` |
-| **Svelte / Astro** | — | `prettierd` / `prettier` | `svelte`, `astro` |
+| **Svelte / Astro** | `svelte`, `astro` | `prettierd` / `prettier` | `svelte`, `astro` |
 | **Go** | `gopls` | `gofumpt`, `goimports` | `go`, `gomod`, `gowork`, `gosum` |
+| **C# / .csproj** | `omnisharp` (`.cs`), `lemminx` (`.csproj`, `.props`, `.targets` — treated as XML) | — | `c_sharp` |
+| **YAML / TOML** | `yamlls`, `taplo` | — | `yaml`, `toml` |
 | **Markdown** | — | — | `markdown`, `markdown_inline` |
-| **Config / Data** | — | — | `yaml`, `toml`, `vim`, `vimdoc` |
+| **Config / Data** | — | — | `vim`, `vimdoc` |
 
-- **JSON Schema Validation**: Automatically integrated with `schemastore.nvim` for autocompletion and live validation in `package.json`, `tsconfig.json`, `eslintrc.json`, etc.
-- **Format on Save**: Enabled via `conform.nvim` (`timeout_ms = 1000`, `lsp_fallback = true`).
+- **JSON Schema Validation** via `schemastore.nvim` — autocompletion and live validation in `package.json`, `tsconfig.json`, `.eslintrc`, etc.
+- **Format on Save** via `conform.nvim` (`timeout_ms = 1000`, `lsp_fallback = true`).
+- **C# IntelliSense** comes from `omnisharp` reading the project's `.csproj`/`.sln`; you don't need to open the solution manually, it resolves from the working directory.
 
 ---
 
 ## 📦 Installed Plugins & Custom Modules
 
-### 🛠️ Custom-Tailored Plugins & Modules
-| Feature / Custom Plugin | Location | Purpose & Key Features | Keybindings |
+### 🛠️ Custom-Tailored Plugins & Modules (`lua/plugins/krs`, `lua/config/krs`)
+
+| Feature | Location | What it does | Keybindings |
 |---|---|---|---|
-| **Workspaces Manager** | [`lua/plugins/editor/workspaces.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/workspaces.lua) | UI session & workspace manager (Harpoon + Telescope hybrid). Persists open buffers, tab layouts, and `cwd` per project with slot shortcuts, rename/overwrite capabilities, and Telescope floating UI. | `<C-S-w>`, `<leader>ws`, `<leader>ww`, `<leader>wm`, `<leader>w1`..`9`, `<C-m>` |
-| **Desktop Folder Browser** | [`lua/plugins/editor/telescope.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/editor/telescope.lua) | Custom Telescope folder picker starting at `~/Desktop`. Allows folder selection, changes `cwd`, opens Neo-tree, and registers folders into recent project history (`<C-S-r>`). Supports drill-down (`<C-l>`) and parent nav (`<C-h>`). | `<C-S-o>` (n, i) |
-| **Multi-Terminal Manager** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | 1-9 indexed toggleable terminal system. Opens bottom split terminals, auto-hides when leaving window focus, and manages tab list cleanliness. | `<C-;>`, `<leader>t1`..`9` |
-| **Live Colorscheme Previewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Real-time command-line previewer for `:colorscheme`. Previews colors as you tab through choices and restores previous theme if cancelled (`<Esc>`). | `:colorscheme <Tab>` |
-| **Pixel Art Image Viewer** | [`lua/config/keybinds.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/keybinds.lua) | Floating terminal window image viewer powered by `chafa` to render pixel art previews of images within Neovim. | `<leader>i` |
+| **Workspaces Manager** | `lua/plugins/krs/workspaces.lua` | Harpoon + Telescope hybrid session manager. Saves buffers, tab layout and `cwd` per project into numbered slots; rename, overwrite, delete from a floating UI. | `<C-S-w>`, `<leader>ws`, `<leader>ww`, `<leader>wm`, `<leader>w1`..`9`, `<C-S-m>` |
+| **Command Palette** | `lua/plugins/krs/command_palette.lua` | VSCode-style `Ctrl+Shift+P` fuzzy command list — runs Vim commands, simulated keypresses, or Lua functions from one picker. | `<C-S-p>` |
+| **Git Control Center** | `lua/plugins/krs/git_center.lua` | Custom floating Git UI: stage/unstage, diff preview, commit form (title/description/tag), stash, and undo — no external Git plugin needed for the daily flow. | `<C-S-g>` |
+| **Nuget Package Manager** | `lua/plugins/krs/nuget.lua` | CRUD for `<PackageReference>` in a `.csproj` via `dotnet add/remove package`, through a Telescope picker. Only activates when the project actually has a `.csproj`. | `<leader>ng`, `:NugetManager` |
+| **Desktop File Explorer** | `lua/config/krs/file_explorer.lua` | Pure-Lua floating file browser (no external file-manager binary), starts at `~/Desktop`. Create/rename/delete files & folders, drill in/out, set a folder as the active project. | `<C-S-f>` |
+| **WSL File Explorer** | `lua/config/krs/file_explorer.lua` | Same explorer, rooted at a WSL distro's filesystem (`\\wsl.localhost\<Distro>\`). Lists installed distros if there's more than one. Windows-only. | `<leader>fw`, `:TelescopeFileBrowserWSL` |
+| **Open Folder Picker** | `lua/plugins/editor/telescope.lua` | Generic "open any folder as project" picker, independent of the Desktop explorer. | `<C-S-o>` |
+| **Recent Projects** | `lua/plugins/editor/project.lua` | `project.nvim` wrapped in a custom picker with favorites (pinned to the bottom) and per-entry delete. | `<C-S-r>` |
+| **Multi-Terminal Manager** | `lua/config/krs/terminal.lua` | 9 lazily-spawned terminals, toggle/select independently. If the terminal's `cwd` sits inside a WSL distro path, it launches `wsl.exe` there instead of the default Windows shell — automatic, no config needed. | `<A-1>`..`<A-9>`, `<C-;>` |
+| **IntelliJ-Style Toolbar** | `lua/config/krs/intellij_toolbar.lua` | Floating top-right widget (▶ Play / 🐞 Debug / ⚙️ Profiles) that shows up when the project has tasks defined. | `IntelliJToolbarToggle` |
+| **Task & Script Manager** | `lua/config/krs/tasks.lua` | Per-project tasks stored in `.nvimkrs`; run, chain, or set a default task detected from `Makefile`/`package.json`/etc. | `<C-S-t>`, `<leader>ta`, `<C-S-a>` |
+| **Live Colorscheme Previewer** | `lua/config/krs/colorscheme_preview.lua` | Previews the theme live as you tab through `:colorscheme <Tab>`, reverts if you cancel. | `:colorscheme <Tab>` |
+| **Pixel-Art Image Viewer** | `lua/config/krs/image_viewer.lua` | Renders images as terminal pixel art via `chafa` in a floating window; can also hand off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
+| **Buffer Cleaner & Smart Quit** | `lua/config/krs/buffer_cleaner.lua` | Makes `:q` context-aware (close split → close tab → back to dashboard → quit), and sweeps empty `[No Name]` buffers automatically. | `:q` / `:q!` |
+| **Context Help** | `lua/config/krs/context_help.lua` | `?` / `<F1>` shows a tiny, context-aware cheatsheet (different content in Neo-tree, Git, Telescope, editor). | `?`, `<F1>` |
 
 ### Core & LSP
 | Plugin | Purpose |
@@ -82,21 +99,21 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | `williamboman/mason.nvim` | Package manager for LSPs, formatters & linters |
 | `williamboman/mason-lspconfig.nvim` | Mason integration with nvim-lspconfig |
 | `zapling/mason-conform.nvim` | Automatic installer for Conform formatters |
-| `saghen/blink.cmp` | Blazing-fast completion engine (modern nvim-cmp replacement) |
+| `saghen/blink.cmp` | Fast completion engine (modern nvim-cmp replacement) |
 | `rafamadriz/friendly-snippets` | Multi-language snippet collection |
 | `stevearc/conform.nvim` | Fast asynchronous code formatter |
-| `nvim-treesitter/nvim-treesitter` | Advanced code highlighting and AST parsing |
-| `b0o/schemastore.nvim` | Real-time JSON schemas for popular files |
+| `nvim-treesitter/nvim-treesitter` | Code highlighting and AST parsing |
+| `b0o/schemastore.nvim` | JSON schemas for popular config files |
 
 ### Editor & Navigation
 | Plugin | Purpose |
 |---|---|
 | `ThePrimeagen/harpoon` (v2) | Fast file bookmarking and navigation |
-| `nvim-telescope/telescope.nvim` | Powerful Fuzzy Finder |
+| `nvim-telescope/telescope.nvim` | Fuzzy finder |
 | `nvim-tree/neo-tree.nvim` | Sidebar file explorer |
 | `NeogitOrg/neogit` | Git interface sidebar |
-| `sindrets/diffview.nvim` | Diff viewer and history tool for Neogit |
-| `ahmedkhalf/project.nvim` | Project history and quick switching |
+| `sindrets/diffview.nvim` | Diff viewer and history for Neogit |
+| `ahmedkhalf/project.nvim` | Project history backing the Recent Projects picker |
 | `voldikss/package-info.nvim` | Inline `package.json` dependency management |
 | `nvim-lua/plenary.nvim` | Lua utility library |
 
@@ -104,12 +121,12 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | Plugin | Purpose |
 |---|---|
 | `goolord/alpha-nvim` | ASCII start dashboard |
-| `doki-theme/doki-theme-vim` | Visual theme (Rei / Doki Theme) with custom `#1e1e1e` background |
-| `akinsho/bufferline.nvim` | Sleek top buffer tab bar |
-| `nvim-lualine/lualine.nvim` | Responsive statusline |
-| `nvim-highlight-colors` | Live inline CSS color preview (hex, rgb, hsl) |
+| `doki-theme/doki-theme-vim` | Visual theme (Doki Theme) with a custom `#1e1e1e` background |
+| `akinsho/bufferline.nvim` | Top buffer tab bar |
+| `nvim-lualine/lualine.nvim` | Statusline |
+| `nvim-highlight-colors` | Inline CSS color preview (hex, rgb, hsl) |
 | `nvim-window-picker` | Visual window selector when opening files |
-| `nvim-file-operations` | Automatic file rename and move synchronization |
+| `nvim-file-operations` | Auto rename/move sync between disk and buffers |
 
 ---
 
@@ -118,31 +135,31 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 > **Leader key**: `<Space>`
 
 ### 📂 Workspaces (Session & UI Management)
-*A powerful hybrid between Harpoon and Project Selector (`Ctrl+Shift+R`)*
+*A hybrid between Harpoon and a project/session selector.*
 
 | Shortcut / Command | Mode | Description |
 |---|---|---|
-| `<C-S-w>` / `<C-S-W>` | n, i, v, t | **Open Workspaces picker** (Telescope floating UI) |
-| `<C-m>` / `<C-S-m>` | n, i, v, t | **Close session & Return to Main Menu** (with save prompt) |
+| `<C-S-w>` / `<C-S-W>` | n, i, v, t | Open Workspaces picker (Telescope floating UI) |
+| `<C-S-m>` | n, i, v, t | Close session & return to Main Menu (with save prompt) |
 | `<leader>ww` | n | Open Workspaces picker |
 | `<leader>ws` | n | Save current UI state as a workspace (optional name) |
-| `<leader>wm` | n | Close session & Return to Main Menu (Dashboard) |
+| `<leader>wm` | n | Close session & return to Main Menu (Dashboard) |
 | `<leader>w1` .. `<leader>w9` | n | Load workspace from slot 1 to 9 directly |
 | `:WorkspaceSave [name]` | Cmd | Save workspace with a name |
 | `:WorkspaceLoad [name/slot]` | Cmd | Load a workspace by name or slot number |
-| `:WorkspaceClose` / `:WorkspaceMenu` | Cmd | Prompt to save and return to main menu (Dashboard) |
+| `:WorkspaceClose` / `:WorkspaceMenu` | Cmd | Prompt to save and return to main menu |
 | `:WorkspaceDelete [name]` | Cmd | Delete a saved workspace |
 | `:WorkspaceRename [old] [new]` | Cmd | Rename a workspace |
 | `:Workspaces` / `:WorkspaceSelect` | Cmd | Open Workspaces selector UI |
 
-> **Inside the Workspaces menu (`<C-S-w>`)**:
-> - `<Enter>`: Load selected workspace.
-> - `a` / `<C-a>`: Save current session as a **new** workspace.
-> - `s` / `<C-s>`: **Overwrite** selected workspace with current state.
-> - `d` / `<C-d>` / `<Del>`: **Delete** workspace.
-> - `r` / `<C-r>` / `<F2>`: **Rename** workspace.
-> - `g` / `<C-g>`: Toggle filter between current project vs all projects.
-> - `1` to `9`: Jump directly to slot (Harpoon style).
+> **Inside the Workspaces picker (`<C-S-w>`)**:
+> - `<Enter>`: load selected workspace.
+> - `a` / `<C-a>`: save current session as a **new** workspace.
+> - `s` / `<C-s>`: **overwrite** selected workspace with current state.
+> - `d` / `<C-d>` / `<Del>`: **delete** workspace.
+> - `r` / `<C-r>` / `<F2>`: **rename** workspace.
+> - `g` / `<C-g>`: toggle current-project vs all-projects filter.
+> - `1`..`9`: jump directly to slot.
 
 ---
 
@@ -151,16 +168,17 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | Shortcut | Mode | Action |
 |---|---|---|
 | `<C-s>` | n, v, i | Save current file (`:w`) |
-| `<C-+>` / `<C-=>` | n, i, v, t | **Increase font size** (`+1pt`, saved permanently) |
-| `<C-->` | n, i, v, t | **Decrease font size** (`-1pt`, saved permanently) |
-| `<C-0>` | n, i, v, t | **Reset font size** to default (`14pt`) |
+| `<C-+>` / `<C-=>` | n, i, v, t | Increase font size (`+1pt`, persisted) |
+| `<C-->` | n, i, v, t | Decrease font size (`-1pt`, persisted) |
+| `<C-0>` | n, i, v, t | Reset font size to default (`14pt`) |
 | `<leader>f` | n, v | Format file or selection (LSP / Conform) |
 | `<F2>` | n | Rename file on disk (or item inside Neo-tree) |
-| `<C-w>` | n | Close current buffer (VSCode tab close style) |
+| `<C-w>` | n | Close current buffer (VSCode tab-close style) |
 | `<C-_>` | n, v | Comment line (`gcc`) or selection (`gc`) |
 | `<C-c>` | v | Copy selection to system clipboard (`"+y`) |
-| `<leader>i` | n | View image as pixel art float window (`chafa`) |
-| `<leader>cd` | n | Open default netrw directory browser (`netrw Ex`) |
+| `<leader>i` | n | View image as pixel art in a floating window (`chafa`) |
+| `<C-S-Enter>` | n | Open image/video with the OS default app |
+| `<leader>cd` | n | Open default netrw directory browser |
 | `:ReloadConfig` | Cmd | Reload Neovim configuration instantly |
 
 ---
@@ -173,10 +191,10 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 | `<C-l>` | n | Move focus to right window |
 | `<C-S-j>` | n | Move focus to bottom window |
 | `<C-S-k>` | n | Move focus to top window |
-| `<C-Right>` | n | Make window narrower (vertical -2) |
-| `<C-Left>` | n | Make window wider (vertical +2) |
-| `<C-Up>` | n | Make window taller (horizontal +2) |
-| `<C-Down>` | n | Make window shorter (horizontal -2) |
+| `<C-Right>` | n | Make window narrower |
+| `<C-Left>` | n | Make window wider |
+| `<C-Up>` | n | Make window taller |
+| `<C-Down>` | n | Make window shorter |
 
 ---
 
@@ -184,10 +202,10 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<A-k>` / `<M-k>` | n, v | **Go to Definition** of symbol/method under cursor |
-| `<C-j>` | n, i, v | **Show Parameter Signature Help** (types & argument names inside `(...)`) |
-| `<C-o>` | n | **Jump Back** to previous cursor location (Vim jump list) |
-| `<leader>k` | n | Show diagnostic error info floating under cursor |
+| `<A-k>` / `<M-k>` | n, v | Go to definition of symbol under cursor |
+| `<C-j>` | n, i, v | Show parameter signature help |
+| `<C-o>` | n | Jump back in the Vim jump list |
+| `<leader>k` | n | Show diagnostic detail floating under cursor |
 | `<leader>u` | n | Jump to previous diagnostic |
 | `<leader>o` | n | Jump to next diagnostic |
 
@@ -195,9 +213,9 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<A-j>` / `<M-j>` | n, i, v | **Toggle Breakpoint** 🔴 on current line |
-| `<C-S-s>` | n, i, v | **Start / Continue Debugging** 🐞 (opens DAP-UI automatically) |
-| `<C-S-x>` | n, i, v | **Terminate Debugger** (closes debug session and UI) |
+| `<A-j>` / `<M-j>` | n, i, v | Toggle breakpoint on current line |
+| `<C-S-s>` | n, i, v | Start / continue debugging (opens DAP-UI) |
+| `<C-S-x>` | n, i, v | Terminate debugger and close UI |
 
 ---
 
@@ -205,19 +223,42 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-S-t>` / `<leader>ta` | n, i, v | **Open Task Menu UI** (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
-| `<C-S-a>` | n, i, v | **Run Default Project Script** (auto-detects `Makefile`/`package.json` with `cwd = project_root`) |
+| `<C-S-t>` / `<leader>ta` | n, i, v | Open Task Menu UI (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
+| `<C-S-a>` | n, i, v | Run the project's default task (auto-detected `cwd = project_root`) |
 
 ---
 
-### 💻 Integrated Terminal (Lazy-Loaded Multi-Terminals 1-9)
+### 💻 Integrated Terminal (Lazy-Loaded, 1-9)
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<Alt+1>` .. `<Alt+9>` | n, i, t | **Select & Switch Terminal #1 to #9** (Lazy loaded on demand) |
-| `<C-;>` | n, i, t | **Toggle Currently Selected Terminal** (open/hide bottom panel) |
+| `<A-1>` .. `<A-9>` | n, i, t | Select & switch to terminal #1-#9 (spawned on first use) |
+| `<C-;>` | n, i, t | Toggle the currently selected terminal (open/hide bottom panel) |
 | `<C-w>c` | n (in terminal) | Close active terminal window |
 | `<C-w>` | t | Standard window navigation from terminal mode |
+
+> If the terminal's working directory is inside a WSL distro's filesystem (opened via the WSL File Explorer, for example), it opens `wsl.exe -d <Distro> --cd <path>` instead of the default Windows shell — no extra setup.
+
+---
+
+### 🐧 WSL File Explorer
+
+| Shortcut / Command | Mode | Action |
+|---|---|---|
+| `<leader>fw` / `:TelescopeFileBrowserWSL` | n, i, v | Browse a WSL distro's filesystem via `\\wsl.localhost\<Distro>\`. Prompts for a distro if more than one is installed. Windows-only. |
+
+Opening a folder from here as the active project (`o`) drops it straight into Recent Projects like any other folder — and any terminal opened from that project auto-switches to WSL.
+
+---
+
+### 📦 Nuget Package Manager (C# projects only)
+
+| Shortcut / Command | Mode | Action |
+|---|---|---|
+| `<leader>ng` / `:NugetManager` | n | Open the package picker for the `.csproj` in the current project |
+
+> Only does anything if the current project actually has a `.csproj`; otherwise it just tells you so.
+> Inside the picker: `a` add package, `u` update selected package, `d` remove selected package. All three shell out to `dotnet` so the `.csproj` stays correctly formatted.
 
 ---
 
@@ -225,15 +266,15 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-k>` | n, i | Find files respecting `.gitignore` (`find_files`) |
-| `<C-Alt-k>` / `<C-A-k>` | n, i | Find files ignoring `.gitignore` (`find_files no_ignore=true`) |
+| `<C-k>` | n, i | Find files respecting `.gitignore` |
+| `<C-A-k>` | n, i | Find files ignoring `.gitignore` |
 | `<C-f>` | n, i | Live global text search (`live_grep`) |
-| `<C-o>` | n, i | Open system folder browser at Desktop |
-| `<C-S-r>` | n | Open recent projects list (`projects`) |
-| `<leader>fh` | n | Search help tags (`help_tags`) |
+| `<C-S-o>` | n, i | Open any folder as a project |
+| `<C-S-f>` | n, i, v | Floating Desktop file explorer |
+| `<C-S-r>` | n | Recent projects list (favorites, delete) |
+| `<leader>fh` | n | Search help tags |
 
-> **Inside Recent Projects (`<C-S-r>`)**:
-> - `<C-r>` (normal & insert mode): Remove selected project from history.
+> **Inside Recent Projects (`<C-S-r>`)**: `<C-f>` toggles favorite (pins to bottom), `<C-r>` removes from history.
 
 ---
 
@@ -241,8 +282,8 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-S-Space>` / `:Neotree toggle` | n | Toggle sidebar file explorer |
-| `a` | Neo-tree | Create new file or directory (ending with `/`) |
+| `<leader>e` / `:Neotree toggle` | n | Toggle sidebar file explorer |
+| `a` | Neo-tree | Create new file or directory (end with `/` for a folder) |
 | `d` | Neo-tree | Delete file/folder |
 | `r` | Neo-tree | Rename item |
 | `c` | Neo-tree | Copy item |
@@ -250,13 +291,32 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 ---
 
-### 🌿 Neogit & Diffview (Version Control)
+### 🐙 Git Control Center
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-S-g>` | n | Toggle Git sidebar (status, staged/unstaged, commits) |
+| `<C-S-g>` / `<C-S-G>` | n, i, v, t | Toggle the Git Control Center (stage, diff, commit, stash) |
+| `s` / `S` | n, v (Git Center) | Stage selected / stage all |
+| `u` / `U` | n, v (Git Center) | Unstage selected / unstage all |
+| `c` | Git Center | Open commit form (title / description / tag) |
+| `d` | Git Center | Discard changes on selected file |
+| `r` | Git Center | Refresh |
+| `<Esc>` / `<CR>` (commit form) | Git Center | Save & close commit form |
+
+### 🌿 Neogit & Diffview (secondary Git UI)
+
+| Shortcut | Mode | Action |
+|---|---|---|
 | `<Enter>` | Neogit Status | Open diff in vertical split |
 | `d` | Neogit Status | Quick diff preview |
+
+---
+
+### 🚀 Command Palette
+
+| Shortcut / Command | Mode | Action |
+|---|---|---|
+| `<C-S-p>` / `<C-S-P>` / `:CommandPalette` | n, i, v, t | Fuzzy-search every registered command, keymap, and action from one picker |
 
 ---
 
