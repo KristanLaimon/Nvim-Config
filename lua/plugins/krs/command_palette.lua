@@ -28,6 +28,7 @@ M.commands = {
 	{ name = "📂 Open Folder", keys = "<C-S-o>", category = "Files" },
 	{ name = "⭐ Recent Projects", keys = "<C-S-r>", category = "Files" },
 	{ name = "📁 Floating Desktop File Explorer", keys = "<C-S-f>", category = "Files" },
+	{ name = "🐧 Browse WSL Files", cmd = "TelescopeFileBrowserWSL", category = "Files" },
 	{ name = "🖥️ Toggle Selected Terminal", keys = "<C-;>", category = "Terminal" },
 
 	-- --------------------------------------------------------------------------
@@ -70,6 +71,7 @@ M.commands = {
 	{ name = "🎨 Format File (Conform)", keys = "<leader>f", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
 	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
+	{ name = "📦 Nuget Package Manager (C#)", cmd = "NugetManager", category = "LSP" },
 
 	-- --------------------------------------------------------------------------
 	-- 🎨 UI & Configuration

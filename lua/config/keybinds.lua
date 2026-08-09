@@ -385,6 +385,11 @@ vim.keymap.set({ "n", "i", "v" }, "<C-S-f>", function()
 	require("config.krs.file_explorer").open_desktop_explorer()
 end, { noremap = true, silent = true, desc = "Open Floating Desktop File Explorer" })
 
+-- Floating WSL File Explorer
+vim.keymap.set({ "n", "i", "v" }, "<leader>fw", function()
+	require("config.krs.file_explorer").open_wsl_explorer()
+end, { noremap = true, silent = true, desc = "Open Floating WSL File Explorer" })
+
 vim.keymap.set({ "n", "v" }, "<leader>f", function()
 	require("conform").format({ async = true, lsp_fallback = true })
 end, { desc = "Format file or range" })

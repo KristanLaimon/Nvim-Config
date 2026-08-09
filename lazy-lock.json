@@ -3,7 +3,7 @@
   "blink.cmp": { "branch": "main", "commit": "78336bc89ee5365633bcf754d93df01678b5c08f" },
   "bufferline.nvim": { "branch": "main", "commit": "655133c3b4c3e5e05ec549b9f8cc2894ac6f51b3" },
   "conform.nvim": { "branch": "master", "commit": "619363c30309d29ffa631e67c8183f2a72caa373" },
-  "cord.nvim": { "branch": "master", "commit": "b343e3348a86b78b63e52b64659a62fc2900c6fd" },
+  "cord.nvim": { "branch": "master", "commit": "4aca7b812f46fb97c9ebdc97ff0584bffbcd3da7" },
   "diffview.nvim": { "branch": "main", "commit": "4516612fe98ff56ae0415a259ff6361a89419b0a" },
   "doki-theme-vim": { "branch": "master", "commit": "407c75de0049a184d6eb09ad415d2ccbc22ba612" },
   "friendly-snippets": { "branch": "main", "commit": "6cd7280adead7f586db6fccbd15d2cac7e2188b9" },

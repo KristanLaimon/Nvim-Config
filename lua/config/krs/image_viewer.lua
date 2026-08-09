@@ -23,60 +23,102 @@ local function is_media_file(path)
 	return media_exts[ext] == true
 end
 
--- Open file with OS default application (Windows / macOS / Linux)
+local function path_exists(p)
+	return p ~= nil and p ~= "" and (vim.fn.filereadable(p) == 1 or vim.fn.isdirectory(p) == 1)
+end
+
+-- Convert a Linux path (when Neovim itself runs natively inside WSL) to the
+-- `\\wsl.localhost\<Distro>\...` UNC path Windows' explorer.exe understands.
+local function windows_path_for_wsl(linux_path)
+	local distro = os.getenv("WSL_DISTRO_NAME")
+	if not distro then
+		return nil
+	end
+	local rel = linux_path:gsub("^/", ""):gsub("/", "\\")
+	return "\\\\wsl.localhost\\" .. distro .. "\\" .. rel
+end
+
+-- Reveal a file or folder in the OS's native file manager (Windows Explorer,
+-- Finder, or the Linux file manager via xdg-open). Works on directories too,
+-- and transparently reaches into Windows Explorer when Neovim is running
+-- natively inside WSL.
+--
+-- `filepath` should already be the exact path to reveal (Neo-tree's command
+-- handler passes the selected node's path directly). Falls back to the
+-- current buffer only when called without one (e.g. the global keymap fired
+-- outside Neo-tree).
 function M.open_with_system_app(filepath)
-	-- Check if Neo-tree has a selected node
-	local neotree_path = nil
-	local ok_mgr, manager = pcall(require, "neo-tree.sources.manager")
-	if ok_mgr and manager.get_state then
-		local state = manager.get_state("filesystem")
-		if state and state.tree then
-			local node = state.tree:get_node()
-			if node and node.path then
-				neotree_path = node.path
-			end
+	local ok, err = pcall(function()
+		if not filepath or filepath == "" then
+			filepath = vim.api.nvim_buf_get_name(0)
 		end
-	end
 
-	-- If focused on Neo-tree or filepath is not provided, use Neo-tree selected node
-	if vim.bo.filetype == "neo-tree" and neotree_path then
-		filepath = neotree_path
-	elseif not filepath or filepath == "" then
-		filepath = neotree_path or vim.api.nvim_buf_get_name(0)
-	end
-
-	if not filepath or filepath == "" or vim.fn.filereadable(filepath) == 0 then
-		-- Fallback to first real active buffer
-		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-			local b = vim.api.nvim_win_get_buf(win)
-			if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
-				local name = vim.api.nvim_buf_get_name(b)
-				if name ~= "" and vim.fn.filereadable(name) == 1 then
-					filepath = name
-					break
+		if not path_exists(filepath) then
+			-- Fallback to first real active buffer
+			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+				local b = vim.api.nvim_win_get_buf(win)
+				if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
+					local name = vim.api.nvim_buf_get_name(b)
+					if path_exists(name) then
+						filepath = name
+						break
+					end
 				end
 			end
 		end
+
+		if not path_exists(filepath) then
+			vim.notify("No valid file or folder found to open", vim.log.levels.WARN, { title = "Media Viewer" })
+			return
+		end
+
+		-- Strip a trailing separator (directory nodes from Neo-tree keep one)
+		filepath = filepath:gsub("[/\\]+$", "")
+
+		local is_win = vim.fn.has("win32") == 1
+		local is_wsl = vim.fn.has("wsl") == 1
+		local is_mac = vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1
+
+		local cmd
+		if is_win then
+			-- `cmd /c start` goes through the shell's own file/folder-open
+			-- association instead of poking explorer.exe's process directly,
+			-- which is what actually works from a detached/elevated/GUI
+			-- frontend (Neovide) child process — direct `explorer.exe <path>`
+			-- can spawn "successfully" yet silently show no window in that
+			-- context. Windows Explorer opens WSL UNC paths
+			-- (`\\wsl.localhost\<Distro>\...`) fine this way too.
+			cmd = { "cmd.exe", "/c", "start", '""', filepath }
+		elseif is_wsl then
+			cmd = { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
+		elseif is_mac then
+			cmd = { "open", filepath }
+		else
+			cmd = { "xdg-open", filepath }
+		end
+
+		vim.system(cmd, { detach = true }, function(result)
+			-- `start`/explorer.exe legitimately exit non-zero on success,
+			-- ignore their code; only surface a real spawn failure (e.g.
+			-- binary missing).
+			if result.code ~= 0 and cmd[1] ~= "cmd.exe" and cmd[1] ~= "explorer.exe" then
+				vim.schedule(function()
+					vim.notify(
+						"Failed to open: " .. (result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
+						vim.log.levels.ERROR,
+						{ title = "Media Viewer" }
+					)
+				end)
+			end
+		end)
+
+		local filename = vim.fn.fnamemodify(filepath, ":t")
+		vim.notify("🎬 Opening with OS default program: " .. filename, vim.log.levels.INFO, { title = "Media Viewer" })
+	end)
+
+	if not ok then
+		vim.notify("Reveal in system explorer failed: " .. tostring(err), vim.log.levels.ERROR, { title = "Media Viewer" })
 	end
-
-	if not filepath or filepath == "" or vim.fn.filereadable(filepath) == 0 then
-		vim.notify("No valid file found to open", vim.log.levels.WARN, { title = "Media Viewer" })
-		return
-	end
-
-	local is_win = vim.fn.has("win32") == 1
-	local is_mac = vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1
-
-	if is_win then
-		vim.system({ "cmd.exe", "/c", "start", '""', filepath }, { detach = true })
-	elseif is_mac then
-		vim.system({ "open", filepath }, { detach = true })
-	else
-		vim.system({ "xdg-open", filepath }, { detach = true })
-	end
-
-	local filename = vim.fn.fnamemodify(filepath, ":t")
-	vim.notify("🎬 Opening with OS default program: " .. filename, vim.log.levels.INFO, { title = "Media Viewer" })
 end
 
 function M.view_current_image()

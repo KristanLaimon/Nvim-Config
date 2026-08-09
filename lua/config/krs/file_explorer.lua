@@ -254,12 +254,52 @@ function M.open_desktop_explorer(opts)
 	}):find()
 end
 
--- Register global user command
+-- Open native file explorer rooted at a WSL distro's filesystem (Windows only)
+function M.open_wsl_explorer()
+	local wsl = require("config.krs.wsl")
+	if not wsl.available() then
+		vim.notify("WSL is not available on this system", vim.log.levels.WARN, { title = "WSL Explorer" })
+		return
+	end
+
+	local distros = wsl.list_distros()
+	if #distros == 0 then
+		vim.notify("No WSL distributions found", vim.log.levels.WARN, { title = "WSL Explorer" })
+		return
+	end
+
+	local function open_distro(distro)
+		local root = wsl.distro_root(distro)
+		if vim.fn.isdirectory(root) == 0 then
+			vim.notify("Could not reach WSL distro filesystem: " .. root, vim.log.levels.ERROR, { title = "WSL Explorer" })
+			return
+		end
+		M.open_desktop_explorer({ path = root })
+	end
+
+	if #distros == 1 then
+		open_distro(distros[1])
+	else
+		vim.ui.select(distros, { prompt = "Select WSL distro:" }, function(choice)
+			if choice then
+				open_distro(choice)
+			end
+		end)
+	end
+end
+
+-- Register global user commands
 function M.setup()
 	if vim.fn.exists(":TelescopeFileBrowserDesktop") == 0 then
 		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
 			M.open_desktop_explorer()
 		end, { desc = "Open Floating File Explorer (Desktop)" })
+	end
+
+	if vim.fn.exists(":TelescopeFileBrowserWSL") == 0 then
+		vim.api.nvim_create_user_command("TelescopeFileBrowserWSL", function()
+			M.open_wsl_explorer()
+		end, { desc = "Open Floating File Explorer (WSL)" })
 	end
 end
 

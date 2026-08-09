@@ -1,3 +1,15 @@
+-- MSBuild project/props files are XML; register them so lemminx (below)
+-- attaches and gives IntelliSense in .csproj etc.
+vim.filetype.add({
+	extension = {
+		csproj = "xml",
+		fsproj = "xml",
+		vbproj = "xml",
+		props = "xml",
+		targets = "xml",
+	},
+})
+
 return {
 	{
 		"neovim/nvim-lspconfig",
@@ -39,6 +51,13 @@ return {
 				html = {},
 				cssls = {},
 				tailwindcss = {},
+				omnisharp = {
+					cmd = { "omnisharp" },
+					enable_roslyn_analyzers = true,
+					organize_imports_on_format = true,
+					enable_import_completion = true,
+				},
+				lemminx = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -93,6 +112,8 @@ return {
 					"html",
 					"cssls",
 					"tailwindcss",
+					"omnisharp",
+					"lemminx",
 				},
 			})
 

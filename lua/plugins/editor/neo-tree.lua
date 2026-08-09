@@ -75,6 +75,7 @@ return {
 		    ["<C-S-n>"] = "add_directory",
 		    ["<C-S-CR>"] = "open_with_system_app",
 		    ["<C-S-Enter>"] = "open_with_system_app",
+		    ["<C-S-Space>"] = "open_with_system_app",
 		},
 	    },
 	    commands = {

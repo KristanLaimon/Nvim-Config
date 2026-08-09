@@ -13,6 +13,15 @@ local terminals = {} -- Structure: [n] = { buf = number|nil, win = number|nil }
 local selected_terminal = 1 -- Currently selected terminal index (1 by default)
 local code_win = nil -- Origin code window to return with clean focus
 
+-- Build the `:terminal` command, dropping into WSL when cwd lives inside a
+-- WSL distro's filesystem (`\\wsl.localhost\<Distro>\...`) instead of the
+-- default Windows shell.
+local function terminal_open_cmd()
+	local ok, wsl = pcall(require, "config.krs.wsl")
+	local wsl_cmd = ok and wsl.shell_command_for_cwd(vim.fn.getcwd()) or nil
+	return wsl_cmd and ("terminal " .. wsl_cmd) or "terminal"
+end
+
 -- Check if window is valid
 local function is_valid_win(win)
 	return win and vim.api.nvim_win_is_valid(win)
@@ -68,7 +77,7 @@ function M.select_terminal(n)
 		else
 			-- Lazy load terminal #n for the first time
 			vim.api.nvim_set_current_win(t.win)
-			vim.cmd("terminal")
+			vim.cmd(terminal_open_cmd())
 			t.buf = vim.api.nvim_get_current_buf()
 			vim.bo[t.buf].buflisted = false
 		end
@@ -114,7 +123,7 @@ function M.open_terminal(n)
 		vim.api.nvim_win_set_buf(t.win, t.buf)
 	else
 		-- Lazy load terminal process #n
-		vim.cmd("terminal")
+		vim.cmd(terminal_open_cmd())
 		t.buf = vim.api.nvim_get_current_buf()
 		vim.bo[t.buf].buflisted = false
 	end
