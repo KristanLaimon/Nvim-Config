@@ -140,6 +140,9 @@ function M.open_desktop_explorer(opts)
 					table.insert(history.recent_projects, target)
 					pcall(history.write_projects_to_history)
 				end
+				pcall(function()
+					require("config.krs.wsl").add_recent_project(target)
+				end)
 
 				pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target))
 				vim.notify("📁 Project root changed to:\n" .. target, vim.log.levels.INFO, { title = "Active Project" })

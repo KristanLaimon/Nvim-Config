@@ -173,6 +173,10 @@ return {
 
 					history.write_projects_to_history()
 				end
+
+				pcall(function()
+					require('config.krs.wsl').add_recent_project(norm_path)
+				end)
 			end
 
 			local function open_directory(dir_path)

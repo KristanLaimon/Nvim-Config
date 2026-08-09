@@ -96,4 +96,81 @@ function M.shell_command_for_cwd(cwd)
 	return string.format("wsl.exe -d %s --cd %s", distro, vim.fn.shellescape(linux_path))
 end
 
+-- ============================================================================
+-- Recent Projects (WSL-safe)
+-- ============================================================================
+-- project.nvim's own history store collapses "//" -> "/" when normalising
+-- paths (see its `normalise_path`), which mangles
+-- `\\wsl.localhost\<Distro>\...` UNC paths into a garbage path that then
+-- fails its own `dir_exists` check and gets silently dropped. Rather than
+-- patch a vendored plugin (reverts on every `:Lazy update`), keep a small
+-- parallel JSON store here for WSL projects and merge it into the recent
+-- projects picker.
+
+local function recent_projects_file()
+	return vim.fn.stdpath("data") .. "/wsl_recent_projects.json"
+end
+
+local function load_recent_raw()
+	local f = io.open(recent_projects_file(), "r")
+	if not f then
+		return {}
+	end
+	local content = f:read("*a")
+	f:close()
+	if not content or content == "" then
+		return {}
+	end
+	local ok, data = pcall(vim.json.decode, content)
+	return (ok and type(data) == "table") and data or {}
+end
+
+local function save_recent_raw(list)
+	local f = io.open(recent_projects_file(), "w")
+	if not f then
+		return
+	end
+	f:write(vim.json.encode(list))
+	f:close()
+end
+
+-- Record a WSL folder as an opened project (no-op for non-WSL paths)
+function M.add_recent_project(path)
+	if not M.is_wsl_path(path) then
+		return
+	end
+	local list = { path }
+	for _, p in ipairs(load_recent_raw()) do
+		if p ~= path then
+			table.insert(list, p)
+		end
+	end
+	if #list > 50 then
+		list = vim.list_slice(list, 1, 50)
+	end
+	save_recent_raw(list)
+end
+
+-- Remove a WSL folder from recent projects
+function M.remove_recent_project(path)
+	local list = {}
+	for _, p in ipairs(load_recent_raw()) do
+		if p ~= path then
+			table.insert(list, p)
+		end
+	end
+	save_recent_raw(list)
+end
+
+-- List recent WSL projects that still exist on disk
+function M.get_recent_projects()
+	local list = {}
+	for _, p in ipairs(load_recent_raw()) do
+		if vim.fn.isdirectory(p) == 1 then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
 return M

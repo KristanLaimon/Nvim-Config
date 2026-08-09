@@ -16,6 +16,7 @@ return {
 				html = { "prettierd", "prettier", stop_after_first = true },
 				svelte = { "prettierd", "prettier", stop_after_first = true },
 				astro = { "prettierd", "prettier", stop_after_first = true },
+				dockerfile = { "dockerfmt" },
 			},
 			format_on_save = {
 				timeout_ms = 1000,

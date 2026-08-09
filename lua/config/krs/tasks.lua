@@ -234,37 +234,91 @@ local function show_failure_alert(step_idx, total_steps, failed_cmd, exit_code, 
 	vim.keymap.set({ "n", "v", "i" }, "<Space>", close_alert, kopts)
 end
 
--- Global variables for managing task window and buffer
-M.task_win = nil
-M.task_buf = nil
+-- Up to 4 background task slots (Ctrl+Shift+Alt+1..4). Each slot keeps its
+-- job alive when its window is hidden, so a long-running task (bun run dev)
+-- in slot 1 survives while slot 2 runs something else.
+M.slots = {}
+M.last_slot = nil
 
--- Execute chained step sequence in bottom panel
-local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
+-- Find a slot to run a new task in: an empty one, or one whose previous job
+-- already finished (job_id cleared by on_exit below). nil if all 4 busy.
+local function get_free_slot()
+	for i = 1, 4 do
+		local s = M.slots[i]
+		if not s or not s.job_id then
+			return i
+		end
+	end
+	return nil
+end
+
+-- Show/hide the output window for a slot. Job keeps running when hidden.
+function M.toggle_slot_window(n)
+	local s = M.slots[n]
+	if not s or not s.buf or not vim.api.nvim_buf_is_valid(s.buf) then
+		vim.notify("No task in slot " .. n, vim.log.levels.WARN, { title = "KRS Task Runner" })
+		return
+	end
+
+	if s.win and vim.api.nvim_win_is_valid(s.win) then
+		pcall(vim.api.nvim_win_close, s.win, true)
+		s.win = nil
+	else
+		vim.cmd("botright 12split")
+		s.win = vim.api.nvim_get_current_win()
+		vim.api.nvim_win_set_buf(s.win, s.buf)
+		vim.wo[s.win].number = false
+		vim.wo[s.win].relativenumber = false
+		vim.wo[s.win].signcolumn = "no"
+	end
+	M.last_slot = n
+end
+
+-- Toggle whichever slot was last run/focused (Ctrl+Shift+Alt+J)
+function M.toggle_last_slot_window()
+	if not M.last_slot then
+		vim.notify("No task has been run yet", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		return
+	end
+	M.toggle_slot_window(M.last_slot)
+end
+
+-- Execute chained step sequence in bottom panel, inside the given slot
+local function run_step_sequence(step_idx, steps, root, origin_win, task_name, slot)
 	local total = #steps
 	local current_cmd = steps[step_idx]
 
 	if step_idx == 1 then
-		if M.task_win and vim.api.nvim_win_is_valid(M.task_win) then
-			pcall(vim.api.nvim_win_close, M.task_win, true)
-			M.task_win = nil
+		local prev = M.slots[slot]
+		if prev then
+			if prev.win and vim.api.nvim_win_is_valid(prev.win) then
+				pcall(vim.api.nvim_win_close, prev.win, true)
+			end
+			if prev.buf and vim.api.nvim_buf_is_valid(prev.buf) then
+				pcall(vim.api.nvim_buf_delete, prev.buf, { force = true })
+			end
 		end
 
 		vim.cmd("botright 12split")
-		M.task_win = vim.api.nvim_get_current_win()
-		M.task_buf = vim.api.nvim_create_buf(false, true)
-		vim.api.nvim_win_set_buf(M.task_win, M.task_buf)
+		local win = vim.api.nvim_get_current_win()
+		local buf = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_win_set_buf(win, buf)
 
-		vim.bo[M.task_buf].bufhidden = "wipe"
-		vim.bo[M.task_buf].buflisted = false
-		vim.bo[M.task_buf].filetype = "TaskRunner"
+		vim.bo[buf].bufhidden = "hide"
+		vim.bo[buf].buflisted = false
+		vim.bo[buf].filetype = "TaskRunner"
 
-		vim.wo[M.task_win].number = false
-		vim.wo[M.task_win].relativenumber = false
-		vim.wo[M.task_win].signcolumn = "no"
+		vim.wo[win].number = false
+		vim.wo[win].relativenumber = false
+		vim.wo[win].signcolumn = "no"
+
+		M.slots[slot] = { win = win, buf = buf, job_id = nil, name = task_name }
+		M.last_slot = slot
 	end
 
-	local win = M.task_win
-	local buf = M.task_buf
+	local s = M.slots[slot]
+	local win = s.win
+	local buf = s.buf
 
 	vim.notify(
 		string.format("🚀 Running Step %d/%d: %s", step_idx, total, current_cmd),
@@ -288,9 +342,10 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 							vim.log.levels.INFO,
 							{ title = "KRS Task Runner" }
 						)
-						run_step_sequence(step_idx + 1, steps, root, origin_win, task_name)
+						run_step_sequence(step_idx + 1, steps, root, origin_win, task_name, slot)
 					else
 						-- All steps completed successfully
+						if M.slots[slot] then M.slots[slot].job_id = nil end
 						pcall(vim.cmd, "stopinsert")
 						if vim.api.nvim_win_is_valid(win) then
 							pcall(vim.api.nvim_set_current_win, win)
@@ -300,8 +355,7 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 							if vim.api.nvim_win_is_valid(win) then
 								pcall(vim.api.nvim_win_close, win, true)
 							end
-							if M.task_win == win then M.task_win = nil end
-							if M.task_buf == buf then M.task_buf = nil end
+							if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 							if origin_win and vim.api.nvim_win_is_valid(origin_win) then
 								pcall(vim.api.nvim_set_current_win, origin_win)
 							else
@@ -323,6 +377,7 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 					end
 				else
 					-- STEP FAILED! STOP CHAIN IMMEDIATELY AND SHOW ALERT
+					if M.slots[slot] then M.slots[slot].job_id = nil end
 					pcall(vim.cmd, "stopinsert")
 					if vim.api.nvim_win_is_valid(win) then
 						pcall(vim.api.nvim_set_current_win, win)
@@ -332,8 +387,7 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 						if vim.api.nvim_win_is_valid(win) then
 							pcall(vim.api.nvim_win_close, win, true)
 						end
-						if M.task_win == win then M.task_win = nil end
-						if M.task_buf == buf then M.task_buf = nil end
+						if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 						if origin_win and vim.api.nvim_win_is_valid(origin_win) then
 							pcall(vim.api.nvim_set_current_win, origin_win)
 						else
@@ -359,10 +413,11 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 		return
 	end
 
+	s.job_id = job_id
 	vim.cmd("startinsert")
 end
 
--- Run a task or task chain
+-- Run a task or task chain in the next free slot (1-4)
 function M.run_task_item(task_item, root)
 	root = root or M.get_project_root()
 	local pdata = M.get_project_data(root)
@@ -373,11 +428,21 @@ function M.run_task_item(task_item, root)
 		return
 	end
 
+	local slot = get_free_slot()
+	if not slot then
+		vim.notify(
+			"All 4 task slots are busy. Stop one first (Ctrl+Shift+Alt+1..4 to view, q/<CR> in it once done).",
+			vim.log.levels.WARN,
+			{ title = "KRS Task Runner" }
+		)
+		return
+	end
+
 	local origin_win = vim.api.nvim_get_current_win()
 	vim.cmd("silent! write")
 
 	local task_name = (type(task_item) == "table" and (task_item.name or task_item.cmd)) or tostring(task_item)
-	run_step_sequence(1, steps, root, origin_win, task_name)
+	run_step_sequence(1, steps, root, origin_win, task_name, slot)
 end
 
 -- Backward compatibility wrapper

@@ -140,6 +140,9 @@ return {
 			local themes = require('telescope.themes')
 
 			local raw_projects = history.get_recent_projects() or {}
+			-- WSL recents dropped: isdirectory() over \\wsl.localhost\... is slow
+			-- enough (network stat) to make the picker noticeably laggy to open.
+			local wsl_ok, wsl = pcall(require, 'config.krs.wsl')
 			local favs = load_favorites()
 
 			local non_fav_items = {}
@@ -199,6 +202,8 @@ return {
 				if _G.AddOpenedFolder then
 					_G.AddOpenedFolder(dir_path)
 				end
+				-- not calling wsl.add_recent_project here anymore: WSL paths no
+				-- longer tracked in recents (see above)
 
 				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
 				vim.notify('📁 Switched to project: ' .. dir_path, vim.log.levels.INFO)
@@ -291,6 +296,10 @@ return {
 						end
 
 						save_history_to_disk(history.get_recent_projects())
+
+						if wsl_ok then
+							wsl.remove_recent_project(selection.value.path)
+						end
 
 						local current_favs = load_favorites()
 						if current_favs[target_val] then

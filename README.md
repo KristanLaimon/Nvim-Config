@@ -12,6 +12,10 @@
 
 # 🦊 KrsVim - A orange-fox nvim tailored for fox coders
 
+![krsnv-cover](./.github/cover.png)
+![krsnv-cover](./.github/editor-example.png)
+
+
 This is my personal Neovim setup, I think it can be considered a mini-distro, but if you like it go ahead and use it! or fork it. I'm just documenting it here so I remember how it works for my future-self, and in case I broke something while editing this setup haha.
 Expect sharp edges, highly opinionated features, and things wired specifically to how *I* work in my day-to-day
 
@@ -68,6 +72,15 @@ Mason, Conform and Treesitter are preconfigured to install and manage everything
 - **Format on Save** via `conform.nvim` (`timeout_ms = 1000`, `lsp_fallback = true`).
 - **C# IntelliSense** comes from `omnisharp` reading the project's `.csproj`/`.sln`; you don't need to open the solution manually, it resolves from the working directory.
 
+#### ➕ Adding a new Treesitter language
+
+`lua/plugins/lsp/treesitter.lua` pins `nvim-treesitter` to the `main` branch (the rewrite), which dropped the old `highlight.enable` config — highlighting is started per-buffer via a `FileType` autocmd that calls `vim.treesitter.start()` on any filetype, `pcall`'d so it silently no-ops when there's no parser installed. To add a language:
+
+1. Add the parser name to the `parsers` list at the top of `lua/plugins/lsp/treesitter.lua`.
+2. `:TSUpdate` (or restart Neovim — `ts.install(parsers)` runs on setup).
+
+No autocmd/pattern changes needed — it already matches every filetype.
+
 ---
 
 ## 📦 Installed Plugins & Custom Modules
@@ -85,7 +98,6 @@ Mason, Conform and Treesitter are preconfigured to install and manage everything
 | **Open Folder Picker** | `lua/plugins/editor/telescope.lua` | Generic "open any folder as project" picker, independent of the Desktop explorer. | `<C-S-o>` |
 | **Recent Projects** | `lua/plugins/editor/project.lua` | `project.nvim` wrapped in a custom picker with favorites (pinned to the bottom) and per-entry delete. | `<C-S-r>` |
 | **Multi-Terminal Manager** | `lua/config/krs/terminal.lua` | 9 lazily-spawned terminals, toggle/select independently. If the terminal's `cwd` sits inside a WSL distro path, it launches `wsl.exe` there instead of the default Windows shell — automatic, no config needed. | `<A-1>`..`<A-9>`, `<C-;>` |
-| **IntelliJ-Style Toolbar** | `lua/config/krs/intellij_toolbar.lua` | Floating top-right widget (▶ Play / 🐞 Debug / ⚙️ Profiles) that shows up when the project has tasks defined. | `IntelliJToolbarToggle` |
 | **Task & Script Manager** | `lua/config/krs/tasks.lua` | Per-project tasks stored in `.nvimkrs`; run, chain, or set a default task detected from `Makefile`/`package.json`/etc. | `<C-S-t>`, `<leader>ta`, `<C-S-a>` |
 | **Live Colorscheme Previewer** | `lua/config/krs/colorscheme_preview.lua` | Previews the theme live as you tab through `:colorscheme <Tab>`, reverts if you cancel. | `:colorscheme <Tab>` |
 | **Pixel-Art Image Viewer** | `lua/config/krs/image_viewer.lua` | Renders images as terminal pixel art via `chafa` in a floating window; can also hand off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
@@ -225,6 +237,12 @@ Mason, Conform and Treesitter are preconfigured to install and manage everything
 |---|---|---|
 | `<C-S-t>` / `<leader>ta` | n, i, v | Open Task Menu UI (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
 | `<C-S-a>` | n, i, v | Run the project's default task (auto-detected `cwd = project_root`) |
+| `<C-1>` .. `<C-4>` | n, i, v, t | Toggle output window for background task slot 1-4 (no-op if slot empty) |
+| `` <C-`> `` | n, i, v, t | Toggle output window for the last-run/focused task slot |
+
+> Up to 4 tasks can run in the background at once (e.g. multiple `bun run dev`); each gets its own slot, closing the window doesn't kill the job.
+
+
 
 ---
 

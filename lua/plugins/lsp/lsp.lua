@@ -58,6 +58,8 @@ return {
 					enable_import_completion = true,
 				},
 				lemminx = {},
+				["dockerfile-language-server"] = {},
+				dockerfmt = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -114,6 +116,8 @@ return {
 					"tailwindcss",
 					"omnisharp",
 					"lemminx",
+					"dockerls",
+					"dockerfmt",
 				},
 			})
 

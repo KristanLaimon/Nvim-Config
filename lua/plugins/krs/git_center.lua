@@ -218,12 +218,20 @@ local function format_vscode_diff(raw_lines, is_untracked)
 	local formatted = {}
 	local line_types = {}
 
+	-- nvim_buf_set_lines rejects any entry with an embedded newline; git
+	-- output can smuggle one in (e.g. binary/CRLF-mangled content), so split
+	-- defensively at the single point everything funnels through.
+	local function push_line(text, ltype)
+		for _, sub in ipairs(vim.split(text, "\n", { plain = true })) do
+			table.insert(formatted, sub)
+			table.insert(line_types, ltype)
+		end
+	end
+
 	if is_untracked then
-		table.insert(formatted, " ─── 📄 New Untracked File ──────────────────────────────────────────")
-		table.insert(line_types, "header")
+		push_line(" ─── 📄 New Untracked File ──────────────────────────────────────────", "header")
 		for _, line in ipairs(raw_lines) do
-			table.insert(formatted, "+ " .. line)
-			table.insert(line_types, "add")
+			push_line("+ " .. line, "add")
 		end
 		return formatted, line_types
 	end
@@ -244,25 +252,20 @@ local function format_vscode_diff(raw_lines, is_untracked)
 			if #header_str < 65 then
 				header_str = header_str .. string.rep("─", 65 - #header_str)
 			end
-			table.insert(formatted, header_str)
-			table.insert(line_types, "header")
+			push_line(header_str, "header")
 		elseif not in_header then
 			if line:sub(1, 1) == "+" then
-				table.insert(formatted, line)
-				table.insert(line_types, "add")
+				push_line(line, "add")
 			elseif line:sub(1, 1) == "-" then
-				table.insert(formatted, line)
-				table.insert(line_types, "delete")
+				push_line(line, "delete")
 			else
-				table.insert(formatted, line)
-				table.insert(line_types, "context")
+				push_line(line, "context")
 			end
 		end
 	end
 
 	if #formatted == 0 then
-		table.insert(formatted, " (no visible changes in this file)")
-		table.insert(line_types, "context")
+		push_line(" (no visible changes in this file)", "context")
 	end
 
 	return formatted, line_types

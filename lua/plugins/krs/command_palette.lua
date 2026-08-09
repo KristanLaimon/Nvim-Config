@@ -39,12 +39,8 @@ M.commands = {
 	{ name = "🚪 Close Workspace & Go to Main Menu", cmd = "WorkspaceClose", category = "Workspace" },
 
 	-- --------------------------------------------------------------------------
-	-- 🛠️ Tasks & Code Execution (IntelliJ Style)
+	-- 🛠️ Tasks & Code Execution
 	-- --------------------------------------------------------------------------
-	{ name = "🚀 [Play] IntelliJ Run Menu", keys = "<leader>rp", category = "Tasks" },
-	{ name = "🐞 [Debug] IntelliJ Debug Menu", keys = "<leader>rd", category = "Tasks" },
-	{ name = "⚙️ [Profiles] IntelliJ Profiles & Tasks Menu", keys = "<leader>rc", category = "Tasks" },
-	{ name = "🚀 Toggle IntelliJ Top-Right Toolbar", cmd = "IntelliJToolbarToggle", category = "UI" },
 	{ name = "🚀 Run Project Default Task", keys = "<C-S-a>", category = "Tasks" },
 	{ name = "🛠️ Open Project Tasks Menu", keys = "<leader>ta", category = "Tasks" },
 
@@ -81,6 +77,7 @@ M.commands = {
 	{ name = "🔍 Reset Font Size", cmd = "FontSizeReset", category = "UI" },
 	{ name = "🖼️ View Image with Chafa", keys = "<leader>i", category = "UI" },
 	{ name = "🎬 Open Image/Video with OS Default Program", keys = "<C-S-Enter>", category = "UI" },
+	{ name = "📂 Open Project Root in File Explorer", cmd = "OpenRootInExplorer", category = "Files" },
 	{ name = "🧩 Plugin Manager (Lazy)", cmd = "Lazy", category = "Config" },
 	{ name = "🔄 Reload Neovim Configuration", cmd = "ReloadConfig", category = "Config" },
 	{ name = "🚪 Quit Neovim (Quit All)", cmd = "qa", category = "System" },

@@ -36,7 +36,7 @@ function M.show_help()
 			"a : Create File     | A : Create Folder",
 			"r : Rename          | d : Delete",
 			"c : Copy            | x : Cut | p : Paste",
-			"Ctrl + Shift + Enter/Space : Reveal selected file/folder in System Explorer",
+			"Ctrl + Shift + Enter : Reveal selected file/folder in System Explorer",
 			"q : Close explorer",
 		}
 	elseif context == "git" then

@@ -380,6 +380,26 @@ vim.keymap.set("n", "<leader>ta", function()
 	require("config.krs.tasks").open_task_menu()
 end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
 
+-- Background task output windows (up to 4 concurrent long-running tasks,
+-- e.g. `bun run dev`). Ctrl+1..4 toggles that slot's window; does nothing
+-- if the slot is empty. Ctrl+` toggles whichever slot was last run/focused.
+-- NOTE: tried Ctrl+Shift+Alt+<key> (3-modifier chords eaten by
+-- Windows/Neovide) and Alt+Shift+<key> (Windows' keyboard layout-switch
+-- hotkey). Even Ctrl+Alt+<key> failed specifically from INSIDE the task's
+-- terminal buffer (real PTY job swallows the AltGr-ish combo on entry,
+-- even though it works fine outside a terminal) — single-modifier Ctrl is
+-- what the rest of this config already relies on for in-terminal binds
+-- (<C-;>, <A-1>..<A-9>), so stick to that here too.
+for i = 1, 4 do
+	vim.keymap.set({ "n", "i", "v", "t" }, "<C-" .. i .. ">", function()
+		require("config.krs.tasks").toggle_slot_window(i)
+	end, { noremap = true, silent = true, desc = "Toggle task output slot " .. i })
+end
+
+vim.keymap.set({ "n", "i", "v", "t" }, "<C-`>", function()
+	require("config.krs.tasks").toggle_last_slot_window()
+end, { noremap = true, silent = true, desc = "Toggle last task output window" })
+
 -- Floating Desktop File Explorer (Ctrl + Shift + F)
 vim.keymap.set({ "n", "i", "v" }, "<C-S-f>", function()
 	require("config.krs.file_explorer").open_desktop_explorer()

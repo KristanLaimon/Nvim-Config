@@ -163,7 +163,16 @@ function M.view_current_image()
 	vim.keymap.set("n", "<Esc>", "<Cmd>close<CR>", { buffer = buf, silent = true })
 end
 
+-- Open the current project root (cwd) in the OS's native file manager
+function M.open_project_root_in_explorer()
+	M.open_with_system_app(vim.fn.getcwd())
+end
+
 function M.setup()
+	vim.api.nvim_create_user_command("OpenRootInExplorer", function()
+		M.open_project_root_in_explorer()
+	end, { desc = "Open current project root in the OS file explorer" })
+
 	-- Map <leader>i to open image viewer with Chafa
 	vim.keymap.set(
 		"n",

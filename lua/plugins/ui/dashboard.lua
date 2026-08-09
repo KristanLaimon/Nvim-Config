@@ -34,6 +34,16 @@ return {
 			dashboard.button("q", "  Quit", ":qa<CR>"),
 		}
 
+		-- Only show the WSL folder button on Windows when WSL is actually installed
+		local ok_wsl, wsl = pcall(require, "config.krs.wsl")
+		if ok_wsl and wsl.available() then
+			table.insert(
+				dashboard.section.buttons.val,
+				3,
+				dashboard.button("w", "  File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>")
+			)
+		end
+
 		dashboard.section.footer.val = ""
 
 		-- Wrap alpha.redraw and alpha.draw in pcall to prevent WinResized invalid window id errors when closing splits/explorer
