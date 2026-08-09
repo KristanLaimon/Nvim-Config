@@ -73,7 +73,17 @@ return {
 		mappings = {
 		    ["<C-n>"] = "add",
 		    ["<C-S-n>"] = "add_directory",
+		    ["<C-S-CR>"] = "open_with_system_app",
+		    ["<C-S-Enter>"] = "open_with_system_app",
 		},
+	    },
+	    commands = {
+		open_with_system_app = function(state)
+		    local node = state.tree:get_node()
+		    if node and node.path then
+			require("config.krs.image_viewer").open_with_system_app(node.path)
+		    end
+		end,
 	    },
 	    filesystem = {
 		bind_to_cwd = true,

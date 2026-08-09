@@ -18,7 +18,7 @@ return {
 			[[																																						                 ]],
 		}
 
-		-- Highlight Naranja para el arte ASCII del Header
+		-- Orange highlight for header ASCII art
 		local function set_header_hl()
 			vim.api.nvim_set_hl(0, "AlphaHeaderOrange", { fg = "#FF8800", bold = true })
 		end
@@ -27,7 +27,7 @@ return {
 		dashboard.section.header.opts.hl = "AlphaHeaderOrange"
 
 		dashboard.section.buttons.val = {
-			dashboard.button("f", "  Explorador de Archivos (Desktop)", ":TelescopeFileBrowserDesktop<CR>"),
+			dashboard.button("f", "  File Explorer (Desktop)", ":TelescopeFileBrowserDesktop<CR>"),
 			dashboard.button("p", "  Recent projects", ":Telescope projects<CR>"),
 			dashboard.button("e", "  Plugins/Extensions", ":Lazy<CR>"),
 			dashboard.button("m", "  Lsps/Languages", ":Mason<CR>"),
@@ -78,3 +78,4 @@ return {
 		})
 	end,
 }
+

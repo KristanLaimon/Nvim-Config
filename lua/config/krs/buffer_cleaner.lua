@@ -1,20 +1,20 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Limpiador de Buffers y Cierre Inteligente (Buffer Manager)
+-- 🦊 KRS CONFIG: Buffer Cleaner & Smart Quit Manager
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE MÓDULO?
--- 1. `Neotree_Smart_Quit`: Cierra el buffer/pestaña actual de forma inteligente:
---      - Si hay varias pestañas/buffers abiertos, cierra solo la pestaña actual y pasa a la anterior (sin cerrar Neovim).
---      - Si hay divisiones de pantalla (splits), cierra solo la ventana dividida actual.
---      - Si es el último archivo abierto, borra el buffer y vuelve al Menú Principal (Alpha Dashboard).
---      - Si ya estás en el Menú Principal (Alpha), `:q` cierra Neovim por completo.
--- 2. `CleanNoNameBuffers`: Autocomando que detecta y elimina automáticamente los buffers vacíos [No Name] sin modificar cuando abres archivos reales.
--- 3. `AddOpenedFolder`: Mantiene un registro de carpetas/proyectos abiertos recientemente para Telescope.
--- 4. Alias de comandos `:q` y `:q!`: Sobrescribe `:q` para llamar dinámicamente a la limpieza inteligente.
+-- HOW THIS MODULE WORKS:
+-- 1. `Neotree_Smart_Quit`: Smartly closes current buffer/tab:
+--      - If multiple tabs/buffers are open, closes only current tab and moves to previous (without quitting Neovim).
+--      - Si screen is split, closes only the current split window.
+--      - If it is the last open file, deletes buffer and returns to Alpha Dashboard.
+--      - If already on Alpha Dashboard, `:q` quits Neovim completely.
+-- 2. `CleanNoNameBuffers`: Autocommand detecting and clearing empty unmodified [No Name] buffers when real files open.
+-- 3. `AddOpenedFolder`: Keeps record of recently opened folders/projects for Telescope.
+-- 4. Command aliases `:q` and `:q!`: Overrides `:q` to dynamically trigger smart quit.
 -- ============================================================================
 
 local M = {}
 
--- Tabla global para registro de carpetas abiertas
+-- Global table for tracking opened folders
 _G.OpenedFolders = _G.OpenedFolders or {}
 
 function _G.AddOpenedFolder(dir_path)
@@ -27,32 +27,32 @@ function _G.AddOpenedFolder(dir_path)
 	end
 end
 
--- Función de Cierre Inteligente de Buffers y Pestañas (Smart Quit & Tab Manager)
+-- Smart Buffer & Tab Manager Quit Function
 function _G.Neotree_Smart_Quit(force)
 	local cur_win = vim.api.nvim_get_current_win()
 	local cur_buf = vim.api.nvim_get_current_buf()
 	local ft = vim.bo[cur_buf].filetype
 	local bt = vim.bo[cur_buf].buftype
 
-	-- 1. Si estamos en Alpha (Dashboard), :q cierra Neovim por completo
+	-- 1. If in Alpha (Dashboard), :q quits Neovim completely
 	if ft == "alpha" then
 		vim.cmd(force and "qa!" or "qa")
 		return
 	end
 
-	-- 2. Si estamos enfocados en Neo-tree, cerrar la barra lateral de Neo-tree
+	-- 2. If focused on Neo-tree, close Neo-tree sidebar
 	if ft == "neo-tree" then
 		pcall(vim.cmd, "Neotree close")
 		return
 	end
 
-	-- 3. Si estamos en una ventana de terminal, cerrar esa ventana
+	-- 3. If in a terminal window, close that window
 	if bt == "terminal" then
 		pcall(vim.cmd, force and "close!" or "close")
 		return
 	end
 
-	-- Contar cuántas ventanas de código reales (excluyendo Neo-tree) hay en la pestaña actual
+	-- Count how many real code windows (excluding Neo-tree) are in the current tabpage
 	local code_wins = 0
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 		if vim.api.nvim_win_is_valid(win) then
@@ -64,13 +64,13 @@ function _G.Neotree_Smart_Quit(force)
 		end
 	end
 
-	-- Si hay múltiples divisiones de ventana (splits de código), cerrar solo el split actual
+	-- If multiple window splits exist, close only the current split
 	if code_wins > 1 then
 		pcall(vim.cmd, force and "close!" or "close")
 		return
 	end
 
-	-- Contar cuántos buffers reales de archivos están abiertos en total
+	-- Count how many real file buffers are open in total
 	local bufs = vim.api.nvim_list_bufs()
 	local real_bufs = {}
 	for _, b in ipairs(bufs) do
@@ -83,27 +83,26 @@ function _G.Neotree_Smart_Quit(force)
 		end
 	end
 
-	-- Si hay más de 1 buffer de archivo abierto en la barra de pestañas:
+	-- If more than 1 file buffer open in bufferline:
 	if #real_bufs > 1 then
-		-- Pasar al buffer anterior antes de borrar el actual para no cerrar la aplicación ni deformar el editor
+		-- Cycle to previous buffer before deleting current
 		pcall(vim.cmd, "BufferLineCyclePrev")
-		local cmd = force and ("bdelete! " .. cur_buf) or ("bdelete " .. cur_buf)
-		pcall(vim.cmd, cmd)
+		pcall(vim.api.nvim_buf_delete, cur_buf, { force = force })
 	else
-		-- Es el último buffer de archivo abierto -> Cerrar el buffer y mostrar el Menú Principal (Alpha Dashboard)
-		local cmd = force and ("bdelete! " .. cur_buf) or ("bdelete " .. cur_buf)
-		pcall(vim.cmd, cmd)
-		vim.schedule(function()
-			pcall(vim.cmd, "Alpha")
-		end)
+		-- Last file buffer -> Show Alpha Dashboard FIRST, then delete buffer
+		local ok_alpha = pcall(vim.cmd, "Alpha")
+		if not ok_alpha then
+			pcall(vim.cmd, "enew")
+		end
+		pcall(vim.api.nvim_buf_delete, cur_buf, { force = force })
 	end
 end
 
 function M.setup()
-	-- Inicializar carpeta de trabajo actual en OpenedFolders
+	-- Initialize working directory in OpenedFolders
 	_G.AddOpenedFolder(vim.fn.getcwd())
 
-	-- Autocomando: Registrar cambio de directorio (:cd / Telescope projects)
+	-- Autocmd: Track directory changes (:cd / Telescope projects)
 	local group_track = vim.api.nvim_create_augroup("KRSTrackOpenedFolders", { clear = true })
 	vim.api.nvim_create_autocmd("DirChanged", {
 		group = group_track,
@@ -113,7 +112,7 @@ function M.setup()
 		end,
 	})
 
-	-- Autocomando: Limpieza automática de buffers vacíos [No Name] cuando hay archivos reales abiertos
+	-- Autocmd: Automatic cleanup of empty [No Name] buffers when real files are open
 	local group_clean = vim.api.nvim_create_augroup("KRSCleanNoNameBuffers", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
 		group = group_clean,
@@ -132,7 +131,7 @@ function M.setup()
 					end
 				end
 
-				-- Solo limpiar buffers [No Name] si hay al menos 1 archivo real abierto
+				-- Only clean [No Name] buffers if at least 1 real file is open
 				if real_files > 0 then
 					local visible_bufs = {}
 					for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -156,19 +155,24 @@ function M.setup()
 		end,
 	})
 
-	-- Mapeos de teclado para cierre inteligente de buffers (Ctrl+Q y Leader+q)
+	-- Keybindings for smart buffer quit (Ctrl+Q & Leader+q)
 	vim.keymap.set("n", "<C-q>", function()
 		_G.Neotree_Smart_Quit(false)
-	end, { noremap = true, silent = true, desc = "Cerrar buffer/pestaña actual" })
+	end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
 	vim.keymap.set("n", "<leader>q", function()
 		_G.Neotree_Smart_Quit(false)
-	end, { noremap = true, silent = true, desc = "Cerrar buffer/pestaña actual" })
+	end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
 
-	-- Sobrescribir :q y :q! para llamar a la función inteligente
+	-- Override :q, :q!, :bd, :bd!, :bdelete to trigger smart quit
 	vim.cmd([[
 		cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
 		cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
+		cnoreabbrev <expr> bd (getcmdtype() == ':' && getcmdline() ==# 'bd') ? 'lua _G.Neotree_Smart_Quit(false)' : 'bd'
+		cnoreabbrev <expr> bd! (getcmdtype() == ':' && getcmdline() ==# 'bd!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'bd!'
+		cnoreabbrev <expr> bdelete (getcmdtype() == ':' && getcmdline() ==# 'bdelete') ? 'lua _G.Neotree_Smart_Quit(false)' : 'bdelete'
+		cnoreabbrev <expr> bdelete! (getcmdtype() == ':' && getcmdline() ==# 'bdelete!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'bdelete!'
 	]])
 end
 
 return M
+

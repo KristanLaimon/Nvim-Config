@@ -1,29 +1,29 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Gestor de Terminales Múltiples (Lazy Loading Multi-Terminal Manager)
+-- 🦊 KRS CONFIG: Lazy Loading Multi-Terminal Manager
 -- ============================================================================
--- 1. Permite gestionar 9 terminales independientes (1-9) con Carga Perezosa (Lazy Loading).
--- 2. <Alt + 1> .. <Alt + 9> selecciona y cambia a la terminal #n.
--- 3. <Ctrl + ;> abre/oculta alternadamente la terminal que esté SELECCIONADA actualmente.
--- 4. Soporta navegación limpia entre el editor de código y las terminales.
+-- 1. Manages 9 independent terminals (1-9) with Lazy Loading.
+-- 2. <Alt + 1> .. <Alt + 9> selects and switches to terminal #n.
+-- 3. <Ctrl + ;> toggles open/hidden for currently SELECTED terminal.
+-- 4. Supports clean navigation between code editor and terminals.
 -- ============================================================================
 
 local M = {}
 
-local terminals = {} -- Estructura: [n] = { buf = number|nil, win = number|nil }
-local selected_terminal = 1 -- Índice de la terminal actualmente seleccionada (1 por defecto)
-local code_win = nil -- Ventana de código de origen para volver con foco limpio
+local terminals = {} -- Structure: [n] = { buf = number|nil, win = number|nil }
+local selected_terminal = 1 -- Currently selected terminal index (1 by default)
+local code_win = nil -- Origin code window to return with clean focus
 
--- Verificar si una ventana es válida
+-- Check if window is valid
 local function is_valid_win(win)
 	return win and vim.api.nvim_win_is_valid(win)
 end
 
--- Verificar si un buffer es válido
+-- Check if buffer is valid
 local function is_valid_buf(buf)
 	return buf and vim.api.nvim_buf_is_valid(buf)
 end
 
--- Obtener o inicializar la referencia del terminal n (Lazy Loading)
+-- Get or initialize reference for terminal n (Lazy Loading)
 local function get_term(n)
 	local t = terminals[n]
 	if not t then
@@ -33,7 +33,7 @@ local function get_term(n)
 	return t
 end
 
--- Obtener la ventana de terminal visible actualmente (si hay alguna)
+-- Get currently visible terminal window (if any)
 local function get_active_terminal_win()
 	for _, t in pairs(terminals) do
 		if is_valid_win(t.win) then
@@ -43,30 +43,30 @@ local function get_active_terminal_win()
 	return nil
 end
 
--- Obtener la terminal seleccionada actualmente (1-9)
+-- Get currently selected terminal (1-9)
 function M.get_selected_terminal()
 	return selected_terminal
 end
 
--- Seleccionar la terminal #n (Alt + 1..9)
+-- Select terminal #n (Alt + 1..9)
 function M.select_terminal(n)
 	selected_terminal = n
 	local t = get_term(n)
 	local current_win = vim.api.nvim_get_current_win()
 	local active_win = get_active_terminal_win()
 
-	-- Si no estamos en una ventana de terminal, guardar la ventana de código actual
+	-- If not in terminal window, save current code window
 	if not active_win or current_win ~= active_win then
 		code_win = current_win
 	end
 
 	if is_valid_win(active_win) then
-		-- Si ya hay una ventana de terminal split visible abajo: cambiar el buffer
+		-- If split terminal window already visible below: change buffer
 		t.win = active_win
 		if is_valid_buf(t.buf) then
 			vim.api.nvim_win_set_buf(t.win, t.buf)
 		else
-			-- Lazy load terminal #n por primera vez
+			-- Lazy load terminal #n for the first time
 			vim.api.nvim_set_current_win(t.win)
 			vim.cmd("terminal")
 			t.buf = vim.api.nvim_get_current_buf()
@@ -75,14 +75,14 @@ function M.select_terminal(n)
 		vim.api.nvim_set_current_win(t.win)
 		vim.cmd("startinsert")
 	else
-		-- Si no hay ventana de terminal abierta, abrir la terminal seleccionada
+		-- If no terminal window open, open selected terminal
 		M.open_terminal(n)
 	end
 
-	vim.notify("🖥️ Terminal #" .. n .. " activa", vim.log.levels.INFO, { title = "Multi-Terminal" })
+	vim.notify("🖥️ Terminal #" .. n .. " active", vim.log.levels.INFO, { title = "Multi-Terminal" })
 end
 
--- Abrir/Mostrar una terminal específica
+-- Open/Show a specific terminal
 function M.open_terminal(n)
 	n = n or selected_terminal
 	selected_terminal = n
@@ -90,12 +90,12 @@ function M.open_terminal(n)
 	local current = vim.api.nvim_get_current_win()
 	local active_win = get_active_terminal_win()
 
-	-- Guardar ventana de código
+	-- Save code window
 	if current ~= active_win then
 		code_win = current
 	end
 
-	-- Si la ventana ya no es válida, limpiar referencia
+	-- If window is no longer valid, clear reference
 	if t.win and not is_valid_win(t.win) then
 		t.win = nil
 	end
@@ -106,20 +106,20 @@ function M.open_terminal(n)
 		return
 	end
 
-	-- Crear ventana split abajo (10 líneas)
+	-- Create bottom split window (10 lines)
 	vim.cmd("botright 10split")
 	t.win = vim.api.nvim_get_current_win()
 
 	if is_valid_buf(t.buf) then
 		vim.api.nvim_win_set_buf(t.win, t.buf)
 	else
-		-- Lazy loading del proceso de terminal #n
+		-- Lazy load terminal process #n
 		vim.cmd("terminal")
 		t.buf = vim.api.nvim_get_current_buf()
 		vim.bo[t.buf].buflisted = false
 	end
 
-	-- Ajustes visuales de ventana de terminal
+	-- Terminal window visual settings
 	vim.wo[t.win].number = false
 	vim.wo[t.win].relativenumber = false
 	vim.wo[t.win].signcolumn = "no"
@@ -127,14 +127,14 @@ function M.open_terminal(n)
 	vim.cmd("startinsert")
 end
 
--- Alternar (Toggle) la terminal SELECCIONADA con Ctrl + ;
+-- Toggle selected terminal with Ctrl + ;
 function M.toggle_selected_terminal()
 	local n = selected_terminal
 	local t = get_term(n)
 	local current = vim.api.nvim_get_current_win()
 	local active_win = get_active_terminal_win()
 
-	-- Caso 1: Si el cursor está en una ventana de terminal -> Ocultarla y volver al código
+	-- Case 1: Cursor is in terminal window -> Hide it and return to code
 	if active_win and current == active_win then
 		pcall(vim.cmd, "stopinsert")
 		pcall(vim.api.nvim_win_close, active_win, true)
@@ -155,20 +155,20 @@ function M.toggle_selected_terminal()
 		return
 	end
 
-	-- Caso 2: Si el terminal está abierto pero sin foco -> Enfocarlo
+	-- Case 2: Terminal is open but unfocused -> Focus it
 	if is_valid_win(t.win) then
 		vim.api.nvim_set_current_win(t.win)
 		vim.cmd("startinsert")
 		return
 	end
 
-	-- Caso 3: Abrir el terminal seleccionado
+	-- Case 3: Open selected terminal
 	M.open_terminal(n)
 end
 
--- Configuración de Keymaps globales
+-- Global Keymaps configuration
 function M.setup()
-	-- Alt + 1..9 para seleccionar/gestionar Terminal 1..9 en Normal, Insert y Terminal
+	-- Alt + 1..9 to select/manage Terminal 1..9 in Normal, Insert, and Terminal modes
 	for n = 1, 9 do
 		local alt_key = "<A-" .. n .. ">"
 		vim.keymap.set({ "n", "i", "t" }, alt_key, function()
@@ -176,16 +176,17 @@ function M.setup()
 				pcall(vim.cmd, "stopinsert")
 			end
 			M.select_terminal(n)
-		end, { noremap = true, silent = true, desc = "Seleccionar Terminal #" .. n })
+		end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
 	end
 
-	-- Ctrl + ; para abrir/ocultar alternadamente la terminal seleccionada actualmente
+	-- Ctrl + ; to toggle open/hidden for currently selected terminal
 	vim.keymap.set({ "n", "i", "t" }, "<C-;>", function()
 		M.toggle_selected_terminal()
-	end, { noremap = true, silent = true, desc = "Alternar Terminal Seleccionada" })
+	end, { noremap = true, silent = true, desc = "Toggle Selected Terminal" })
 
-	-- Permitir navegación estándar con Ctrl+W desde dentro de la terminal
+	-- Allow standard navigation with Ctrl+W from inside terminal
 	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], { noremap = true, silent = true })
 end
 
 return M
+

@@ -1,15 +1,15 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Explorador de Archivos Flotante Nativo (Pure Lua Telescope)
+-- 🦊 KRS CONFIG: Native Floating File Explorer (Pure Lua Telescope)
 -- ============================================================================
--- 1. 100% Nativo en Lua sin usar binarios externos (evita errores 'Executable not found').
--- 2. Se ejecuta por defecto en el Desktop del usuario (Multiplataforma).
--- 3. Permite crear archivos, carpetas, renombrar, eliminar y navegar.
--- 4. Tecla 'o' o '<C-o>' abre carpetas como Proyecto Activo (CWD).
+-- 1. 100% Native in Lua without external binaries (avoids 'Executable not found' errors).
+-- 2. Defaults to user's Desktop directory (Cross-platform).
+-- 3. Allows creating files, folders, renaming, deleting, and navigating.
+-- 4. Key 'o' or '<C-o>' opens folders as Active Project (CWD).
 -- ============================================================================
 
 local M = {}
 
--- Obtener la ruta del Escritorio (Desktop) de forma multiplataforma (Windows / macOS / Linux)
+-- Get Desktop path cross-platform (Windows / macOS / Linux)
 function M.get_desktop_path()
 	local home = vim.fn.expand("~")
 	local desktop = home .. "/Desktop"
@@ -17,7 +17,7 @@ function M.get_desktop_path()
 		return desktop
 	end
 
-	-- Soporte para OneDrive Desktop en Windows
+	-- Support for OneDrive Desktop on Windows
 	local onedrive_desktop = home .. "/OneDrive/Desktop"
 	if vim.fn.isdirectory(onedrive_desktop) == 1 then
 		return onedrive_desktop
@@ -26,7 +26,7 @@ function M.get_desktop_path()
 	return home
 end
 
--- Abrir el explorador de archivos nativo en Telescope
+-- Open native file explorer in Telescope
 function M.open_desktop_explorer(opts)
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
@@ -42,7 +42,7 @@ function M.open_desktop_explorer(opts)
 		curr_dir = M.get_desktop_path()
 	end
 
-	-- Escanear elementos usando la API nativa de Neovim (fs_scandir)
+	-- Scan items using Neovim native API (fs_scandir)
 	local entries = {}
 	local handle = vim.uv.fs_scandir(curr_dir)
 	if handle then
@@ -62,7 +62,7 @@ function M.open_desktop_explorer(opts)
 		end
 	end
 
-	-- Ordenar: Carpetas primero, luego archivos por orden alfabético
+	-- Sort: Directories first, then files alphabetically
 	table.sort(entries, function(a, b)
 		if a.is_dir ~= b.is_dir then
 			return a.is_dir
@@ -71,8 +71,8 @@ function M.open_desktop_explorer(opts)
 	end)
 
 	pickers.new({
-		prompt_title = " 📁 Explorador: " .. curr_dir .. " ",
-		results_title = " Archivos / Carpetas | Presiona [?] para ver ayuda ",
+		prompt_title = " 📁 Explorer: " .. curr_dir .. " ",
+		results_title = " Files / Folders | Press [?] for help ",
 		finder = finders.new_table({
 			results = entries,
 			entry_maker = function(entry)
@@ -91,7 +91,7 @@ function M.open_desktop_explorer(opts)
 			prompt_position = "top",
 		},
 		attach_mappings = function(prompt_bufnr, map)
-			-- Enter: Entrar a carpeta o abrir archivo en el editor
+			-- Enter: Enter folder or open file in editor
 			actions.select_default:replace(function()
 				local selection = action_state.get_selected_entry()
 				if not selection or not selection.value then
@@ -109,7 +109,7 @@ function M.open_desktop_explorer(opts)
 				end
 			end)
 
-			-- Teclas 'o', 'O' y '<C-o>': Establecer carpeta como Proyecto Activo (CWD)
+			-- Keys 'o', 'O' and '<C-o>': Set folder as Active Project (CWD)
 			local set_project_cwd = function()
 				local selection = action_state.get_selected_entry()
 				local target = curr_dir
@@ -117,6 +117,22 @@ function M.open_desktop_explorer(opts)
 					target = selection.value.path
 				end
 				actions.close(prompt_bufnr)
+
+				-- Close Neo-tree & all splits to start completely clean
+				pcall(vim.cmd, "Neotree close")
+				pcall(vim.cmd, "only")
+
+				-- Create a clean empty buffer
+				vim.cmd("enew")
+				local new_buf = vim.api.nvim_get_current_buf()
+
+				-- Delete ALL old buffers from the previous project
+				for _, b in ipairs(vim.api.nvim_list_bufs()) do
+					if b ~= new_buf and vim.api.nvim_buf_is_valid(b) then
+						pcall(vim.api.nvim_buf_delete, b, { force = true })
+					end
+				end
+
 				pcall(vim.api.nvim_set_current_dir, target)
 
 				local history_ok, history = pcall(require, "project_nvim.utils.history")
@@ -125,30 +141,31 @@ function M.open_desktop_explorer(opts)
 					pcall(history.write_projects_to_history)
 				end
 
-				vim.notify("📁 Raíz del proyecto cambiada a:\n" .. target, vim.log.levels.INFO, { title = "Proyecto Activo" })
+				pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target))
+				vim.notify("📁 Project root changed to:\n" .. target, vim.log.levels.INFO, { title = "Active Project" })
 			end
 			map("i", "<C-o>", set_project_cwd)
 			map("n", "<C-o>", set_project_cwd)
 			map("n", "o", set_project_cwd)
 			map("n", "O", set_project_cwd)
 
-			-- Tecla 'a': Crear archivo (ej: index.js) o carpeta (ej: src/ con barra al final)
+			-- Key 'a': Create file (e.g. index.js) or folder (e.g. src/ with trailing slash)
 			local create_item = function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					vim.ui.input({ prompt = "Crear nuevo (agrega '/' al final para carpeta): " }, function(name)
+					vim.ui.input({ prompt = "Create new (add '/' at end for folder): " }, function(name)
 						if not name or name == "" then
 							return
 						end
 						local full_path = curr_dir .. "/" .. name
 						if name:sub(-1) == "/" or name:sub(-1) == "\\" then
 							vim.fn.mkdir(full_path, "p")
-							vim.notify("📁 Carpeta creada: " .. name, vim.log.levels.INFO)
+							vim.notify("📁 Folder created: " .. name, vim.log.levels.INFO)
 						else
 							local f = io.open(full_path, "w")
 							if f then
 								f:close()
-								vim.notify("📄 Archivo creado: " .. name, vim.log.levels.INFO)
+								vim.notify("📄 File created: " .. name, vim.log.levels.INFO)
 							end
 						end
 						M.open_desktop_explorer({ path = curr_dir })
@@ -158,7 +175,7 @@ function M.open_desktop_explorer(opts)
 			map("n", "a", create_item)
 			map("i", "<C-a>", create_item)
 
-			-- Tecla 'r': Renombrar
+			-- Key 'r': Rename
 			local rename_item = function()
 				local selection = action_state.get_selected_entry()
 				if not selection or not selection.value then
@@ -167,20 +184,20 @@ function M.open_desktop_explorer(opts)
 				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					vim.ui.input({ prompt = "Renombrar a: ", default = item.name }, function(new_name)
+					vim.ui.input({ prompt = "Rename to: ", default = item.name }, function(new_name)
 						if not new_name or new_name == "" or new_name == item.name then
 							return
 						end
 						local new_path = curr_dir .. "/" .. new_name
 						os.rename(item.path, new_path)
-						vim.notify("✏️ Renombrado a: " .. new_name, vim.log.levels.INFO)
+						vim.notify("✏️ Renamed to: " .. new_name, vim.log.levels.INFO)
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
 			end
 			map("n", "r", rename_item)
 
-			-- Tecla 'd': Eliminar
+			-- Key 'd': Delete
 			local delete_item = function()
 				local selection = action_state.get_selected_entry()
 				if not selection or not selection.value then
@@ -189,10 +206,10 @@ function M.open_desktop_explorer(opts)
 				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					vim.ui.input({ prompt = "¿Eliminar '" .. item.name .. "'? (s/n): " }, function(confirm)
-						if confirm and confirm:lower() == "s" then
+					vim.ui.input({ prompt = "Delete '" .. item.name .. "'? (y/n): " }, function(confirm)
+						if confirm and confirm:lower() == "y" then
 							vim.fn.delete(item.path, "rf")
-							vim.notify("🗑️ Eliminado: " .. item.name, vim.log.levels.INFO)
+							vim.notify("🗑️ Deleted: " .. item.name, vim.log.levels.INFO)
 						end
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
@@ -200,7 +217,7 @@ function M.open_desktop_explorer(opts)
 			end
 			map("n", "d", delete_item)
 
-			-- Teclas 'h' y '<BS>': Subir al directorio padre
+			-- Keys 'h' and '<BS>': Navigate to parent directory
 			local go_parent = function()
 				local parent = vim.fn.fnamemodify(curr_dir, ":h")
 				if parent and parent ~= curr_dir then
@@ -213,7 +230,7 @@ function M.open_desktop_explorer(opts)
 			map("n", "h", go_parent)
 			map("n", "<BS>", go_parent)
 
-			-- Tecla 'l': Entrar a carpeta
+			-- Key 'l': Enter folder
 			local drill_in = function()
 				local selection = action_state.get_selected_entry()
 				if selection and selection.value and selection.value.is_dir then
@@ -225,7 +242,7 @@ function M.open_desktop_explorer(opts)
 			end
 			map("n", "l", drill_in)
 
-			-- Teclas '?' y '<F1>': Ayuda contextual minimalista
+			-- Keys '?' and '<F1>': Minimalist context help
 			local show_help = function()
 				require("config.krs.context_help").show_help()
 			end
@@ -237,13 +254,14 @@ function M.open_desktop_explorer(opts)
 	}):find()
 end
 
--- Registrar el comando de usuario global
+-- Register global user command
 function M.setup()
 	if vim.fn.exists(":TelescopeFileBrowserDesktop") == 0 then
 		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
 			M.open_desktop_explorer()
-		end, { desc = "Abrir Explorador de Archivos (Desktop)" })
+		end, { desc = "Open Floating File Explorer (Desktop)" })
 	end
 end
 
 return M
+

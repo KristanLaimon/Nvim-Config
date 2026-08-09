@@ -11,15 +11,15 @@ return {
 		'TelescopeFindFilesNoIgnore',
 	},
 	keys = {
-		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (excluye .gitignore)' },
-		{ '<C-A-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<C-A-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<C-M-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<C-M-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<A-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<A-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<M-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
-		{ '<M-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (sin importar .gitignore)' },
+		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (excludes .gitignore)' },
+		{ '<C-A-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<C-A-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<C-M-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<C-M-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<A-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<A-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<M-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
+		{ '<M-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
 		{ '<leader>fa', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'v' }, desc = 'Find all files (no .gitignore)' },
 		{ '<C-f>', '<cmd>Telescope live_grep<CR>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
 		{ '<leader>fh', '<cmd>Telescope help_tags<CR>', desc = 'Telescope help tags' },
@@ -70,13 +70,13 @@ return {
 			builtin.find_files({ no_ignore = true, hidden = true })
 		end
 
-		vim.api.nvim_create_user_command('TelescopeFindFilesNoIgnore', find_files_no_ignore, { desc = 'Buscar archivos ignorando .gitignore' })
+		vim.api.nvim_create_user_command('TelescopeFindFilesNoIgnore', find_files_no_ignore, { desc = 'Find files ignoring .gitignore' })
 
-		vim.keymap.set({ 'n', 'i' }, '<C-k>', find_files_gitignore, { desc = 'Telescope find files (excluye .gitignore)' })
+		vim.keymap.set({ 'n', 'i' }, '<C-k>', find_files_gitignore, { desc = 'Telescope find files (excludes .gitignore)' })
 
 		local no_ignore_keys = { '<C-A-k>', '<C-A-K>', '<C-M-k>', '<C-M-K>', '<A-C-k>', '<A-C-K>', '<M-C-k>', '<M-C-K>', '<leader>fa' }
 		for _, key in ipairs(no_ignore_keys) do
-			vim.keymap.set({ 'n', 'i' }, key, find_files_no_ignore, { noremap = true, silent = true, desc = 'Telescope find files (sin importar .gitignore)' })
+			vim.keymap.set({ 'n', 'i' }, key, find_files_no_ignore, { noremap = true, silent = true, desc = 'Telescope find files (ignoring .gitignore)' })
 		end
 
 		vim.keymap.set('n', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
@@ -182,24 +182,25 @@ return {
 					return
 				end
 
-				pcall(vim.api.nvim_set_current_dir, dir_path)
-				add_to_recent_projects(dir_path)
-				if _G.AddOpenedFolder then
-					_G.AddOpenedFolder(dir_path)
-				end
+				-- Close Neo-tree & all splits to start completely clean
+				pcall(vim.cmd, 'Neotree close')
+				pcall(vim.cmd, 'only')
 
-				local curr_buf = vim.api.nvim_get_current_buf()
-				local is_alpha = vim.bo[curr_buf].filetype == 'alpha'
+				-- Create a clean empty buffer
+				vim.cmd('enew')
+				local new_buf = vim.api.nvim_get_current_buf()
 
-				-- Close any remaining Alpha dashboard buffers
+				-- Delete ALL old buffers from the previous project
 				for _, b in ipairs(vim.api.nvim_list_bufs()) do
-					if vim.api.nvim_buf_is_valid(b) and vim.bo[b].filetype == 'alpha' then
+					if b ~= new_buf and vim.api.nvim_buf_is_valid(b) then
 						pcall(vim.api.nvim_buf_delete, b, { force = true })
 					end
 				end
 
-				if is_alpha then
-					vim.cmd('enew')
+				pcall(vim.api.nvim_set_current_dir, dir_path)
+				add_to_recent_projects(dir_path)
+				if _G.AddOpenedFolder then
+					_G.AddOpenedFolder(dir_path)
 				end
 
 				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
@@ -283,14 +284,14 @@ return {
 
 		local function open_find_files_split(direction)
 			local dir_names = {
-				h = 'Izquierda (←)',
-				j = 'Abajo (↓)',
-				k = 'Arriba (↑)',
-				l = 'Derecha (→)',
+				h = 'Left (←)',
+				j = 'Down (↓)',
+				k = 'Up (↑)',
+				l = 'Right (→)',
 			}
 
 			builtin.find_files({
-				prompt_title = ' 🔍 Abrir Archivo a la ' .. (dir_names[direction] or direction) .. ' ',
+				prompt_title = ' 🔍 Find & Open File ' .. (dir_names[direction] or direction) .. ' ',
 				attach_mappings = function(prompt_bufnr, map)
 					actions.select_default:replace(function()
 						local selection = action_state.get_selected_entry()
@@ -334,8 +335,9 @@ return {
 			for _, k in ipairs(keys_list) do
 				vim.keymap.set(split_key_modes, k, function()
 					open_find_files_split(dir)
-				end, { noremap = true, silent = true, desc = 'Buscar archivo y abrir en split (' .. dir .. ')' })
+				end, { noremap = true, silent = true, desc = 'Find file and open in split (' .. dir .. ')' })
 			end
 		end
 	end,
 }
+

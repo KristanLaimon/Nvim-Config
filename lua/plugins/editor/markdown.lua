@@ -40,7 +40,7 @@ return {
 		config = function(_, opts)
 			require("render-markdown").setup(opts)
 
-			-- Autocmd para asignar Ctrl+Shift+V solo en archivos markdown
+			-- Autocmd to map Ctrl+Shift+V only in markdown files
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "markdown",
 				callback = function(ev)

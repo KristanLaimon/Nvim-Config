@@ -1,23 +1,23 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Gestor de Tareas y Ejecutor de Código por Proyecto (Task Runner)
+-- 🦊 KRS CONFIG: Per-Project Task Runner & Code Executor
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE MÓDULO?
--- 1. Detecta la raíz del proyecto usando vim.fs.find (busca .nvimkrs, package.json, Makefile, Cargo.toml, etc.).
--- 2. Escanea automáticamente scripts en Makefile, package.json, Cargo.toml o go.mod.
--- 3. Permite guardar tareas personalizadas y cadenas de tareas secuenciales en .nvimkrs.
--- 4. Soporta encadenamiento de tareas (Task Chains): si un paso falla, la cadena SE DETIENE inmediatamente
---    y abre un cuadro flotante de alerta de error en Neovim.
--- 5. Renderiza un menú interactivo en Telescope con accesos directos:
---      [Enter]  -> Ejecuta la tarea/cadena seleccionada
---      [d]      -> Marcar/Desmarcar como tarea Por Defecto (Default)
---      [a]      -> Añadir tarea individual nueva
---      [c]      -> Añadir Cadena de Tareas (Task Chain)
---      [x]      -> Eliminar tarea o quitar marca por defecto
+-- HOW THIS MODULE WORKS:
+-- 1. Detects project root using vim.fs.find (looks for .nvimkrs, package.json, Makefile, Cargo.toml, etc.).
+-- 2. Automatically scans build scripts in Makefile, package.json, Cargo.toml or go.mod.
+-- 3. Allows saving custom tasks and sequential task chains in .nvimkrs.
+-- 4. Supports Task Chains: if a step fails, execution STOPS immediately
+--    and opens an error alert floating popup in Neovim.
+-- 5. Renders an interactive Telescope menu with shortcuts:
+--      [Enter]  -> Run selected task/chain
+--      [d]      -> Mark/Unmark as Default task
+--      [a]      -> Add new individual task
+--      [c]      -> Add Task Chain
+--      [x]      -> Delete task or remove default mark
 -- ============================================================================
 
 local M = {}
 
--- Archivo legacy donde se guardaban datos globales (mantenido para migración/fallback)
+-- Legacy store file where global data was saved (kept for migration/fallback)
 local legacy_store_file = vim.fn.stdpath("data") .. "/project_tasks.json"
 
 local function load_legacy_data()
@@ -31,13 +31,13 @@ local function load_legacy_data()
 	return ok and type(data) == "table" and data or {}
 end
 
--- Obtener la ruta del archivo de configuración .nvimkrs del proyecto
+-- Get project .nvimkrs configuration file path
 local function get_krs_filepath(root)
 	local norm_root = root:gsub("\\", "/")
 	return norm_root .. "/.nvimkrs"
 end
 
--- Obtener el directorio raíz del proyecto actual
+-- Get current project root directory
 function M.get_project_root()
 	local current = vim.fn.expand("%:p:h")
 	if current == "" then
@@ -51,12 +51,12 @@ function M.get_project_root()
 	return vim.fn.getcwd()
 end
 
--- Descubrir tareas automáticamente examinando archivos de construcción del proyecto
+-- Discover tasks automatically by examining project build files
 function M.discover_tasks(root)
 	local discovered = {}
 	local norm_root = root:gsub("\\", "/")
 
-	-- 1. Parsear Makefile
+	-- 1. Parse Makefile
 	local makefile = norm_root .. "/Makefile"
 	if vim.fn.filereadable(makefile) == 1 then
 		local lines = vim.fn.readfile(makefile)
@@ -68,7 +68,7 @@ function M.discover_tasks(root)
 		end
 	end
 
-	-- 2. Parsear package.json (Node.js / JS / TS)
+	-- 2. Parse package.json (Node.js / JS / TS)
 	local pkg_json = norm_root .. "/package.json"
 	if vim.fn.filereadable(pkg_json) == 1 then
 		local content = table.concat(vim.fn.readfile(pkg_json), "\n")
@@ -98,7 +98,7 @@ function M.discover_tasks(root)
 	return discovered
 end
 
--- Obtener tareas guardadas desde .nvimkrs en la raíz del proyecto
+-- Get saved tasks from .nvimkrs in project root
 function M.get_project_data(root)
 	local filepath = get_krs_filepath(root)
 	local f = io.open(filepath, "r")
@@ -114,7 +114,7 @@ function M.get_project_data(root)
 		end
 	end
 
-	-- Fallback a almacenamiento legacy si no existe .nvimkrs aún
+	-- Fallback to legacy storage if .nvimkrs doesn't exist yet
 	local key = root:gsub("\\", "/"):lower()
 	local legacy_all = load_legacy_data()
 	local legacy_data = legacy_all[key]
@@ -125,7 +125,7 @@ function M.get_project_data(root)
 	return { default_task = nil, custom_tasks = {} }
 end
 
--- Guardar datos de tareas en el archivo .nvimkrs de la raíz del proyecto
+-- Save task data to .nvimkrs file in project root
 function M.save_project_data(root, pdata)
 	local filepath = get_krs_filepath(root)
 	local data_to_save = {
@@ -142,7 +142,7 @@ function M.save_project_data(root, pdata)
 	end
 end
 
--- Resolución de pasos individuales de una tarea (soporta cadenas y dependencias)
+-- Resolve individual steps of a task (supports chains and dependencies)
 function M.resolve_steps(task_item, pdata)
 	if not task_item then
 		return {}
@@ -158,7 +158,7 @@ function M.resolve_steps(task_item, pdata)
 		return {}
 	end
 
-	-- 1. Si define dependencias previa (depends_on)
+	-- 1. If previous dependencies defined (depends_on)
 	if task_item.depends_on and type(task_item.depends_on) == "table" then
 		for _, dep_name in ipairs(task_item.depends_on) do
 			for _, ct in ipairs(pdata.custom_tasks or {}) do
@@ -172,7 +172,7 @@ function M.resolve_steps(task_item, pdata)
 		end
 	end
 
-	-- 2. Si define un arreglo de cadena (chain)
+	-- 2. If defines a chain array
 	if task_item.chain and type(task_item.chain) == "table" then
 		for _, step in ipairs(task_item.chain) do
 			if type(step) == "string" then
@@ -186,7 +186,7 @@ function M.resolve_steps(task_item, pdata)
 	return steps
 end
 
--- Renderizar cuadro emergente flotante de error al fallar un paso en la cadena
+-- Render floating popup error alert when a chain step fails
 local function show_failure_alert(step_idx, total_steps, failed_cmd, exit_code, remaining_count)
 	local width = math.floor(vim.o.columns * 0.70)
 	local lines = {
@@ -234,11 +234,11 @@ local function show_failure_alert(step_idx, total_steps, failed_cmd, exit_code, 
 	vim.keymap.set({ "n", "v", "i" }, "<Space>", close_alert, kopts)
 end
 
--- Variables globales para gestionar ventana y buffer de la tarea
+-- Global variables for managing task window and buffer
 M.task_win = nil
 M.task_buf = nil
 
--- Ejecutar secuencia de pasos encadenados en el panel inferior
+-- Execute chained step sequence in bottom panel
 local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 	local total = #steps
 	local current_cmd = steps[step_idx]
@@ -267,7 +267,7 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 	local buf = M.task_buf
 
 	vim.notify(
-		string.format("🚀 Ejecutando Paso %d/%d: %s", step_idx, total, current_cmd),
+		string.format("🚀 Running Step %d/%d: %s", step_idx, total, current_cmd),
 		vim.log.levels.INFO,
 		{ title = "KRS Task Runner" }
 	)
@@ -282,15 +282,15 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 
 				if exit_code == 0 then
 					if step_idx < total then
-						-- Paso exitoso: Continuar con el siguiente paso en la cadena
+						-- Step successful: Continue to next step in chain
 						vim.notify(
-							string.format("✅ Paso %d/%d completado. Iniciando Paso %d/%d...", step_idx, total, step_idx + 1, total),
+							string.format("✅ Step %d/%d completed. Starting Step %d/%d...", step_idx, total, step_idx + 1, total),
 							vim.log.levels.INFO,
 							{ title = "KRS Task Runner" }
 						)
 						run_step_sequence(step_idx + 1, steps, root, origin_win, task_name)
 					else
-						-- Todos los pasos completados exitosamente
+						-- All steps completed successfully
 						pcall(vim.cmd, "stopinsert")
 						if vim.api.nvim_win_is_valid(win) then
 							pcall(vim.api.nvim_set_current_win, win)
@@ -316,13 +316,13 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 						vim.keymap.set({ "n", "t" }, "<Space>", close_task_window, map_opts)
 
 						vim.notify(
-							string.format("✅ Cadena de tareas '%s' (%d/%d pasos) finalizada con éxito. Presiona <Enter> para cerrar.", task_name or "Chain", total, total),
+							string.format("✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.", task_name or "Chain", total, total),
 							vim.log.levels.INFO,
 							{ title = "KRS Task Runner" }
 						)
 					end
 				else
-					-- ¡PASO FALLIDO! DETENER LA CADENA INMEDIATAMENTE Y MOSTRAR ALERTA
+					-- STEP FAILED! STOP CHAIN IMMEDIATELY AND SHOW ALERT
 					pcall(vim.cmd, "stopinsert")
 					if vim.api.nvim_win_is_valid(win) then
 						pcall(vim.api.nvim_set_current_win, win)
@@ -355,21 +355,21 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name)
 	})
 
 	if job_id <= 0 then
-		vim.notify("Error al iniciar el comando: " .. current_cmd, vim.log.levels.ERROR, { title = "KRS Task Runner" })
+		vim.notify("Error starting command: " .. current_cmd, vim.log.levels.ERROR, { title = "KRS Task Runner" })
 		return
 	end
 
 	vim.cmd("startinsert")
 end
 
--- Ejecutar una tarea o cadena de tareas
+-- Run a task or task chain
 function M.run_task_item(task_item, root)
 	root = root or M.get_project_root()
 	local pdata = M.get_project_data(root)
 	local steps = M.resolve_steps(task_item, pdata)
 
 	if #steps == 0 then
-		vim.notify("No se encontraron pasos ejecutables para esta tarea", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		vim.notify("No executable steps found for this task", vim.log.levels.WARN, { title = "KRS Task Runner" })
 		return
 	end
 
@@ -380,12 +380,12 @@ function M.run_task_item(task_item, root)
 	run_step_sequence(1, steps, root, origin_win, task_name)
 end
 
--- Wrapper de retrocompatibilidad
+-- Backward compatibility wrapper
 function M.run_task_cmd(cmd, root)
 	M.run_task_item(cmd, root)
 end
 
--- Ejecutar la tarea por defecto o abrir el menú si no hay ninguna configurada
+-- Run default task or open menu if none configured
 function M.run_default_or_menu()
 	local root = M.get_project_root()
 	local pdata = M.get_project_data(root)
@@ -397,7 +397,7 @@ function M.run_default_or_menu()
 	end
 end
 
--- Abrir la interfaz interactiva de tareas en Telescope
+-- Open interactive task UI in Telescope
 function M.open_task_menu()
 	local root = M.get_project_root()
 	local pdata = M.get_project_data(root)
@@ -405,7 +405,7 @@ function M.open_task_menu()
 
 	local tasks = {}
 
-	-- Tareas custom o cadenas previamente guardadas
+	-- Custom tasks or chains previously saved
 	for _, ct in ipairs(pdata.custom_tasks or {}) do
 		local steps = M.resolve_steps(ct, pdata)
 		local name = ct.name or (type(ct.cmd) == "string" and ct.cmd) or "Chained Task"
@@ -418,7 +418,7 @@ function M.open_task_menu()
 		})
 	end
 
-	-- Tareas auto-descubiertas (sin duplicados)
+	-- Auto-discovered tasks (without duplicates)
 	for _, dt in ipairs(discovered) do
 		local exists = false
 		for _, t in ipairs(tasks) do
@@ -441,8 +441,8 @@ function M.open_task_menu()
 	end
 
 	if #tasks == 0 then
-		-- Si no hay tareas detectadas, pedir una custom al usuario
-		vim.ui.input({ prompt = "Sin tareas detectadas. Ingresa comando a ejecutar: " }, function(cmd)
+		-- If no tasks detected, prompt user for a custom command
+		vim.ui.input({ prompt = "No tasks detected. Enter command to execute: " }, function(cmd)
 			if cmd and cmd ~= "" then
 				pdata.custom_tasks = pdata.custom_tasks or {}
 				local new_t = { name = cmd, cmd = cmd }
@@ -465,7 +465,7 @@ function M.open_task_menu()
 	local default_task = pdata.default_task
 
 	pickers.new(themes.get_dropdown({
-		prompt_title = " 🛠️ Tareas (" .. vim.fn.fnamemodify(root, ":t") .. ") | [d]=Default [a]=Añadir [c]=Cadena [x]=Eliminar ",
+		prompt_title = " 🛠️ Tasks (" .. vim.fn.fnamemodify(root, ":t") .. ") | [d]=Default [a]=Add [c]=Chain [x]=Delete ",
 		finder = finders.new_table({
 			results = tasks,
 			entry_maker = function(entry)
@@ -478,7 +478,7 @@ function M.open_task_menu()
 					end
 				end
 
-				local chain_tag = entry.steps_count > 1 and string.format(" 🔗 [%d pasos]", entry.steps_count) or ""
+				local chain_tag = entry.steps_count > 1 and string.format(" 🔗 [%d steps]", entry.steps_count) or ""
 				local tag = is_def and " ⭐ [DEFAULT]" or (" [" .. entry.source .. "]" .. chain_tag)
 				local display = entry.name .. tag
 				return {
@@ -490,7 +490,7 @@ function M.open_task_menu()
 		}),
 		sorter = conf.generic_sorter({}),
 		attach_mappings = function(prompt_bufnr, map)
-			-- Enter: Ejecutar tarea elegida
+			-- Enter: Run chosen task
 			actions.select_default:replace(function()
 				local selection = action_state.get_selected_entry()
 				actions.close(prompt_bufnr)
@@ -499,14 +499,14 @@ function M.open_task_menu()
 				end
 			end)
 
-			-- Tecla 'd': Marcar como Default
+			-- Key 'd': Mark as Default
 			local set_default = function()
 				local selection = action_state.get_selected_entry()
 				if selection and selection.value then
 					pdata.default_task = selection.value.item
 					M.save_project_data(root, pdata)
 					actions.close(prompt_bufnr)
-					vim.notify("⭐ Tarea por defecto guardada", vim.log.levels.INFO, { title = "KRS Task Runner" })
+					vim.notify("⭐ Default task saved", vim.log.levels.INFO, { title = "KRS Task Runner" })
 					vim.schedule(function()
 						M.open_task_menu()
 					end)
@@ -515,11 +515,11 @@ function M.open_task_menu()
 			map("i", "d", set_default)
 			map("n", "d", set_default)
 
-			-- Tecla 'a': Añadir Tarea Custom Individual
+			-- Key 'a': Add Individual Custom Task
 			local add_custom = function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					vim.ui.input({ prompt = "Nuevo Comando de Tarea: " }, function(cmd)
+					vim.ui.input({ prompt = "New Task Command: " }, function(cmd)
 						if cmd and cmd ~= "" then
 							pdata.custom_tasks = pdata.custom_tasks or {}
 							table.insert(pdata.custom_tasks, { name = cmd, cmd = cmd })
@@ -532,13 +532,13 @@ function M.open_task_menu()
 			map("i", "a", add_custom)
 			map("n", "a", add_custom)
 
-			-- Tecla 'c': Añadir Cadena de Tareas (Task Chain)
+			-- Key 'c': Add Task Chain
 			local add_chain = function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					vim.ui.input({ prompt = "Nombre de la Cadena (ej. Build & Test): " }, function(chain_name)
+					vim.ui.input({ prompt = "Chain Name (e.g. Build & Test): " }, function(chain_name)
 						if not chain_name or chain_name == "" then return end
-						vim.ui.input({ prompt = "Pasos en cadena (separados por '&&' o ','): " }, function(raw_steps)
+						vim.ui.input({ prompt = "Chained steps (separated by '&&' or ','): " }, function(raw_steps)
 							if not raw_steps or raw_steps == "" then return end
 							local steps = {}
 							for step in raw_steps:gmatch("[^&,]+") do
@@ -551,7 +551,7 @@ function M.open_task_menu()
 								pdata.custom_tasks = pdata.custom_tasks or {}
 								table.insert(pdata.custom_tasks, { name = chain_name, chain = steps })
 								M.save_project_data(root, pdata)
-								vim.notify("🔗 Cadena de tareas guardada: " .. chain_name .. " (" .. #steps .. " pasos)", vim.log.levels.INFO, { title = "KRS Task Runner" })
+								vim.notify("🔗 Task chain saved: " .. chain_name .. " (" .. #steps .. " steps)", vim.log.levels.INFO, { title = "KRS Task Runner" })
 							end
 							M.open_task_menu()
 						end)
@@ -561,7 +561,7 @@ function M.open_task_menu()
 			map("i", "c", add_chain)
 			map("n", "c", add_chain)
 
-			-- Tecla 'x': Eliminar Tarea
+			-- Key 'x': Delete Task
 			local delete_task = function()
 				local selection = action_state.get_selected_entry()
 				if selection and selection.value then
@@ -594,3 +594,4 @@ function M.open_task_menu()
 end
 
 return M
+

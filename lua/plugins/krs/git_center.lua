@@ -1,10 +1,10 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Centro de Control de Git Interactivo (Ctrl + Shift + G)
+-- 🦊 KRS PLUGIN: Interactive Git Control Center (Ctrl + Shift + G)
 -- ============================================================================
 
 local M = {}
 
--- Referencias a ventanas abiertas para Toggle/Untoggle
+-- References to open windows for Toggle/Untoggle
 M.main_win = nil
 M.preview_win = nil
 M.main_buf = nil
@@ -12,34 +12,34 @@ M.preview_buf = nil
 M.diff_cache = {}
 M.line_map = {}
 
--- Estado interno del formulario de commit
+-- Internal state of commit form
 M.commit_data = {
 	title = "",
 	description = "",
 	tag = "",
 }
 
--- Namespace para los highlights del Diff estilo VSCode
+-- Namespace for VSCode-style Diff highlights
 local ns_diff = vim.api.nvim_create_namespace("git_center_diff_hl")
 
--- Configurar los colores estilo VSCode para los cambios + y -
+-- Configure VSCode-style colors for + and - changes
 local function setup_diff_highlights()
-	-- Líneas añadidas (+) -> Fondo verde suave, texto verde claro estilo VSCode
+	-- Added lines (+) -> Soft green background, light green text (VSCode style)
 	vim.api.nvim_set_hl(0, "GitCenterDiffAdd", { bg = "#1c3427", fg = "#a6e3a1", default = true })
-	-- Líneas eliminadas (-) -> Fondo rojo suave, texto rojo claro estilo VSCode
+	-- Deleted lines (-) -> Soft red background, light red text (VSCode style)
 	vim.api.nvim_set_hl(0, "GitCenterDiffDelete", { bg = "#3b1d22", fg = "#f38ba8", default = true })
-	-- Encabezado de Fragmento/Hunk (@@) -> Fondo azul suave, texto cian/azul bold
+	-- Hunk Header (@@) -> Soft blue background, bold cyan/blue text
 	vim.api.nvim_set_hl(0, "GitCenterDiffHeader", { bg = "#1e293b", fg = "#89dceb", bold = true, default = true })
-	-- Texto de contexto sin cambios
+	-- Unchanged context text
 	vim.api.nvim_set_hl(0, "GitCenterDiffContext", { fg = "#cdd6f4", default = true })
 end
 
--- Comprobar si el Centro de Git está abierto
+-- Check if Git Center is open
 function M.is_open()
 	return M.main_win ~= nil and vim.api.nvim_win_is_valid(M.main_win)
 end
 
--- Cerrar todas las ventanas del Centro de Git (Untoggle)
+-- Close all Git Center windows (Untoggle)
 function M.close_git_center()
 	if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
 		pcall(vim.api.nvim_win_close, M.preview_win, true)
@@ -53,7 +53,7 @@ function M.close_git_center()
 	M.preview_buf = nil
 end
 
--- Alternar abrir/cerrar (Toggle / Untoggle)
+-- Toggle open/close
 function M.toggle_git_center()
 	if M.is_open() then
 		M.close_git_center()
@@ -61,6 +61,7 @@ function M.toggle_git_center()
 		M.open_git_center()
 	end
 end
+
 
 -- Ejecutar comando Git nativo utilizando vim.system (Robusto en Windows/Linux, sin fallos de quoting)
 local function run_git(args, cwd)

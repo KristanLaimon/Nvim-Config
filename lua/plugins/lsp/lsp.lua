@@ -24,6 +24,21 @@ return {
 					},
 				},
 				jsonls = {},
+				ts_ls = {},
+				svelte = {
+					on_attach = function(client, _)
+						vim.api.nvim_create_autocmd("BufWritePost", {
+							pattern = { "*.js", "*.ts" },
+							callback = function(ctx)
+								client.notify("$/onDidChangeTsOrJsFile", { uri = ctx.match })
+							end,
+						})
+					end,
+				},
+				astro = {},
+				html = {},
+				cssls = {},
+				tailwindcss = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -66,7 +81,19 @@ return {
 			-- 1. Initialize Mason
 			require("mason").setup()
 			require("mason-lspconfig").setup({
-				ensure_installed = { "lua_ls", "jsonls", "editorconfig_ls", "taplo", "yamlls" },
+				ensure_installed = {
+					"lua_ls",
+					"jsonls",
+					"editorconfig_ls",
+					"taplo",
+					"yamlls",
+					"ts_ls",
+					"svelte",
+					"astro",
+					"html",
+					"cssls",
+					"tailwindcss",
+				},
 			})
 
 			vim.diagnostic.config({

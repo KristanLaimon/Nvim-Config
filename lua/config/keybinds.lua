@@ -8,29 +8,29 @@ vim.keymap.set("v", "<C-'>", "gc", { remap = true, desc = "Comment selection" })
 
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
--- QOL Features & Clipboard (Ctrl+C = Copiar, Ctrl+V = Pegar del sistema)
-vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copiar al portapapeles" })
+-- QOL Features & Clipboard (Ctrl+C = Copy, Ctrl+V = Paste from system)
+vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
 vim.keymap.set(
 	{ "n", "v" },
 	"<C-v>",
 	'"+p',
-	{ noremap = true, silent = true, desc = "Pegar del portapapeles del sistema" }
+	{ noremap = true, silent = true, desc = "Paste from system clipboard" }
 )
 vim.keymap.set(
 	{ "i", "c" },
 	"<C-v>",
 	"<C-r>+",
-	{ noremap = true, silent = true, desc = "Pegar del portapapeles del sistema" }
+	{ noremap = true, silent = true, desc = "Paste from system clipboard" }
 )
--- Undo / Redo (Ctrl+Z = Deshacer, Ctrl+Y / Ctrl+Shift+Z = Rehacer)
-vim.keymap.set("n", "<C-z>", "u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
-vim.keymap.set("v", "<C-z>", "<Esc>u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
-vim.keymap.set("i", "<C-z>", "<C-o>u", { noremap = true, silent = true, desc = "Deshacer (Undo)" })
+-- Undo / Redo (Ctrl+Z = Undo, Ctrl+Y / Ctrl+Shift+Z = Redo)
+vim.keymap.set("n", "<C-z>", "u", { noremap = true, silent = true, desc = "Undo" })
+vim.keymap.set("v", "<C-z>", "<Esc>u", { noremap = true, silent = true, desc = "Undo" })
+vim.keymap.set("i", "<C-z>", "<C-o>u", { noremap = true, silent = true, desc = "Undo" })
 
-vim.keymap.set("n", "<C-y>", "<C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
-vim.keymap.set("n", "<C-S-z>", "<C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
-vim.keymap.set("i", "<C-y>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
-vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Rehacer (Redo)" })
+vim.keymap.set("n", "<C-y>", "<C-r>", { noremap = true, silent = true, desc = "Redo" })
+vim.keymap.set("n", "<C-S-z>", "<C-r>", { noremap = true, silent = true, desc = "Redo" })
+vim.keymap.set("i", "<C-y>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Redo" })
+vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Redo" })
 
 -- Movements across panels & split windows
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
@@ -40,21 +40,21 @@ vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
 local function open_find_files_split(direction)
 	local ok, builtin = pcall(require, "telescope.builtin")
 	if not ok then
-		vim.notify("Telescope no está listo", vim.log.levels.ERROR)
+		vim.notify("Telescope is not ready", vim.log.levels.ERROR)
 		return
 	end
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
 
 	local dir_names = {
-		h = "Izquierda (←)",
-		j = "Abajo (↓)",
-		k = "Arriba (↑)",
-		l = "Derecha (→)",
+		h = "Left (←)",
+		j = "Down (↓)",
+		k = "Up (↑)",
+		l = "Right (→)",
 	}
 
 	builtin.find_files({
-		prompt_title = " 🔍 Abrir Archivo a la " .. (dir_names[direction] or direction) .. " ",
+		prompt_title = " 🔍 Open File to the " .. (dir_names[direction] or direction) .. " ",
 		attach_mappings = function(prompt_bufnr, map)
 			actions.select_default:replace(function()
 				local selection = action_state.get_selected_entry()
@@ -93,7 +93,7 @@ for dir, keys in pairs(split_binds) do
 	for _, key in ipairs(keys) do
 		vim.keymap.set(split_modes, key, function()
 			open_find_files_split(dir)
-		end, { noremap = true, silent = true, desc = "Buscar archivo y abrir en split (" .. dir .. ")" })
+		end, { noremap = true, silent = true, desc = "Find file and open in split (" .. dir .. ")" })
 	end
 end
 
@@ -140,7 +140,7 @@ vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_next, { desc = "Next diagno
 -- VSCode Quick Fix / Suggestions with Ctrl + . (Mini Dropdown at Caret position)
 local function cursor_ui_select(items, opts, on_choice)
 	opts = opts or {}
-	local prompt = opts.prompt or "Acciones de Código Disponibles:"
+	local prompt = opts.prompt or "Available Code Actions:"
 	prompt = prompt:gsub("^%s*", ""):gsub("%s*$", "")
 
 	local formatted_items = {}
@@ -150,7 +150,7 @@ local function cursor_ui_select(items, opts, on_choice)
 	end
 
 	if #formatted_items == 0 then
-		vim.notify("No hay sugerencias de código disponibles aquí", vim.log.levels.INFO, { title = "LSP Code Actions" })
+		vim.notify("No code suggestions available here", vim.log.levels.INFO, { title = "LSP Code Actions" })
 		return
 	end
 
@@ -169,7 +169,7 @@ local function cursor_ui_select(items, opts, on_choice)
 	end
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-	-- Crear ventana flotante anclada AL CURSOR (caret position)
+	-- Create floating window anchored to CURSOR (caret position)
 	local win = vim.api.nvim_open_win(buf, true, {
 		relative = "cursor",
 		row = 1,
@@ -242,7 +242,7 @@ local function vscode_quick_fix()
 	local clients = get_cls({ bufnr = 0 })
 	if not clients or #clients == 0 then
 		vim.notify(
-			"No hay ningún servidor LSP activo para este archivo",
+			"No active LSP server for this file",
 			vim.log.levels.WARN,
 			{ title = "LSP Code Actions" }
 		)
@@ -254,7 +254,7 @@ local function vscode_quick_fix()
 		vim.ui.select = orig_select
 		if not items or #items == 0 then
 			vim.notify(
-				"No hay sugerencias ni acciones de código disponibles aquí",
+				"No suggestions or code actions available here",
 				vim.log.levels.INFO,
 				{ title = "LSP Code Actions" }
 			)
@@ -484,3 +484,4 @@ vim.keymap.set("n", "<F2>", function()
 		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
 	end)
 end, { noremap = true, silent = true, desc = "Rename file" })
+

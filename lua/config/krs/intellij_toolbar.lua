@@ -1,9 +1,10 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Barra de Herramientas Estilo IntelliJ (Play | Debug | Profiles)
+-- 🦊 KRS CONFIG: IntelliJ-Style Toolbar (Play | Debug | Profiles)
 -- ============================================================================
--- 1. Se renderiza automáticamente en la esquina superior derecha cuando existe .nvimkrs o tareas de proyecto.
--- 2. Ofrece un widget flotante visual:  🚀 [ ▶ Play | 🐞 Debug | ⚙️ Profiles ]
--- 3. Permite navegación con ratón (Click) o mediante comandos y Vim Motions (j/k, Enter, Esc, 1-9).
+-- 1. Automatically renders in the top-right corner when .nvimkrs or project tasks exist.
+-- 2. Provides a visual floating widget: 🚀 [ ▶ Play | 🐞 Debug | ⚙️ Profiles ]
+-- 3. Intercepts mouse clicks (<LeftMouse>) so they don't pass through to background code.
+-- 4. Supports interactive floating modals with Vim Motions (j/k, Enter, Esc, 1-9).
 -- ============================================================================
 
 local M = {}
@@ -11,7 +12,7 @@ local M = {}
 M.toolbar_win = nil
 M.toolbar_buf = nil
 
--- Verificar si el proyecto actual posee .nvimkrs o tareas de construcción
+-- Check if the current project has .nvimkrs or build tasks
 local function has_project_tasks()
 	local tasks_mod = require("config.krs.tasks")
 	local root = tasks_mod.get_project_root()
@@ -26,72 +27,72 @@ local function has_project_tasks()
 	return false, root
 end
 
--- Abrir Menú Modal de Ejecución (▶ Play)
+-- Open Execution Modal Menu (▶ Play)
 function M.open_play_modal()
 	local tasks_mod = require("config.krs.tasks")
 	local root = tasks_mod.get_project_root()
 	local pdata = tasks_mod.get_project_data(root)
-	local default_name = "Sin configurar"
+	local default_name = "Not configured"
 	if pdata.default_task then
 		default_name = (type(pdata.default_task) == "table" and (pdata.default_task.name or pdata.default_task.cmd)) or tostring(pdata.default_task)
 	end
 
 	local items = {
-		{ label = "▶ 1. Ejecutar Tarea por Defecto: " .. default_name, action = function() tasks_mod.run_default_or_menu() end },
-		{ label = "📋 2. Abrir Menú Seleccionador de Tareas", action = function() tasks_mod.open_task_menu() end },
-		{ label = "🔗 3. Crear o Ejecutar Cadena de Tareas", action = function() tasks_mod.open_task_menu() end },
+		{ label = "▶ 1. Run Default Task: " .. default_name, action = function() tasks_mod.run_default_or_menu() end },
+		{ label = "📋 2. Open Task Selector Menu", action = function() tasks_mod.open_task_menu() end },
+		{ label = "🔗 3. Create or Run Task Chain", action = function() tasks_mod.open_task_menu() end },
 	}
 
 	M.open_popup_menu(" 🚀 IntelliJ Run Toolbar (Play) ", items)
 end
 
--- Abrir Menú Modal de Depuración (🐞 Debug)
+-- Open Debugging Modal Menu (🐞 Debug)
 function M.open_debug_modal()
 	local items = {
 		{
-			label = "▶ 1. Iniciar / Continuar Depuración (DAP Continue)",
+			label = "▶ 1. Start / Continue Debugging (DAP Continue)",
 			action = function()
 				local ok, dap = pcall(require, "dap")
-				if ok then dap.continue() else vim.notify("DAP no disponible", vim.log.levels.WARN) end
+				if ok then dap.continue() else vim.notify("DAP not available", vim.log.levels.WARN) end
 			end,
 		},
 		{
-			label = "🔴 2. Alternar Punto de Interrupción (Toggle Breakpoint)",
+			label = "🔴 2. Toggle Breakpoint",
 			action = function()
 				local ok, dap = pcall(require, "dap")
 				if ok then
 					dap.toggle_breakpoint()
-					vim.notify("🔴 Punto de interrupción alternado", vim.log.levels.INFO)
+					vim.notify("🔴 Breakpoint toggled", vim.log.levels.INFO)
 				end
 			end,
 		},
 		{
-			label = "⏭️ 3. Dar un Paso (Step Over)",
+			label = "⏭️ 3. Step Over",
 			action = function()
 				local ok, dap = pcall(require, "dap")
 				if ok then dap.step_over() end
 			end,
 		},
 		{
-			label = "⬇️ 4. Entrar en Función (Step Into)",
+			label = "⬇️ 4. Step Into",
 			action = function()
 				local ok, dap = pcall(require, "dap")
 				if ok then dap.step_into() end
 			end,
 		},
 		{
-			label = "🛑 5. Terminar Sesión de Depuración (DAP Terminate)",
+			label = "🛑 5. Terminate Debugging Session (DAP Terminate)",
 			action = function()
 				local ok, dap = pcall(require, "dap")
 				if ok then
 					dap.terminate()
 					pcall(function() require("dapui").close() end)
-					vim.notify("🛑 Sesión de depuración terminada", vim.log.levels.INFO)
+					vim.notify("🛑 Debugging session terminated", vim.log.levels.INFO)
 				end
 			end,
 		},
 		{
-			label = "🖥️ 6. Alternar Interfaz Visual de Depuración (DAP UI)",
+			label = "🖥️ 6. Toggle Debugging UI (DAP UI)",
 			action = function()
 				local ok, dapui = pcall(require, "dapui")
 				if ok then dapui.toggle() end
@@ -102,13 +103,13 @@ function M.open_debug_modal()
 	M.open_popup_menu(" 🐞 IntelliJ Debug Toolbar ", items)
 end
 
--- Abrir Menú Modal de Perfiles y Tareas (⚙️ Profiles)
+-- Open Profiles & Tasks Modal Menu (⚙️ Profiles)
 function M.open_profiles_modal()
 	local tasks_mod = require("config.krs.tasks")
 	tasks_mod.open_task_menu()
 end
 
--- Renderizador Genérico de Ventanas Emergentes Modales con Vim Motions
+-- Generic Renderer for Floating Modal Popups with Vim Motions
 function M.open_popup_menu(title, items)
 	local max_width = #title + 4
 	for _, it in ipairs(items) do
@@ -180,8 +181,31 @@ function M.open_popup_menu(title, items)
 	end
 end
 
--- Renderizar o actualizar el widget superior derecho estilo IntelliJ
+-- Process click column position inside the floating widget
+function M.handle_click(wincol)
+	if not wincol then
+		local mouse = vim.fn.getmousepos()
+		wincol = mouse.wincol
+	end
+
+	if wincol <= 14 then
+		M.open_play_modal()
+	elseif wincol <= 28 then
+		M.open_debug_modal()
+	else
+		M.open_profiles_modal()
+	end
+end
+
+-- Render or update top-right IntelliJ style widget
 function M.render_toolbar()
+	local cur_buf = vim.api.nvim_get_current_buf()
+	local ft = vim.bo[cur_buf].filetype
+	if ft == "alpha" or ft == "dashboard" then
+		M.hide_toolbar()
+		return
+	end
+
 	local has_tasks, _ = has_project_tasks()
 	if not has_tasks then
 		M.hide_toolbar()
@@ -221,23 +245,6 @@ function M.render_toolbar()
 	})
 
 	vim.wo[M.toolbar_win].winhl = "Normal:NormalFloat,FloatBorder:FloatBorder"
-
-	-- Manejar clics del ratón sobre los botones del widget
-	local function handle_click()
-		local mouse_col = vim.fn.getmousepos().col
-		local win_col = vim.api.nvim_win_get_position(M.toolbar_win)[2]
-		local rel_col = mouse_col - win_col
-
-		if rel_col <= 14 then
-			M.open_play_modal()
-		elseif rel_col <= 28 then
-			M.open_debug_modal()
-		else
-			M.open_profiles_modal()
-		end
-	end
-
-	vim.keymap.set("n", "<LeftMouse>", handle_click, { buffer = buf, noremap = true, silent = true })
 end
 
 function M.hide_toolbar()
@@ -258,7 +265,7 @@ function M.toggle_toolbar()
 	end
 end
 
--- Inicializar autocomandos y comandos globales
+-- Initialize autocommands, mouse click handler and global commands
 function M.setup()
 	local group = vim.api.nvim_create_augroup("IntelliJToolbarAuto", { clear = true })
 	vim.api.nvim_create_autocmd({ "VimResized", "DirChanged", "BufEnter" }, {
@@ -270,14 +277,41 @@ function M.setup()
 		end,
 	})
 
+	-- Global Mouse Click Handler (<LeftMouse>): Intercept clicks on IntelliJ floating window
+	local function intercept_mouse_click()
+		if not M.toolbar_win or not vim.api.nvim_win_is_valid(M.toolbar_win) then
+			return false
+		end
+
+		local mouse = vim.fn.getmousepos()
+		if mouse.winid == M.toolbar_win then
+			vim.schedule(function()
+				M.handle_click(mouse.wincol)
+			end)
+			return true
+		end
+		return false
+	end
+
+	vim.keymap.set({ "n", "v", "i" }, "<LeftMouse>", function()
+		if intercept_mouse_click() then
+			-- Click intercepted on IntelliJ toolbar (prevents focus bleed to background code)
+			return
+		end
+		-- Normal mouse click behavior for editor
+		local termcode = vim.api.nvim_replace_termcodes("<LeftMouse>", true, false, true)
+		vim.api.nvim_feedkeys(termcode, "n", false)
+	end, { noremap = true, silent = true })
+
 	vim.api.nvim_create_user_command("IntelliJToolbarToggle", function()
 		M.toggle_toolbar()
 	end, { desc = "Toggle IntelliJ Top-Right Toolbar" })
 
-	-- Keybindings globales para abrir modales Play, Debug y Profiles
+	-- Global Keybindings for Play, Debug, Profiles modals
 	vim.keymap.set({ "n", "v" }, "<leader>rp", function() M.open_play_modal() end, { desc = "IntelliJ Play Modal" })
 	vim.keymap.set({ "n", "v" }, "<leader>rd", function() M.open_debug_modal() end, { desc = "IntelliJ Debug Modal" })
 	vim.keymap.set({ "n", "v" }, "<leader>rc", function() M.open_profiles_modal() end, { desc = "IntelliJ Profiles Modal" })
 end
 
 return M
+

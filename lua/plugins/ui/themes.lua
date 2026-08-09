@@ -2,6 +2,9 @@ return {
 	{
 		"doki-theme/doki-theme-vim",
 		lazy = false, -- Ensures the theme loads immediately on startup
+		config = function()
+			pcall(vim.cmd.colorscheme, "nagatoro-krs")
+		end,
 	},
 	{
 		"nvim-lualine/lualine.nvim",

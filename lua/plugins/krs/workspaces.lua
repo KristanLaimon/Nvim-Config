@@ -1,24 +1,24 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Gestor Personalizado de Workspaces y Sesiones (Workspace Manager)
+-- 🦊 KRS PLUGIN: Custom Workspace and Session Manager (Workspace Manager)
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE PLUGIN?
--- 1. Utiliza `mksession!` de Neovim para guardar el estado exacto de ventanas, pestanas, buffers y layouts.
--- 2. Almacena las sesiones guardadas en un directorio dedicado en `stdpath("data")/workspaces`.
--- 3. Mantiene un índice centralizado `index.json` con la información detallada de cada workspace (rutas, fechas, buffers abiertos).
--- 4. Expone una interfaz interactiva de selección con Telescope (`<C-S-w>`, `:WorkspaceSelect`, `:Workspaces`):
---      [Enter]  -> Cargar el workspace seleccionado
---      [d]      -> Eliminar el workspace
---      [r]      -> Renombrar el workspace
---      [a]      -> Guardar el estado actual como un nuevo workspace
---      [s]      -> Sobrescribir el workspace seleccionado con el estado actual
---      [g]      -> Alternar entre ver workspaces del proyecto actual vs Ver Todos
---      [1..9]   -> Cargar workspace rápidamente por número (Harpoon style)
--- 5. Proporciona comandos de usuario y acceso directo `<C-S-m>` para volver al Menú Principal (Alpha Dashboard).
+-- HOW THIS PLUGIN WORKS:
+-- 1. Uses Neovim `mksession!` to save exact state of windows, tabs, buffers, and layouts.
+-- 2. Stores saved sessions in a dedicated directory at `stdpath("data")/workspaces`.
+-- 3. Maintains a centralized `index.json` file with detailed workspace information (paths, dates, open buffers).
+-- 4. Exposes an interactive selection interface in Telescope (`<C-S-w>`, `:WorkspaceSelect`, `:Workspaces`):
+--      [Enter]  -> Load selected workspace
+--      [d]      -> Delete workspace
+--      [r]      -> Rename workspace
+--      [a]      -> Save current state as new workspace
+--      [s]      -> Overwrite selected workspace with current state
+--      [g]      -> Toggle between Current Project workspaces vs All Workspaces
+--      [1..9]   -> Quick load workspace by slot index (Harpoon style)
+-- 5. Provides user commands and `<C-S-m>` shortcut to return to Main Menu (Alpha Dashboard).
 -- ============================================================================
 
 local M = {}
 
--- Directorio de almacenamiento de sesiones
+-- Session storage directory
 local function get_storage_dir()
 	local dir = vim.fn.stdpath("data") .. "/workspaces"
 	if vim.fn.isdirectory(dir) == 0 then
@@ -27,12 +27,12 @@ local function get_storage_dir()
 	return dir
 end
 
--- Ruta del archivo de índice JSON
+-- JSON index file path
 local function get_index_path()
 	return get_storage_dir() .. "/index.json"
 end
 
--- Leer el archivo de índice JSON
+-- Read JSON index file
 local function load_index()
 	local path = get_index_path()
 	local f = io.open(path, "r")
@@ -48,7 +48,7 @@ local function load_index()
 	return ok and type(res) == "table" and res or {}
 end
 
--- Guardar el archivo de índice JSON
+-- Save JSON index file
 local function save_index(index)
 	local path = get_index_path()
 	local f = io.open(path, "w")
@@ -60,7 +60,7 @@ local function save_index(index)
 	return true
 end
 
--- Formatear tiempo relativo (ej. "hace un momento", "hace 5 mins", "hace 2 horas")
+-- Format relative time (e.g. "just now", "5 mins ago", "2 hours ago")
 local function format_relative_time(timestamp)
 	if not timestamp then
 		return ""
@@ -80,7 +80,7 @@ local function format_relative_time(timestamp)
 	end
 end
 
--- Obtener rutas de buffers abiertos relativas al directorio actual
+-- Get open buffer paths relative to working directory
 local function get_current_buffers()
 	local buflist = {}
 	for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -94,16 +94,16 @@ local function get_current_buffers()
 	return buflist
 end
 
--- Configurar opciones de sesión de Neovim
+-- Configure Neovim session options
 local function set_session_options()
 	vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
 end
 
--- Guardar la sesión actual a archivo .vim
+-- Save current session to .vim file
 local function save_session_file(session_path)
 	set_session_options()
 
-	-- Cerrar neo-tree temporalmente antes de guardar sesión para evitar conflictos de split
+	-- Temporarily close Neo-tree before saving session to prevent split conflicts
 	local neotree_was_open = false
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		local buf = vim.api.nvim_win_get_buf(win)
@@ -126,7 +126,7 @@ local function save_session_file(session_path)
 	return ok, err
 end
 
--- Lógica para guardar un workspace
+-- Logic to save a workspace
 function M.save_workspace(name, callback)
 	local cwd = vim.fn.getcwd()
 	local cwd_name = vim.fn.fnamemodify(cwd, ":t")
@@ -156,7 +156,7 @@ function M.save_workspace(name, callback)
 
 		local ok, err = save_session_file(session_path)
 		if not ok then
-			vim.notify("Error al guardar workspace: " .. tostring(err), vim.log.levels.ERROR)
+			vim.notify("Error saving workspace: " .. tostring(err), vim.log.levels.ERROR)
 			return
 		end
 
@@ -185,7 +185,7 @@ function M.save_workspace(name, callback)
 
 		save_index(index)
 		vim.notify(
-			"¡Workspace '" .. ws_name .. "' guardado con éxito!",
+			"Workspace '" .. ws_name .. "' saved successfully!",
 			vim.log.levels.INFO,
 			{ title = "KRS Workspaces" }
 		)
@@ -209,7 +209,7 @@ function M.save_workspace(name, callback)
 			perform_save(existing_for_cwd.name)
 		else
 			pcall(vim.ui.input, {
-				prompt = "Nombre del nuevo Workspace: ",
+				prompt = "New Workspace Name: ",
 				default = cwd_name .. " - " .. os.date("%H:%M"),
 			}, function(input_name)
 				if input_name ~= nil and input_name ~= "" then
@@ -220,7 +220,7 @@ function M.save_workspace(name, callback)
 	end
 end
 
--- Lógica para cargar un workspace
+-- Logic to load a workspace
 function M.load_workspace(ws_or_identifier)
 	local index = load_index()
 	local target = nil
@@ -249,13 +249,13 @@ function M.load_workspace(ws_or_identifier)
 	end
 
 	if not target then
-		vim.notify("Workspace no encontrado", vim.log.levels.WARN, { title = "KRS Workspaces" })
+		vim.notify("Workspace not found", vim.log.levels.WARN, { title = "KRS Workspaces" })
 		return false
 	end
 
 	if vim.fn.filereadable(target.session_file) == 0 then
 		vim.notify(
-			"El archivo de sesión no existe: " .. target.session_file,
+			"Session file does not exist: " .. target.session_file,
 			vim.log.levels.ERROR,
 			{ title = "KRS Workspaces" }
 		)
@@ -276,18 +276,18 @@ function M.load_workspace(ws_or_identifier)
 
 	local ok, err = pcall(vim.cmd, "source " .. vim.fn.fnameescape(target.session_file))
 	if not ok then
-		vim.notify("Error cargando sesión: " .. tostring(err), vim.log.levels.ERROR, { title = "KRS Workspaces" })
+		vim.notify("Error loading session: " .. tostring(err), vim.log.levels.ERROR, { title = "KRS Workspaces" })
 		return false
 	end
 
 	target.updated_at = os.time()
 	save_index(index)
 
-	vim.notify("¡Workspace '" .. target.name .. "' cargado!", vim.log.levels.INFO, { title = "KRS Workspaces" })
+	vim.notify("Workspace '" .. target.name .. "' loaded!", vim.log.levels.INFO, { title = "KRS Workspaces" })
 	return true
 end
 
--- Lógica para eliminar un workspace
+-- Logic to delete a workspace
 function M.delete_workspace(ws_or_id, callback)
 	local index = load_index()
 	local target_idx = nil
@@ -306,25 +306,25 @@ function M.delete_workspace(ws_or_id, callback)
 	end
 
 	if not target then
-		vim.notify("Workspace no encontrado para eliminar", vim.log.levels.WARN, { title = "KRS Workspaces" })
+		vim.notify("Workspace not found to delete", vim.log.levels.WARN, { title = "KRS Workspaces" })
 		return
 	end
 
-	local confirm = vim.fn.confirm("¿Eliminar workspace '" .. target.name .. "'?", "&Sí\n&No", 2)
+	local confirm = vim.fn.confirm("Delete workspace '" .. target.name .. "'?", "&Yes\n&No", 2)
 	if confirm == 1 then
 		if vim.fn.filereadable(target.session_file) == 1 then
 			os.remove(target.session_file)
 		end
 		table.remove(index, target_idx)
 		save_index(index)
-		vim.notify("Workspace '" .. target.name .. "' eliminado.", vim.log.levels.INFO, { title = "KRS Workspaces" })
+		vim.notify("Workspace '" .. target.name .. "' deleted.", vim.log.levels.INFO, { title = "KRS Workspaces" })
 		if callback then
 			callback()
 		end
 	end
 end
 
--- Lógica para renombrar un workspace
+-- Logic to rename a workspace
 function M.rename_workspace(ws_or_id, callback)
 	local index = load_index()
 	local target = nil
@@ -340,19 +340,19 @@ function M.rename_workspace(ws_or_id, callback)
 	end
 
 	if not target then
-		vim.notify("Workspace no encontrado para renombrar", vim.log.levels.WARN, { title = "KRS Workspaces" })
+		vim.notify("Workspace not found to rename", vim.log.levels.WARN, { title = "KRS Workspaces" })
 		return
 	end
 
 	pcall(
 		vim.ui.input,
-		{ prompt = "Nuevo nombre para '" .. target.name .. "': ", default = target.name },
+		{ prompt = "New name for '" .. target.name .. "': ", default = target.name },
 		function(new_name)
 			if new_name and new_name ~= "" and new_name ~= target.name then
 				target.name = new_name
 				target.updated_at = os.time()
 				save_index(index)
-				vim.notify("Workspace renombrado a '" .. new_name .. "'", vim.log.levels.INFO, { title = "KRS Workspaces" })
+				vim.notify("Workspace renamed to '" .. new_name .. "'", vim.log.levels.INFO, { title = "KRS Workspaces" })
 				if callback then
 					callback()
 				end
@@ -361,10 +361,10 @@ function M.rename_workspace(ws_or_id, callback)
 	)
 end
 
--- Cerrar sesión y volver al Menú Principal (Alpha Dashboard)
+-- Close session and return to Main Menu (Alpha Dashboard)
 function M.close_to_menu()
 	if vim.bo.filetype == "alpha" then
-		vim.notify("Ya estás en el menú principal", vim.log.levels.INFO, { title = "KRS Workspaces" })
+		vim.notify("Already at main menu", vim.log.levels.INFO, { title = "KRS Workspaces" })
 		return
 	end
 
@@ -381,13 +381,13 @@ function M.close_to_menu()
 	end
 
 	local choices = {
-		"1. 💾 Guardar Workspace y volver al Menú",
-		"2. 🚪 Volver al Menú sin guardar",
-		"3. ❌ Cancelar",
+		"1. 💾 Save Workspace and return to Menu",
+		"2. 🚪 Return to Menu without saving",
+		"3. ❌ Cancel",
 	}
 
 	pcall(vim.ui.select, choices, {
-		prompt = "🦊 ¿Cerrar sesión y volver al Menú Principal (Dashboard)?",
+		prompt = "🦊 Close session and return to Main Menu (Dashboard)?",
 	}, function(choice)
 		if not choice or choice:match("^3") then
 			return
@@ -401,11 +401,11 @@ function M.close_to_menu()
 	end)
 end
 
--- Interfaz interactiva de Selección en Telescope
+-- Interactive Selection Interface in Telescope
 function M.select_workspace()
 	local ok_telescope, telescope = pcall(require, "telescope")
 	if not ok_telescope then
-		vim.notify("Telescope no está disponible", vim.log.levels.ERROR, { title = "KRS Workspaces" })
+		vim.notify("Telescope is not available", vim.log.levels.ERROR, { title = "KRS Workspaces" })
 		return
 	end
 
@@ -451,12 +451,12 @@ function M.select_workspace()
 			.new(
 				themes.get_dropdown({
 					prompt_title = string.format(
-						" 🦊 Workspaces [%s] (a: Nuevo | d: Eliminar | r: Renombrar | s: Sobrescribir | g: %s) ",
+						" 🦊 Workspaces [%s] (a: New | d: Delete | r: Rename | s: Overwrite | g: %s) ",
 						vim.fn.fnamemodify(current_cwd, ":t"),
-						show_all and "Solo Proyecto Actual" or "Ver Todos"
+						show_all and "Current Project Only" or "View All"
 					),
 					width = 0.85,
-					results_title = "Workspaces Guardados",
+					results_title = "Saved Workspaces",
 				}),
 				{
 					finder = finders.new_table({
@@ -490,17 +490,17 @@ function M.select_workspace()
 					}),
 					sorter = conf.generic_sorter({}),
 					previewer = previewers.new_buffer_previewer({
-						title = "Detalles del Workspace",
+						title = "Workspace Details",
 						define_preview = function(self, entry)
 							local ws = entry.value
 							local lines = {
-								"📌 Nombre:       " .. ws.name,
-								"📁 Proyecto:     " .. (ws.cwd_name or ""),
-								"🌐 Ruta CWD:     " .. ws.cwd,
-								"🕒 Actualizado:  " .. os.date("%Y-%m-%d %H:%M:%S", ws.updated_at or os.time()),
-								"📑 Pestañas:     " .. tostring(ws.tab_count or 1),
+								"📌 Name:         " .. ws.name,
+								"📁 Project:      " .. (ws.cwd_name or ""),
+								"🌐 CWD Path:     " .. ws.cwd,
+								"🕒 Updated:      " .. os.date("%Y-%m-%d %H:%M:%S", ws.updated_at or os.time()),
+								"📑 Tabs:         " .. tostring(ws.tab_count or 1),
 								"",
-								"📄 Archivos Guardados (" .. #(ws.buffers or {}) .. "):",
+								"📄 Saved Files (" .. #(ws.buffers or {}) .. "):",
 								"----------------------------------------",
 							}
 							if ws.buffers and #ws.buffers > 0 then
@@ -508,7 +508,7 @@ function M.select_workspace()
 									table.insert(lines, string.format("  %d. %s", i, buf))
 								end
 							else
-								table.insert(lines, "  (sin archivos)")
+								table.insert(lines, "  (no files)")
 							end
 
 							vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
@@ -592,7 +592,7 @@ function M.select_workspace()
 									actions.close(prompt_bufnr)
 									M.load_workspace(entry_list[n])
 								else
-									vim.notify("Workspace #" .. n .. " no existe", vim.log.levels.WARN, { title = "KRS Workspaces" })
+									vim.notify("Workspace #" .. n .. " does not exist", vim.log.levels.WARN, { title = "KRS Workspaces" })
 								end
 							end)
 						end
@@ -609,7 +609,7 @@ end
 
 _G.Workspaces = M
 
--- Especificación del Plugin para Lazy.nvim
+-- Plugin Specification for Lazy.nvim
 local plugin_spec = {
 	name = "workspaces",
 	dir = vim.fn.stdpath("config"),
@@ -619,10 +619,10 @@ local plugin_spec = {
 		"nvim-telescope/telescope.nvim",
 	},
 	config = function()
-		-- Comandos de Usuario
+		-- User Commands
 		vim.api.nvim_create_user_command("WorkspaceSave", function(opts)
 			M.save_workspace(opts.args ~= "" and opts.args or nil)
-		end, { nargs = "?", desc = "Guardar estado como workspace" })
+		end, { nargs = "?", desc = "Save state as workspace" })
 
 		vim.api.nvim_create_user_command("WorkspaceLoad", function(opts)
 			local arg = opts.args
@@ -632,11 +632,11 @@ local plugin_spec = {
 				local num = tonumber(arg)
 				M.load_workspace(num or arg)
 			end
-		end, { nargs = "?", desc = "Cargar workspace guardado" })
+		end, { nargs = "?", desc = "Load saved workspace" })
 
 		vim.api.nvim_create_user_command("WorkspaceDelete", function(opts)
 			M.delete_workspace(opts.args ~= "" and opts.args or nil)
-		end, { nargs = "?", desc = "Eliminar workspace" })
+		end, { nargs = "?", desc = "Delete workspace" })
 
 		vim.api.nvim_create_user_command("WorkspaceRename", function(opts)
 			local args = vim.split(opts.args, "%s+", { trimempty = true })
@@ -645,7 +645,7 @@ local plugin_spec = {
 			else
 				M.select_workspace()
 			end
-		end, { nargs = "*", desc = "Renombrar workspace" })
+		end, { nargs = "*", desc = "Rename workspace" })
 
 		vim.api.nvim_create_user_command("WorkspaceSelect", function()
 			M.select_workspace()
@@ -657,50 +657,50 @@ local plugin_spec = {
 
 		vim.api.nvim_create_user_command("WorkspaceClose", function()
 			M.close_to_menu()
-		end, { desc = "Cerrar sesión y volver al menú principal" })
+		end, { desc = "Close session and return to main menu" })
 
 		vim.api.nvim_create_user_command("WorkspaceMenu", function()
 			M.close_to_menu()
-		end, { desc = "Cerrar sesión y volver al menú principal" })
+		end, { desc = "Close session and return to main menu" })
 
-		-- Keymaps Globales
+		-- Global Keymaps
 		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-w>", function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
 			M.select_workspace()
-		end, { noremap = true, silent = true, desc = "Abrir Workspaces UI" })
+		end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
 
 		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-W>", function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
 			M.select_workspace()
-		end, { noremap = true, silent = true, desc = "Abrir Workspaces UI" })
+		end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
 
 		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-m>", function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
 			M.close_to_menu()
-		end, { noremap = true, silent = true, desc = "Cerrar y volver al Menú" })
+		end, { noremap = true, silent = true, desc = "Close and return to Menu" })
 
 		vim.keymap.set("n", "<leader>ws", function()
 			M.save_workspace()
-		end, { desc = "Guardar Workspace" })
+		end, { desc = "Save Workspace" })
 
 		vim.keymap.set("n", "<leader>ww", function()
 			M.select_workspace()
-		end, { desc = "Seleccionar Workspace" })
+		end, { desc = "Select Workspace" })
 
 		vim.keymap.set("n", "<leader>wm", function()
 			M.close_to_menu()
-		end, { desc = "Cerrar y volver al Menú" })
+		end, { desc = "Close and return to Menu" })
 
 		for i = 1, 9 do
 			vim.keymap.set("n", "<leader>w" .. i, function()
 				M.load_workspace(i)
-			end, { desc = "Cargar Workspace slot " .. i })
+			end, { desc = "Load Workspace slot " .. i })
 		end
 	end,
 }
@@ -708,3 +708,4 @@ local plugin_spec = {
 return setmetatable(plugin_spec, {
 	__index = M,
 })
+

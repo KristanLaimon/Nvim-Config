@@ -1,120 +1,121 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Paleta de Comandos Estilo VSCode (Ctrl + Shift + P)
+-- 🦊 KRS PLUGIN: VSCode-Style Command Palette (Ctrl + Shift + P)
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE PLUGIN?
--- 1. Se activa con <Ctrl+Shift+P> desde cualquier modo (Normal, Insert, Visual, Terminal).
--- 2. Presenta un buscador tipo Telescope con búsqueda difusa (loose string search).
--- 3. Utiliza una lista array configurable (`M.commands`) que soporta 3 tipos de acciones:
---      a) `cmd`: Ejecuta un comando de Neovim/Vimscript (ej. "Telescope find_files", "Lazy", "Mason")
---      b) `keys`: Simula la presión de un atajo de teclado (ej. "<C-k>", "<leader>e", "<F2>")
---      c) `fn`: Ejecuta una función personalizada de Lua directamente.
--- 4. Puedes añadir tus propios comandos en runtime usando `M.add_command({ ... })`.
+-- HOW THIS PLUGIN WORKS:
+-- 1. Activated with <Ctrl+Shift+P> from any mode (Normal, Insert, Visual, Terminal).
+-- 2. Presents a Telescope picker with fuzzy search.
+-- 3. Uses a configurable array (`M.commands`) supporting 3 action types:
+--      a) `cmd`: Executes a Neovim/Vimscript command (e.g. "Telescope find_files", "Lazy", "Mason")
+--      b) `keys`: Simulates keypresses (e.g. "<C-k>", "<leader>e", "<F2>")
+--      c) `fn`: Executes a custom Lua function directly.
+-- 4. You can add your own commands at runtime using `M.add_command({ ... })`.
 -- ============================================================================
 
 local M = {}
 
--- Array de comandos configurables por el usuario
+-- Array of user-configurable commands
 M.commands = {
 	-- --------------------------------------------------------------------------
-	-- 📁 Archivos y Búsqueda
+	-- 📁 Files & Search
 	-- --------------------------------------------------------------------------
-	{ name = "🔍 Buscar Archivos (respetando .gitignore)", keys = "<C-k>", category = "Archivos" },
-	{ name = "🔍 Buscar Archivos (sin importar .gitignore)", cmd = "TelescopeFindFilesNoIgnore", category = "Archivos" },
-	{ name = "🔍 Buscar y Abrir Archivo a la Izquierda (Split Left)", keys = "<C-S-h>", category = "Archivos" },
-	{ name = "🔍 Buscar y Abrir Archivo Abajo (Split Down)", keys = "<C-S-j>", category = "Archivos" },
-	{ name = "🔍 Buscar y Abrir Archivo Arriba (Split Up)", keys = "<C-S-k>", category = "Archivos" },
-	{ name = "🔍 Buscar y Abrir Archivo a la Derecha (Split Right)", keys = "<C-S-l>", category = "Archivos" },
-	{ name = "📝 Buscar Texto en Archivos (Live Grep)", keys = "<C-f>", category = "Archivos" },
-	{ name = "📂 Abrir Carpeta (Open Folder)", keys = "<C-S-o>", category = "Archivos" },
-	{ name = "⭐ Proyectos Recientes (Recent Projects)", keys = "<C-S-r>", category = "Archivos" },
-	{ name = "📁 Explorador de Archivos (Desktop)", keys = "<C-S-f>", category = "Archivos" },
-	{ name = "🖥️ Alternar Terminal Seleccionada", keys = "<C-;>", category = "Terminal" },
+	{ name = "🔍 Find Files (respecting .gitignore)", keys = "<C-k>", category = "Files" },
+	{ name = "🔍 Find Files (ignoring .gitignore)", cmd = "TelescopeFindFilesNoIgnore", category = "Files" },
+	{ name = "🔍 Find & Open File Left (Split Left)", keys = "<C-S-h>", category = "Files" },
+	{ name = "🔍 Find & Open File Down (Split Down)", keys = "<C-S-j>", category = "Files" },
+	{ name = "🔍 Find & Open File Up (Split Up)", keys = "<C-S-k>", category = "Files" },
+	{ name = "🔍 Find & Open File Right (Split Right)", keys = "<C-S-l>", category = "Files" },
+	{ name = "📝 Search Text in Files (Live Grep)", keys = "<C-f>", category = "Files" },
+	{ name = "📂 Open Folder", keys = "<C-S-o>", category = "Files" },
+	{ name = "⭐ Recent Projects", keys = "<C-S-r>", category = "Files" },
+	{ name = "📁 Floating Desktop File Explorer", keys = "<C-S-f>", category = "Files" },
+	{ name = "🖥️ Toggle Selected Terminal", keys = "<C-;>", category = "Terminal" },
 
 	-- --------------------------------------------------------------------------
-	-- 🦊 Workspaces y Sesiones
+	-- 🦊 Workspaces & Sessions
 	-- --------------------------------------------------------------------------
-	{ name = "💼 Seleccionar Workspace (Workspaces UI)", cmd = "WorkspaceSelect", category = "Workspace" },
-	{ name = "💾 Guardar Workspace Actual", cmd = "WorkspaceSave", category = "Workspace" },
-	{ name = "🚪 Cerrar Workspace e ir al Menú Principal", cmd = "WorkspaceClose", category = "Workspace" },
+	{ name = "💼 Select Workspace (Workspaces UI)", cmd = "WorkspaceSelect", category = "Workspace" },
+	{ name = "💾 Save Current Workspace", cmd = "WorkspaceSave", category = "Workspace" },
+	{ name = "🚪 Close Workspace & Go to Main Menu", cmd = "WorkspaceClose", category = "Workspace" },
 
 	-- --------------------------------------------------------------------------
-	-- 🛠️ Tareas y Ejecución de Código (Estilo IntelliJ)
+	-- 🛠️ Tasks & Code Execution (IntelliJ Style)
 	-- --------------------------------------------------------------------------
-	{ name = "🚀 [Play] Menú de Ejecución IntelliJ", keys = "<leader>rp", category = "Tareas" },
-	{ name = "🐞 [Debug] Menú de Depuración IntelliJ", keys = "<leader>rd", category = "Tareas" },
-	{ name = "⚙️ [Profiles] Menú de Perfiles y Tareas IntelliJ", keys = "<leader>rc", category = "Tareas" },
-	{ name = "🚀 Alternar Barra Superior Estilo IntelliJ", cmd = "IntelliJToolbarToggle", category = "Interfaz" },
-	{ name = "🚀 Ejecutar Tarea por Defecto del Proyecto", keys = "<C-S-a>", category = "Tareas" },
-	{ name = "🛠️ Abrir Menú de Tareas del Proyecto", keys = "<leader>ta", category = "Tareas" },
+	{ name = "🚀 [Play] IntelliJ Run Menu", keys = "<leader>rp", category = "Tasks" },
+	{ name = "🐞 [Debug] IntelliJ Debug Menu", keys = "<leader>rd", category = "Tasks" },
+	{ name = "⚙️ [Profiles] IntelliJ Profiles & Tasks Menu", keys = "<leader>rc", category = "Tasks" },
+	{ name = "🚀 Toggle IntelliJ Top-Right Toolbar", cmd = "IntelliJToolbarToggle", category = "UI" },
+	{ name = "🚀 Run Project Default Task", keys = "<C-S-a>", category = "Tasks" },
+	{ name = "🛠️ Open Project Tasks Menu", keys = "<leader>ta", category = "Tasks" },
 
 	-- --------------------------------------------------------------------------
-	-- 🌲 Explorador de Archivos y Git
+	-- 🌲 File Explorer & Git
 	-- --------------------------------------------------------------------------
-	{ name = "🌳 Alternar Explorador de Archivos (Neo-tree)", cmd = "Neotree toggle", category = "Explorador" },
-	{ name = "🏷️ Renombrar Archivo Actual (F2)", keys = "<F2>", category = "Explorador" },
-	{ name = "🐙 Alternar Panel de Git (Neogit)", cmd = "Neogit", category = "Git" },
+	{ name = "🌳 Toggle File Explorer (Neo-tree)", cmd = "Neotree toggle", category = "Explorer" },
+	{ name = "🏷️ Rename Current File (F2)", keys = "<F2>", category = "Explorer" },
+	{ name = "🐙 Toggle Git Panel (Neogit)", cmd = "Neogit", category = "Git" },
 
 	-- --------------------------------------------------------------------------
-	-- 💻 Terminales
+	-- 💻 Terminals
 	-- --------------------------------------------------------------------------
-	{ name = "💻 Alternar Terminal 1", keys = "<C-;>", category = "Terminal" },
-	{ name = "💻 Alternar Terminal 2", keys = "<leader>t2", category = "Terminal" },
-	{ name = "💻 Alternar Terminal 3", keys = "<leader>t3", category = "Terminal" },
+	{ name = "💻 Toggle Terminal 1", keys = "<C-;>", category = "Terminal" },
+	{ name = "💻 Toggle Terminal 2", keys = "<leader>t2", category = "Terminal" },
+	{ name = "💻 Toggle Terminal 3", keys = "<leader>t3", category = "Terminal" },
 
 	-- --------------------------------------------------------------------------
-	-- 🧠 LSP, Diagnósticos y Formato
+	-- 🧠 LSP, Diagnostics & Formatting
 	-- --------------------------------------------------------------------------
-	{ name = "💡 Quick-Fix / Acciones de Código (VSCode)", keys = "<C-.>", category = "LSP" },
-	{ name = "🎯 Ir a Definición de Símbolo", keys = "<A-j>", category = "LSP" },
-	{ name = "⚠️ Ver Detalle de Error / Diagnóstico en Cursor", keys = "<A-k>", category = "LSP" },
-	{ name = "🎨 Formatear Archivo (Conform)", keys = "<leader>f", category = "LSP" },
-	{ name = "ℹ️ Información del Servidor LSP", cmd = "LspInfo", category = "LSP" },
-	{ name = "📦 Administrador de Servidores (Mason)", cmd = "Mason", category = "LSP" },
+	{ name = "💡 Quick-Fix / Code Actions (VSCode)", keys = "<C-.>", category = "LSP" },
+	{ name = "🎯 Go to Symbol Definition", keys = "<A-j>", category = "LSP" },
+	{ name = "⚠️ View Error / Diagnostic Detail at Caret", keys = "<A-k>", category = "LSP" },
+	{ name = "🎨 Format File (Conform)", keys = "<leader>f", category = "LSP" },
+	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
+	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
 
 	-- --------------------------------------------------------------------------
-	-- 🎨 Interfaz y Configuración
+	-- 🎨 UI & Configuration
 	-- --------------------------------------------------------------------------
-	{ name = "🔍 Aumentar Tamaño de Fuente", cmd = "FontSizeIncrease", category = "Interfaz" },
-	{ name = "🔍 Disminuir Tamaño de Fuente", cmd = "FontSizeDecrease", category = "Interfaz" },
-	{ name = "🔍 Restablecer Tamaño de Fuente", cmd = "FontSizeReset", category = "Interfaz" },
-	{ name = "🖼️ Ver Imagen con Chafa", keys = "<leader>i", category = "Interfaz" },
-	{ name = "🧩 Administrador de Plugins (Lazy)", cmd = "Lazy", category = "Configuración" },
-	{ name = "🔄 Recargar Configuración de Neovim", cmd = "ReloadConfig", category = "Configuración" },
-	{ name = "🚪 Salir de Neovim (Quit All)", cmd = "qa", category = "Sistema" },
+	{ name = "🔍 Increase Font Size", cmd = "FontSizeIncrease", category = "UI" },
+	{ name = "🔍 Decrease Font Size", cmd = "FontSizeDecrease", category = "UI" },
+	{ name = "🔍 Reset Font Size", cmd = "FontSizeReset", category = "UI" },
+	{ name = "🖼️ View Image with Chafa", keys = "<leader>i", category = "UI" },
+	{ name = "🎬 Open Image/Video with OS Default Program", keys = "<C-S-Enter>", category = "UI" },
+	{ name = "🧩 Plugin Manager (Lazy)", cmd = "Lazy", category = "Config" },
+	{ name = "🔄 Reload Neovim Configuration", cmd = "ReloadConfig", category = "Config" },
+	{ name = "🚪 Quit Neovim (Quit All)", cmd = "qa", category = "System" },
 }
 
--- Función pública para agregar comandos dinámicamente desde cualquier plugin o config
+-- Public function to dynamically add commands from any plugin or config
 function M.add_command(item)
 	if type(item) == "table" and item.name then
 		table.insert(M.commands, item)
 	end
 end
 
--- Ejecutar la acción asociada a la entrada seleccionada
+-- Execute action associated with selected entry
 local function execute_item(item)
 	if not item then
 		return
 	end
 
 	if item.cmd then
-		-- Ejecutar comando Neovim/Vimscript
+		-- Execute Neovim/Vimscript command
 		vim.cmd(item.cmd)
 	elseif item.keys then
-		-- Simular la pulsación de teclas usando nvim_feedkeys
+		-- Simulate keypress using nvim_feedkeys
 		local termcodes = vim.api.nvim_replace_termcodes(item.keys, true, false, true)
 		vim.api.nvim_feedkeys(termcodes, "m", false)
 	elseif item.fn and type(item.fn) == "function" then
-		-- Ejecutar función Lua directamente
+		-- Execute Lua function directly
 		item.fn()
 	end
 end
 
--- Abrir la Paleta de Comandos con Telescope
+-- Open Command Palette with Telescope
 function M.open_palette()
 	local ok_telescope, _ = pcall(require, "telescope")
 	if not ok_telescope then
 		vim.notify(
-			"Telescope no está disponible para la Paleta de Comandos",
+			"Telescope is not available for Command Palette",
 			vim.log.levels.ERROR,
 			{ title = "Command Palette" }
 		)
@@ -131,9 +132,9 @@ function M.open_palette()
 	pickers
 		.new(
 			themes.get_dropdown({
-				prompt_title = " 🚀🦊 Paleta de Comandos (Ctrl+Shift+P) ",
+				prompt_title = " 🚀🦊 Command Palette (Ctrl+Shift+P) ",
 				width = 0.75,
-				results_title = "Comandos Disponibles",
+				results_title = "Available Commands",
 			}),
 			{
 				finder = finders.new_table({
@@ -147,7 +148,7 @@ function M.open_palette()
 						return {
 							value = entry,
 							display = display_str,
-							-- Ordinal para la búsqueda difusa (loose search across name, category and action)
+							-- Ordinal for fuzzy search
 							ordinal = category .. " " .. entry.name .. " " .. shortcut,
 						}
 					end,
@@ -172,7 +173,7 @@ end
 
 _G.CommandPalette = M
 
--- Especificación del Plugin para Lazy.nvim
+-- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "command_palette",
 	dir = vim.fn.stdpath("config"),
@@ -201,26 +202,27 @@ local plugin_spec = {
 	config = function()
 		vim.api.nvim_create_user_command("CommandPalette", function()
 			M.open_palette()
-		end, { desc = "Abrir Paleta de Comandos" })
+		end, { desc = "Open Command Palette" })
 
-		-- Keymaps globales
+		-- Global keymaps
 		local modes = { "n", "i", "v", "t" }
 		vim.keymap.set(modes, "<C-S-p>", function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
 			M.open_palette()
-		end, { noremap = true, silent = true, desc = "Abrir Paleta de Comandos" })
+		end, { noremap = true, silent = true, desc = "Open Command Palette" })
 
 		vim.keymap.set(modes, "<C-S-P>", function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
 			M.open_palette()
-		end, { noremap = true, silent = true, desc = "Abrir Paleta de Comandos" })
+		end, { noremap = true, silent = true, desc = "Open Command Palette" })
 	end,
 }
 
 return setmetatable(plugin_spec, {
 	__index = M,
 })
+

@@ -225,8 +225,8 @@ This configuration comes preconfigured to automatically install and manage LSPs,
 
 | Shortcut | Mode | Action |
 |---|---|---|
-| `<C-k>` | n, i | Buscar archivos respetando `.gitignore` (`find_files`) |
-| `<C-Alt-k>` / `<C-A-k>` | n, i | Buscar archivos sin importar `.gitignore` (`find_files no_ignore=true`) |
+| `<C-k>` | n, i | Find files respecting `.gitignore` (`find_files`) |
+| `<C-Alt-k>` / `<C-A-k>` | n, i | Find files ignoring `.gitignore` (`find_files no_ignore=true`) |
 | `<C-f>` | n, i | Live global text search (`live_grep`) |
 | `<C-o>` | n, i | Open system folder browser at Desktop |
 | `<C-S-r>` | n | Open recent projects list (`projects`) |

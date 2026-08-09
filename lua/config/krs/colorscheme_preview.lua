@@ -1,11 +1,11 @@
 -- ============================================================================
--- 🦊 KRS CONFIG: Previsualización en Vivo de Temas (Live Colorscheme Previewer)
+-- 🦊 KRS CONFIG: Live Colorscheme Previewer
 -- ============================================================================
--- ¿CÓMO FUNCIONA ESTE MÓDULO?
--- 1. Escucha eventos de la línea de comandos de Vim (`CmdlineChanged` y `CmdlineLeave`).
--- 2. Cuando escribes `:colorscheme <tema>` y navegas con `<Tab>`, captura el nombre del tema.
--- 3. Aplica temporalmente el tema en tiempo real para vista previa instantánea (`pcall(vim.cmd.colorscheme, name)`).
--- 4. Si cancelas la entrada (presionas Esc sin presionar Enter), restaura automáticamente el tema original anterior (`vim.v.event.abort`).
+-- HOW THIS MODULE WORKS:
+-- 1. Listens to Vim command line events (`CmdlineChanged` and `CmdlineLeave`).
+-- 2. When you type `:colorscheme <theme>` and navigate with `<Tab>`, it captures the theme name.
+-- 3. Temporarily applies the theme in real time for instant preview (`pcall(vim.cmd.colorscheme, name)`).
+-- 4. If input is cancelled (pressing Esc without Enter), automatically restores the original theme (`vim.v.event.abort`).
 -- ============================================================================
 
 local M = {}
@@ -15,7 +15,7 @@ local colorscheme_preview_orig = nil
 function M.setup()
 	local group = vim.api.nvim_create_augroup("KRSColorschemeLivePreview", { clear = true })
 
-	-- Evento 1: Se modifica el texto en la línea de comandos
+	-- Event 1: Command line text modified
 	vim.api.nvim_create_autocmd("CmdlineChanged", {
 		group = group,
 		callback = function()
@@ -30,7 +30,7 @@ function M.setup()
 				return
 			end
 
-			-- Recordar el tema inicial antes de previsualizar
+			-- Save original theme before previewing
 			if colorscheme_preview_orig == nil then
 				colorscheme_preview_orig = vim.g.colors_name
 			end
@@ -39,7 +39,7 @@ function M.setup()
 		end,
 	})
 
-	-- Evento 2: Se abandona o confirma la línea de comandos
+	-- Event 2: Command line confirmed or left
 	vim.api.nvim_create_autocmd("CmdlineLeave", {
 		group = group,
 		callback = function()
@@ -50,7 +50,7 @@ function M.setup()
 			local cmdline = vim.fn.getcmdline()
 			local applied = cmdline:match("^colo%S*%s+(%S+)%s*$")
 
-			-- Si fue cancelado con Esc (abort = true) y no se aplicó -> revertir al tema previo
+			-- If cancelled with Esc (abort = true) and not applied -> revert to previous theme
 			if colorscheme_preview_orig and vim.v.event.abort and not applied then
 				pcall(vim.cmd.colorscheme, colorscheme_preview_orig)
 			end
@@ -61,3 +61,4 @@ function M.setup()
 end
 
 return M
+
