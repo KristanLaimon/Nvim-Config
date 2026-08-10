@@ -39,6 +39,7 @@ M.commands = {
 	-- 🧠 LSP, Diagnostics & Type Injection
 	-- --------------------------------------------------------------------------
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
+	{ name = "🚫 Add KRS Generated Files to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
 	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
 	{ name = "📦 Nuget Package Manager (C#)", cmd = "NugetManager", category = "LSP" },
@@ -54,12 +55,19 @@ M.commands = {
 	{ name = "🚪 Quit Neovim (Quit All)", cmd = "qa", category = "System" },
 
 	-- --------------------------------------------------------------------------
-	-- 🎮 Discord Rich Presence (cord.nvim)
+	-- 🎨 Discord Rich Presence (cord.nvim)
 	-- --------------------------------------------------------------------------
 	{ name = "🎮 Discord: Toggle", cmd = "Cord toggle", category = "Discord" },
 	{ name = "🎮 Discord: Reconnect", cmd = "Cord reconnect", category = "Discord" },
 	{ name = "🎮 Discord: Shutdown", cmd = "Cord shutdown", category = "Discord" },
 	{ name = "🎮 Discord: Status", cmd = "Cord status", category = "Discord" },
+
+	-- --------------------------------------------------------------------------
+	-- 🎨 Tailwind Classes Organizer
+	-- --------------------------------------------------------------------------
+	{ name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)", cmd = "TailwindOrganizerToggle", category = "Tailwind" },
+	{ name = "✨ Organize Tailwind Classes (Current File)", cmd = "TailwindOrganize", category = "Tailwind" },
+	{ name = "ℹ️ Tailwind Organizer Status", cmd = "TailwindOrganizerStatus", category = "Tailwind" },
 }
 
 -- Public function to dynamically add commands from any plugin or config

@@ -63,21 +63,65 @@ return {
 		})
 
 		local function find_files_gitignore()
-			builtin.find_files({ no_ignore = false })
+			local is_git = false
+			local cwd = vim.fn.getcwd()
+			if vim.fn.isdirectory(cwd .. "/.git") == 1 then
+				is_git = true
+			else
+				local out = vim.fn.system("git -C " .. vim.fn.shellescape(cwd) .. " rev-parse --is-inside-work-tree 2>NUL")
+				if out and out:match("true") then
+					is_git = true
+				end
+			end
+
+			if is_git then
+				local ok = pcall(builtin.git_files, { show_untracked = true })
+				if not ok then
+					builtin.find_files({ no_ignore = false, hidden = false })
+				end
+			elseif vim.fn.executable("rg") == 1 then
+				builtin.find_files({
+					find_command = { "rg", "--files", "--color=never", "--glob", "!.git/*" },
+				})
+			elseif vim.fn.executable("fd") == 1 then
+				builtin.find_files({
+					find_command = { "fd", "--type", "f", "--exclude", ".git" },
+				})
+			else
+				builtin.find_files({ no_ignore = false, hidden = false })
+			end
 		end
 
 		local function find_files_no_ignore()
-			builtin.find_files({ no_ignore = true, hidden = true })
+			if vim.fn.executable("rg") == 1 then
+				builtin.find_files({
+					find_command = { "rg", "--files", "--color=never", "--no-ignore", "--hidden", "--glob", "!.git/*" },
+				})
+			elseif vim.fn.executable("fd") == 1 then
+				builtin.find_files({
+					find_command = { "fd", "--type", "f", "--no-ignore", "--hidden", "--exclude", ".git" },
+				})
+			else
+				builtin.find_files({ no_ignore = true, hidden = true })
+			end
 		end
+
+		_G.FindFilesGitignore = find_files_gitignore
+		_G.FindFilesNoIgnore = find_files_no_ignore
 
 		vim.api.nvim_create_user_command('TelescopeFindFilesNoIgnore', find_files_no_ignore, { desc = 'Find files ignoring .gitignore' })
 
-		vim.keymap.set({ 'n', 'i' }, '<C-k>', find_files_gitignore, { desc = 'Telescope find files (excludes .gitignore)' })
+		local gitignore_keys = { '<C-k>', '<C-/>', '<C-_>' }
+		for _, key in ipairs(gitignore_keys) do
+			vim.keymap.set({ 'n', 'i' }, key, find_files_gitignore, { noremap = true, silent = true, desc = 'Telescope find files (excludes .gitignore)' })
+		end
 
-		local no_ignore_keys = { '<C-A-k>', '<C-A-K>', '<C-M-k>', '<C-M-K>', '<A-C-k>', '<A-C-K>', '<M-C-k>', '<M-C-K>', '<leader>fa' }
+		local no_ignore_keys = { '<C-A-k>', '<C-A-K>', '<C-M-k>', '<C-M-K>', '<A-C-k>', '<A-C-K>', '<M-C-k>', '<M-C-K>', '<C-S-/>', '<C-?>', '<leader>fa' }
 		for _, key in ipairs(no_ignore_keys) do
 			vim.keymap.set({ 'n', 'i' }, key, find_files_no_ignore, { noremap = true, silent = true, desc = 'Telescope find files (ignoring .gitignore)' })
 		end
+
+
 
 		vim.keymap.set('n', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
 		vim.keymap.set('i', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })

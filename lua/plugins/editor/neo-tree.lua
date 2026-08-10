@@ -84,8 +84,16 @@ return {
 	    window = {
 		width = saved_width,
 		mappings = {
-		    ["<C-n>"] = "add",
-		    ["<C-S-n>"] = "add_directory",
+		    ["r"] = "rename_with_modal",
+		    ["m"] = "move_with_picker",
+		    ["a"] = "add_with_modal",
+		    ["A"] = "add_with_modal",
+		    ["<C-n>"] = "add_with_modal",
+		    ["<C-S-n>"] = "add_with_modal",
+		    ["<C-/>"] = "search_respect_gitignore",
+		    ["<C-_>"] = "search_respect_gitignore",
+		    ["<C-S-/>"] = "search_all_files",
+		    ["<C-?>"] = "search_all_files",
 		    ["<C-S-CR>"] = "open_with_system_app",
 		    ["<C-S-Enter>"] = "open_with_system_app",
 		},
@@ -97,7 +105,103 @@ return {
 			require("config.krs.image_viewer").open_with_system_app(node.path)
 		    end
 		end,
+		rename_with_modal = function(state)
+		    local node = state.tree:get_node()
+		    if not node or not node.path then
+			return
+		    end
+		    local old_path = node.path
+		    local old_name = node.name
+
+		    require("config.krs.input_modal").open({
+			label = "Rename (" .. old_name .. ")",
+			default_value = old_name,
+			relative = "editor",
+			callback = function(ok, new_name)
+			    if not ok or not new_name or new_name == "" or new_name == old_name then
+				return
+			    end
+			    local parent_dir = vim.fn.fnamemodify(old_path, ":h")
+			    local new_path = parent_dir .. "/" .. new_name
+
+			    local success, err = os.rename(old_path, new_path)
+			    if success then
+				vim.notify("Renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
+				pcall(function()
+				    require("neo-tree.sources.manager").refresh("filesystem")
+				end)
+			    else
+				vim.notify("Error renaming: " .. tostring(err), vim.log.levels.ERROR, { title = "Neo-tree" })
+			    end
+			end,
+		    })
+		end,
+		move_with_picker = function(state)
+		    local node = state.tree:get_node()
+		    if not node or not node.path then
+			return
+		    end
+		    require("config.krs.file_explorer").open_move_picker({
+			source_path = node.path,
+			root_dir = vim.fn.getcwd(),
+		    })
+		end,
+		add_with_modal = function(state)
+		    local node = state.tree:get_node()
+		    if not node then
+			return
+		    end
+		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+
+		    require("config.krs.input_modal").open({
+			label = "New File / Folder",
+			default_value = "",
+			relative = "editor",
+			callback = function(ok, new_name)
+			    if not ok or not new_name or new_name == "" then
+				return
+			    end
+			    local target_path = parent_dir .. "/" .. new_name
+			    local is_dir = new_name:sub(-1) == "/" or new_name:sub(-1) == "\\"
+
+			    if is_dir then
+				vim.fn.mkdir(target_path, "p")
+				vim.notify("Created folder: " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
+			    else
+				local target_parent = vim.fn.fnamemodify(target_path, ":h")
+				if vim.fn.isdirectory(target_parent) == 0 then
+				    vim.fn.mkdir(target_parent, "p")
+				end
+				local f = io.open(target_path, "w")
+				if f then
+				    f:close()
+				    vim.cmd("edit " .. vim.fn.fnameescape(target_path))
+				    vim.notify("Created file: " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
+				end
+			    end
+			    pcall(function()
+				require("neo-tree.sources.manager").refresh("filesystem")
+			    end)
+			end,
+		    })
+		end,
+		search_respect_gitignore = function()
+		    if _G.FindFilesGitignore then
+			_G.FindFilesGitignore()
+		    else
+			require("telescope.builtin").find_files({ no_ignore = false })
+		    end
+		end,
+		search_all_files = function()
+		    if _G.FindFilesNoIgnore then
+			_G.FindFilesNoIgnore()
+		    else
+			require("telescope.builtin").find_files({ no_ignore = true, hidden = true })
+		    end
+		end,
+
 	    },
+
 	    filesystem = {
 		bind_to_cwd = true,
 		follow_current_file = {

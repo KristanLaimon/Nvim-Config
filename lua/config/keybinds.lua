@@ -3,8 +3,61 @@ vim.g.mapleader = " "
 vim.keymap.set("n", "<leader>cd", vim.cmd.Ex)
 
 -- VSCode Migration (Old habits never die)
-vim.keymap.set("n", "<C-'>", "gcc", { remap = true, desc = "Comment line" })
-vim.keymap.set("v", "<C-'>", "gc", { remap = true, desc = "Comment selection" })
+-- Comment keymapping for US Standard & US International keyboard layouts (Ctrl + ; and Ctrl + ')
+local comment_keys = { "<C-;>", "<C-:>", "<C-S-;>", "<C-S-:>", "<C-'>", "<C-S-'>" }
+
+local function comment_line()
+	local mode = vim.api.nvim_get_mode().mode
+	if mode == "t" then
+		pcall(vim.cmd, "stopinsert")
+		pcall(vim.cmd, "wincmd p")
+	end
+	vim.api.nvim_feedkeys("gcc", "m", false)
+end
+
+local function comment_selection()
+	local mode = vim.api.nvim_get_mode().mode
+	if mode == "t" then
+		pcall(vim.cmd, "stopinsert")
+		pcall(vim.cmd, "wincmd p")
+	end
+	vim.api.nvim_feedkeys("gc", "m", false)
+end
+
+for _, key in ipairs(comment_keys) do
+	vim.keymap.set("n", key, comment_line, { noremap = true, silent = true, desc = "Comment line" })
+	vim.keymap.set("v", key, comment_selection, { noremap = true, silent = true, desc = "Comment selection" })
+	vim.keymap.set("i", key, function()
+		vim.cmd("stopinsert")
+		comment_line()
+	end, { noremap = true, silent = true, desc = "Comment line" })
+	vim.keymap.set("t", key, comment_line, { noremap = true, silent = true, desc = "Comment line from terminal" })
+end
+
+
+-- Global Search Keymaps: Ctrl+/ (respect .gitignore) vs Ctrl+Shift+/ (search all files)
+local gitignore_search_keys = { "<C-/>", "<C-_>" }
+for _, key in ipairs(gitignore_search_keys) do
+	vim.keymap.set({ "n", "i" }, key, function()
+		if _G.FindFilesGitignore then
+			_G.FindFilesGitignore()
+		else
+			require("telescope.builtin").find_files({ no_ignore = false })
+		end
+	end, { noremap = true, silent = true, desc = "Find files (respecting .gitignore)" })
+end
+
+local all_files_search_keys = { "<C-S-/>", "<C-?>" }
+for _, key in ipairs(all_files_search_keys) do
+	vim.keymap.set({ "n", "i" }, key, function()
+		if _G.FindFilesNoIgnore then
+			_G.FindFilesNoIgnore()
+		else
+			require("telescope.builtin").find_files({ no_ignore = true, hidden = true })
+		end
+	end, { noremap = true, silent = true, desc = "Find all files (ignoring .gitignore)" })
+end
+
 
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
@@ -445,9 +498,13 @@ for i = 1, 4 do
 	end, { noremap = true, silent = true, desc = "Toggle task output slot " .. i })
 end
 
-vim.keymap.set({ "n", "i", "v", "t" }, "<C-`>", function()
-	require("config.krs.tasks").toggle_last_slot_window()
-end, { noremap = true, silent = true, desc = "Toggle last task output window" })
+local task_output_keys = { "<C-`>", "<leader>to" }
+for _, k in ipairs(task_output_keys) do
+	vim.keymap.set({ "n", "i", "v", "t" }, k, function()
+		require("config.krs.tasks").toggle_last_slot_window()
+	end, { noremap = true, silent = true, desc = "Toggle last task output window" })
+end
+
 
 -- Ctrl + Click a URL (in any buffer, e.g. task/terminal output) to open it in the browser
 vim.keymap.set({ "n", "i", "v", "t" }, "<C-LeftMouse>", function()
@@ -536,99 +593,6 @@ vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, sile
 -- Floating inline rename box: opens a real (vim-editable) 1-line buffer next
 -- to the symbol, prefilled with its current name. `:w` confirms and fires
 -- the LSP rename; <Esc> or closing the window cancels.
-local function lsp_rename_float()
-	local old_name = vim.fn.expand("<cword>")
-	if old_name == "" then
-		return
-	end
-
-	local orig_win = vim.api.nvim_get_current_win()
-	local line = vim.api.nvim_get_current_line()
-	local cursor = vim.api.nvim_win_get_cursor(0)
-	local col = cursor[2]
-	local start_col = col
-	while start_col > 0 and line:sub(start_col, start_col):match("[%w_]") do
-		start_col = start_col - 1
-	end
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.bo[buf].buftype = "acwrite"
-	vim.bo[buf].bufhidden = "wipe"
-	vim.bo[buf].swapfile = false
-	vim.bo[buf].filetype = "krsrename"
-	vim.api.nvim_buf_set_name(buf, "Rename: " .. old_name)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, { old_name })
-
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "cursor",
-		row = 1,
-		col = -(col - start_col),
-		width = math.max(#old_name + 4, 12),
-		height = 1,
-		style = "minimal",
-		border = "rounded",
-		title = " Rename ",
-		title_pos = "center",
-	})
-
-	vim.cmd("startinsert!")
-
-	local min_width = math.max(#old_name + 4, 12)
-	local function resize()
-		if not vim.api.nvim_win_is_valid(win) then
-			return
-		end
-		local text = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
-		vim.api.nvim_win_set_config(win, { width = math.max(#text + 4, min_width) })
-	end
-
-	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
-		buffer = buf,
-		callback = resize,
-	})
-
-	local function cancel()
-		if vim.api.nvim_win_is_valid(win) then
-			vim.bo[buf].modified = false
-			vim.api.nvim_win_close(win, true)
-		end
-	end
-
-	vim.keymap.set("n", "<Esc>", cancel, { buffer = buf, silent = true })
-
-	local function confirm()
-		vim.cmd("write")
-	end
-	vim.keymap.set({ "n", "i" }, "<CR>", confirm, { buffer = buf, silent = true })
-
-	vim.api.nvim_create_autocmd("BufWriteCmd", {
-		buffer = buf,
-		callback = function()
-			vim.bo[buf].modified = false
-			local new_name = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
-			if vim.api.nvim_win_is_valid(win) then
-				vim.api.nvim_win_close(win, true)
-			end
-			if vim.api.nvim_win_is_valid(orig_win) then
-				vim.api.nvim_set_current_win(orig_win)
-			end
-			if new_name and new_name ~= "" and new_name ~= old_name then
-				vim.lsp.buf.rename(new_name)
-			end
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("WinClosed", {
-		pattern = tostring(win),
-		once = true,
-		callback = function()
-			if vim.api.nvim_buf_is_valid(buf) then
-				vim.bo[buf].modified = false
-			end
-		end,
-	})
-end
-
 -- F2: rename. Inside neo-tree uses its rename; in a code buffer with an
 -- attached LSP renames the symbol under cursor; otherwise renames file on disk.
 vim.keymap.set("n", "<F2>", function()
@@ -637,10 +601,30 @@ vim.keymap.set("n", "<F2>", function()
 		return
 	end
 
+	local has_lsp_rename = false
 	for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
 		if client:supports_method("textDocument/rename") then
-			return lsp_rename_float()
+			has_lsp_rename = true
+			break
 		end
+	end
+
+	if has_lsp_rename then
+		local old_name = vim.fn.expand("<cword>")
+		if old_name == "" then
+			return
+		end
+		require("config.krs.input_modal").open({
+			label = "LSP Rename",
+			default_value = old_name,
+			relative = "cursor",
+			callback = function(ok, new_name)
+				if ok and new_name and new_name ~= "" and new_name ~= old_name then
+					vim.lsp.buf.rename(new_name)
+				end
+			end,
+		})
+		return
 	end
 
 	local old_path = vim.api.nvim_buf_get_name(0)
@@ -652,27 +636,33 @@ vim.keymap.set("n", "<F2>", function()
 	local dir = vim.fn.fnamemodify(old_path, ":h")
 	local old_name = vim.fn.fnamemodify(old_path, ":t")
 
-	vim.ui.input({ prompt = "Rename to: ", default = old_name }, function(new_name)
-		if not new_name or new_name == "" or new_name == old_name then
-			return
-		end
+	require("config.krs.input_modal").open({
+		label = "Rename File",
+		default_value = old_name,
+		relative = "editor",
+		callback = function(ok, new_name)
+			if not ok or not new_name or new_name == "" or new_name == old_name then
+				return
+			end
 
-		local new_path = dir .. "/" .. new_name
+			local new_path = dir .. "/" .. new_name
 
-		if vim.fn.filereadable(new_path) == 1 then
-			vim.notify("File already exists: " .. new_path, vim.log.levels.ERROR)
-			return
-		end
+			if vim.fn.filereadable(new_path) == 1 then
+				vim.notify("File already exists: " .. new_path, vim.log.levels.ERROR)
+				return
+			end
 
-		vim.cmd("write")
-		local ok, err = os.rename(old_path, new_path)
-		if not ok then
-			vim.notify("Error renaming file: " .. tostring(err), vim.log.levels.ERROR)
-			return
-		end
+			vim.cmd("write")
+			local success, err = os.rename(old_path, new_path)
+			if not success then
+				vim.notify("Error renaming file: " .. tostring(err), vim.log.levels.ERROR)
+				return
+			end
 
-		vim.cmd("edit " .. vim.fn.fnameescape(new_path))
-		vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
-	end)
-end, { noremap = true, silent = true, desc = "Rename file" })
+			vim.cmd("edit " .. vim.fn.fnameescape(new_path))
+			vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
+		end,
+	})
+end, { noremap = true, silent = true, desc = "Rename symbol or file" })
+
 

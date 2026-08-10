@@ -364,8 +364,171 @@ function M.open_desktop_explorer(opts)
 	}):find()
 end
 
+-- Open floating file explorer to move a file/folder to a target directory
+function M.open_move_picker(opts)
+	opts = opts or {}
+	local source_path = opts.source_path
+	if not source_path or source_path == "" then
+		vim.notify("No file selected to move", vim.log.levels.WARN, { title = "Move File" })
+		return
+	end
+
+	local source_name = vim.fn.fnamemodify(source_path, ":t")
+	local pickers = require("telescope.pickers")
+	local finders = require("telescope.finders")
+	local conf = require("telescope.config").values
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
+
+	local root_dir = opts.root_dir or vim.fn.getcwd()
+	local curr_dir = opts.path or root_dir
+	curr_dir = vim.fn.fnamemodify(curr_dir, ":p"):gsub("[/\\]$", "")
+
+	if vim.fn.isdirectory(curr_dir) == 0 then
+		curr_dir = root_dir
+	end
+
+	local entries = {}
+	local handle = vim.uv.fs_scandir(curr_dir)
+	if handle then
+		while true do
+			local name, type = vim.uv.fs_scandir_next(handle)
+			if not name then
+				break
+			end
+			local full_path = curr_dir .. "/" .. name
+			local is_dir = (type == "directory")
+			local icon = is_dir and "📁 " or "📄 "
+
+			table.insert(entries, {
+				name = name,
+				path = full_path,
+				is_dir = is_dir,
+				display = icon .. name,
+			})
+		end
+	end
+
+	table.sort(entries, function(a, b)
+		if a.is_dir ~= b.is_dir then
+			return a.is_dir
+		end
+		return a.name:lower() < b.name:lower()
+	end)
+
+	pickers.new({
+		prompt_title = " 🚚 Move '" .. source_name .. "' ➜ Navigate & press [O] to confirm target folder ",
+		results_title = " Folders / Files | Press [O] to Move File Here | [l] Open Folder | [h] Parent ",
+		finder = finders.new_table({
+			results = entries,
+			entry_maker = function(entry)
+				local dir_prefix = entry.is_dir and "0_" or "1_"
+				return {
+					value = entry,
+					display = entry.display,
+					ordinal = dir_prefix .. entry.name,
+				}
+			end,
+		}),
+		sorter = conf.generic_sorter({}),
+		layout_strategy = "horizontal",
+		layout_config = {
+			width = 0.85,
+			height = 0.80,
+			prompt_position = "top",
+		},
+		attach_mappings = function(prompt_bufnr, map)
+			actions.select_default:replace(function()
+				local selection = action_state.get_selected_entry()
+				if selection and selection.value and selection.value.is_dir then
+					actions.close(prompt_bufnr)
+					vim.schedule(function()
+						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = selection.value.path })
+					end)
+				end
+			end)
+
+			local execute_move = function()
+				local selection = action_state.get_selected_entry()
+				local target_dir = curr_dir
+				if selection and selection.value and selection.value.is_dir then
+					target_dir = selection.value.path
+				end
+
+				actions.close(prompt_bufnr)
+
+				local dest_path = target_dir .. "/" .. source_name
+				if source_path == dest_path then
+					vim.notify("File is already in this directory", vim.log.levels.WARN, { title = "Move File" })
+					return
+				end
+
+				if vim.fn.filereadable(dest_path) == 1 or vim.fn.isdirectory(dest_path) == 1 then
+					vim.notify("Target file already exists: " .. dest_path, vim.log.levels.ERROR, { title = "Move File" })
+					return
+				end
+
+				local success, err = os.rename(source_path, dest_path)
+				if success then
+					vim.notify("🚚 Moved '" .. source_name .. "' to:\n" .. target_dir, vim.log.levels.INFO, { title = "Move File" })
+					pcall(function()
+						require("neo-tree.sources.manager").refresh("filesystem")
+					end)
+				else
+					vim.notify("Error moving file: " .. tostring(err), vim.log.levels.ERROR, { title = "Move File" })
+				end
+			end
+
+			map("n", "O", execute_move)
+			map("n", "o", execute_move)
+			map("i", "<C-o>", execute_move)
+
+			local create_item = function()
+				actions.close(prompt_bufnr)
+				vim.schedule(function()
+					vim.ui.input({ prompt = "Create folder to move into (add '/' at end): " }, function(name)
+						if name and name ~= "" then
+							local full_path = curr_dir .. "/" .. name
+							vim.fn.mkdir(full_path, "p")
+						end
+						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = curr_dir })
+					end)
+				end)
+			end
+			map("n", "a", create_item)
+			map("i", "<C-a>", create_item)
+
+			local go_parent = function()
+				local parent = vim.fn.fnamemodify(curr_dir, ":h")
+				if parent and parent ~= curr_dir then
+					actions.close(prompt_bufnr)
+					vim.schedule(function()
+						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = parent })
+					end)
+				end
+			end
+			map("n", "h", go_parent)
+			map("n", "<BS>", go_parent)
+
+			local drill_in = function()
+				local selection = action_state.get_selected_entry()
+				if selection and selection.value and selection.value.is_dir then
+					actions.close(prompt_bufnr)
+					vim.schedule(function()
+						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = selection.value.path })
+					end)
+				end
+			end
+			map("n", "l", drill_in)
+
+			return true
+		end,
+	}):find()
+end
+
 -- Open native file explorer rooted at a WSL distro's filesystem (Windows only)
 function M.open_wsl_explorer()
+
 	local wsl = require("config.krs.wsl")
 	if not wsl.available() then
 		vim.notify("WSL is not available on this system", vim.log.levels.WARN, { title = "WSL Explorer" })

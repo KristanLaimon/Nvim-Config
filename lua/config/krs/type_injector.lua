@@ -758,6 +758,33 @@ function M.open_menu()
 	end
 end
 
+-- Add the .krsnvim/types.d.ts entry to the project's .gitignore. That file is
+-- regenerated locally on every LspAttach (see M.setup below) from whatever
+-- schema store paths resolve on the current machine, so it must never be
+-- committed -- only types.json (the portable list of active schema names) is
+-- meant to travel with the repo.
+function M.gitignore_generated(root)
+	root = root or M.get_project_root()
+	local norm_root = vim.fs.normalize(root):gsub("\\", "/")
+	local gitignore = norm_root .. "/.gitignore"
+	local entry = M.REF_FILE
+
+	local lines = {}
+	if vim.fn.filereadable(gitignore) == 1 then
+		lines = vim.fn.readfile(gitignore)
+		for _, l in ipairs(lines) do
+			if vim.trim(l) == entry then
+				vim.notify(entry .. " ya está en .gitignore", vim.log.levels.INFO, { title = "KRS Type Injector" })
+				return
+			end
+		end
+	end
+
+	table.insert(lines, entry)
+	vim.fn.writefile(lines, gitignore)
+	vim.notify("Agregado '" .. entry .. "' a .gitignore", vim.log.levels.INFO, { title = "KRS Type Injector" })
+end
+
 -- Initialize KRS Type Injector autocommands & user commands
 function M.setup()
 	vim.api.nvim_create_user_command("TypeInjector", function()
@@ -767,6 +794,10 @@ function M.setup()
 	vim.api.nvim_create_user_command("KrsTypes", function()
 		M.open_menu()
 	end, { desc = "Open KRS Modular Type Injector Menu" })
+
+	vim.api.nvim_create_user_command("KrsGitignoreGenerated", function()
+		M.gitignore_generated()
+	end, { desc = "Add .krsnvim/types.d.ts (auto-generated) to .gitignore" })
 
 	-- Autocommand: Apply project type definitions when LSP attaches
 	local group = vim.api.nvim_create_augroup("KrsTypeInjectorGroup", { clear = true })

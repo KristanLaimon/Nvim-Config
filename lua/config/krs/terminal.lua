@@ -231,10 +231,14 @@ function M.setup()
 		end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
 	end
 
-	-- Ctrl + ; to toggle open/hidden for currently selected terminal
-	vim.keymap.set({ "n", "i", "t" }, "<C-;>", function()
-		M.toggle_selected_terminal()
-	end, { noremap = true, silent = true, desc = "Toggle Selected Terminal" })
+	-- Alt + ; to toggle open/hidden for currently selected terminal
+	local term_toggle_keys = { "<A-;>", "<C-A-;>" }
+	for _, k in ipairs(term_toggle_keys) do
+		vim.keymap.set({ "n", "i", "t" }, k, function()
+			M.toggle_selected_terminal()
+		end, { noremap = true, silent = true, desc = "Toggle Selected Terminal" })
+	end
+
 
 	-- Allow standard navigation with Ctrl+W from inside terminal
 	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], { noremap = true, silent = true })

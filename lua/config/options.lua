@@ -119,6 +119,7 @@ require("config.krs.buffer_cleaner").setup()
 require("config.krs.file_explorer").setup()
 require("config.krs.context_help").setup()
 require("config.krs.type_injector").setup()
+require("config.krs.input_modal").setup_ui_input_override()
 
 
 

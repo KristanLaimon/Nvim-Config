@@ -94,27 +94,29 @@ local function get_current_buffers()
 	return buflist
 end
 
--- Configure Neovim session options
+-- Configure Neovim session options (EXCLUDE terminal so workspaces never save terminal splits/buffers)
 local function set_session_options()
-	vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
+	vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,localoptions"
 end
 
 -- Save current session to .vim file. Returns ok, err, neotree_was_open
 local function save_session_file(session_path)
 	set_session_options()
 
-	-- Temporarily close Neo-tree before saving session to prevent split conflicts
+	-- Temporarily close Neo-tree and any active terminal windows before saving session
 	local neotree_was_open = false
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		local buf = vim.api.nvim_win_get_buf(win)
-		if vim.bo[buf].filetype == "neo-tree" then
-			neotree_was_open = true
-			break
+		if vim.api.nvim_win_is_valid(win) then
+			local buf = vim.api.nvim_win_get_buf(win)
+			local ft = vim.bo[buf].filetype
+			local bt = vim.bo[buf].buftype
+			if ft == "neo-tree" then
+				neotree_was_open = true
+				pcall(vim.cmd, "Neotree close")
+			elseif bt == "terminal" or ft == "TaskRunner" or ft == "toggleterm" then
+				pcall(vim.api.nvim_win_close, win, true)
+			end
 		end
-	end
-
-	if neotree_was_open then
-		pcall(vim.cmd, "Neotree close")
 	end
 
 	local ok, err = pcall(vim.cmd, "mksession! " .. vim.fn.fnameescape(session_path))
@@ -125,6 +127,7 @@ local function save_session_file(session_path)
 
 	return ok, err, neotree_was_open
 end
+
 
 -- Logic to save a workspace
 function M.save_workspace(name, callback)
@@ -271,7 +274,7 @@ function M.load_workspace(ws_or_identifier)
 	pcall(vim.cmd, "Neotree close")
 
 	for _, b in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buftype ~= "terminal" then
+		if vim.api.nvim_buf_is_valid(b) then
 			pcall(vim.api.nvim_buf_delete, b, { force = true })
 		end
 	end
@@ -282,9 +285,17 @@ function M.load_workspace(ws_or_identifier)
 		return false
 	end
 
+	-- Clean up any terminal buffers or windows that might have been saved in older session files
+	for _, b in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(b) and (vim.bo[b].buftype == "terminal" or vim.bo[b].filetype == "TaskRunner") then
+			pcall(vim.api.nvim_buf_delete, b, { force = true })
+		end
+	end
+
 	if target.neotree_open then
 		pcall(vim.cmd, "Neotree show")
 	end
+
 
 	target.updated_at = os.time()
 	save_index(index)

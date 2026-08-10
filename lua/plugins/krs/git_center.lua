@@ -96,7 +96,7 @@ local function run_git(args, cwd)
 	return collect_git(spawn_git(args, cwd))
 end
 
--- Obtener métricas y metadatos completos de Git
+-- Obtener métricas y metadatos completos de Git de forma ultra rápida (< 30ms)
 function M.get_git_info()
 	local cwd = vim.fn.getcwd()
 	if vim.fn.isdirectory(cwd .. "/.git") == 0 then
@@ -106,20 +106,52 @@ function M.get_git_info()
 		end
 	end
 
-	-- Lanzar todos los procesos Git en paralelo (evita 3s+ de spawns secuenciales en Windows)
+	-- Ejecutar status y numstats en paralelo
+	local p_status = spawn_git({ "status", "--porcelain=v1", "-b" })
 	local p_numstat = spawn_git({ "diff", "--numstat" })
 	local p_numstat_cached = spawn_git({ "diff", "--cached", "--numstat" })
-	local p_staged = spawn_git({ "diff", "--name-only", "--cached" })
-	local p_unstaged = spawn_git({ "diff", "--name-only" })
-	local p_untracked = spawn_git({ "ls-files", "--others", "--exclude-standard" })
-	local p_graph = spawn_git({ "log", "--graph", "--oneline", "--all", "--decorate", "--color=never", "-n", "12" })
-	local p_branch = spawn_git({ "branch", "--show-current" })
 
-	-- 1. Branch
-	local branch_output = collect_git(p_branch)
-	local branch = (branch_output and #branch_output > 0 and branch_output[1] ~= "") and branch_output[1] or "HEAD (Detached)"
+	local status_lines = collect_git(p_status)
+	local branch = "HEAD (Detached)"
+	local upstream = nil
+	local staged_files = {}
+	local unstaged_files = {}
+	local untracked_files = {}
 
-	-- 2. Lines + and -
+	if #status_lines > 0 then
+		local header = status_lines[1]
+		if header:sub(1, 2) == "##" then
+			local b_info = header:sub(4)
+			local b_name, up = b_info:match("^([^%.]+)%.%.%.(%S+)")
+			if b_name then
+				branch = b_name
+				upstream = up
+			else
+				branch = b_info:match("^([^%s]+)") or b_info
+			end
+		end
+
+		for i = 2, #status_lines do
+			local line = status_lines[i]
+			if #line >= 4 then
+				local s1 = line:sub(1, 1)
+				local s2 = line:sub(2, 2)
+				local f = line:sub(4):gsub("^\"", ""):gsub("\"$", "")
+
+				if s1 == "?" and s2 == "?" then
+					table.insert(untracked_files, f)
+				else
+					if s1 ~= " " and s1 ~= "?" then
+						table.insert(staged_files, f)
+					end
+					if s2 ~= " " and s2 ~= "?" then
+						table.insert(unstaged_files, f)
+					end
+				end
+			end
+		end
+	end
+
 	local numstat = collect_git(p_numstat)
 	local numstat_cached = collect_git(p_numstat_cached)
 	local added_lines = 0
@@ -140,26 +172,14 @@ function M.get_git_info()
 		end
 	end
 
-	-- 3. Staged Files
-	local staged_files = collect_git(p_staged)
-
-	-- 4. Unstaged Files
-	local unstaged_files = collect_git(p_unstaged)
-
-	-- 5. Untracked Files
-	local untracked_files = collect_git(p_untracked)
-
-	-- 6. Linear Git Graph
-	local graph = collect_git(p_graph)
-
 	return {
 		branch = branch,
+		upstream = upstream,
 		added = added_lines,
 		deleted = deleted_lines,
 		staged = staged_files,
 		unstaged = unstaged_files,
 		untracked = untracked_files,
-		graph = graph,
 	}
 end
 
@@ -170,7 +190,8 @@ local function build_panel_content(info, left_width)
 	local section_lines = {}
 
 	-- HEADER
-	table.insert(lines, string.format(" 🌿 Branch: %s", info.branch))
+	local up_str = info.upstream and (" (Tracking " .. info.upstream .. ")") or ""
+	table.insert(lines, string.format(" 🌿 Branch: %s%s", info.branch, up_str))
 	table.insert(lines, string.format(" 📊 Changes: +%d -%d lines", info.added, info.deleted))
 	table.insert(lines, string.format(" 🟢 Staged: %d  |  🔴 Unstaged: %d  |  ❓ Untracked: %d", #info.staged, #info.unstaged, #info.untracked))
 	table.insert(lines, string.rep("═", left_width - 2))
@@ -181,7 +202,7 @@ local function build_panel_content(info, left_width)
 	table.insert(lines, "   [c] Title:       " .. (M.commit_data.title ~= "" and M.commit_data.title or "<Press c to edit in Vim>"))
 	table.insert(lines, "   [m] Description: " .. (M.commit_data.description ~= "" and M.commit_data.description or "<Optional - Press m>"))
 	table.insert(lines, "   [t] Tag:         " .. (M.commit_data.tag ~= "" and M.commit_data.tag or "<Optional - Press t>"))
-	table.insert(lines, "   🚀 [C] Execute Commit & Tag")
+	table.insert(lines, "   🚀 [C] Execute Commit & Tag  |  [P] Push Remote")
 	table.insert(lines, string.rep("─", left_width - 2))
 
 	-- SECTION 2: Staged Files
@@ -218,19 +239,19 @@ local function build_panel_content(info, left_width)
 	end
 	table.insert(lines, string.rep("─", left_width - 2))
 
-	-- SECTION 4: Linear Git Graph
+	-- SECTION 4: Quick Actions & Help
 	section_lines[4] = #lines + 1
-	table.insert(lines, " 📜 [SECTION 4: LINEAR GIT GRAPH & TAGS] (Press 4)")
-	if info.graph and #info.graph > 0 then
-		for _, g_line in ipairs(info.graph) do
-			table.insert(lines, "   " .. g_line)
-		end
-	else
-		table.insert(lines, "   (no commit history)")
-	end
+	table.insert(lines, " ⚡ [SECTION 4: QUICK ACTIONS & SHORTCUTS] (Press 4)")
+	table.insert(lines, "   [s] Stage file  |  [S] Stage All")
+	table.insert(lines, "   [u] Unstage file  |  [U] Unstage All")
+	table.insert(lines, "   [r] Restore File (Confirm)  |  [R] Restore Section (Confirm)")
+	table.insert(lines, "   [P] Push to Remote (Confirm & Upstream Picker)")
+	table.insert(lines, "   [c] Edit Commit Title  |  [C] Execute Commit & Tag")
+	table.insert(lines, "   [Tab] Switch panel focus  |  [Ctrl+Shift+J/K] Scroll preview")
 
 	return lines, line_map, section_lines
 end
+
 
 -- Formateador Estilo VSCode para las diferencias (Omite cabeceras molestas de terminal y solo muestra fragmentos/hunks cambiados)
 local function format_vscode_diff(raw_lines, is_untracked)
@@ -597,27 +618,49 @@ function M.open_git_center()
 
 	-- [c]: Editar Título del Commit
 	vim.keymap.set("n", "c", function()
-		open_vim_editor_modal("Commit Title", M.commit_data.title, function(input)
-			M.commit_data.title = input
-			refresh()
-		end)
+		require("config.krs.input_modal").open({
+			label = "Commit Title",
+			default_value = M.commit_data.title,
+			relative = "editor",
+			callback = function(ok, input)
+				if ok then
+					M.commit_data.title = input
+					refresh()
+				end
+			end,
+		})
 	end, key_opts)
 
 	-- [m]: Editar Descripción del Commit
 	vim.keymap.set("n", "m", function()
-		open_vim_editor_modal("Commit Description", M.commit_data.description, function(input)
-			M.commit_data.description = input
-			refresh()
-		end)
+		require("config.krs.input_modal").open({
+			label = "Commit Description",
+			default_value = M.commit_data.description,
+			relative = "editor",
+			callback = function(ok, input)
+				if ok then
+					M.commit_data.description = input
+					refresh()
+				end
+			end,
+		})
 	end, key_opts)
 
 	-- [t]: Editar Tag
 	vim.keymap.set("n", "t", function()
-		open_vim_editor_modal("Optional Tag (e.g. v1.0.0)", M.commit_data.tag, function(input)
-			M.commit_data.tag = input
-			refresh()
-		end)
+		require("config.krs.input_modal").open({
+			label = "Optional Tag (e.g. v1.0.0)",
+			default_value = M.commit_data.tag,
+			relative = "editor",
+			callback = function(ok, input)
+				if ok then
+					M.commit_data.tag = input
+					refresh()
+				end
+			end,
+		})
 	end, key_opts)
+
 
 	-- [s] en Normal: Stage archivo seleccionado
 	vim.keymap.set("n", "s", function()
@@ -714,8 +757,167 @@ function M.open_git_center()
 		end
 	end, key_opts)
 
-	-- [r]: Refrescar
-	vim.keymap.set("n", "r", refresh, key_opts)
+	-- [r] en Normal: Restore / Discard changes for single file (con prompt de confirmación)
+	vim.keymap.set("n", "r", function()
+		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
+		local item = M.line_map[row]
+		if not item or not item.file then
+			vim.notify("Please place cursor over a file to restore", vim.log.levels.WARN, { title = "Git Center" })
+			return
+		end
+
+		local confirm = vim.fn.confirm("⚠️ Discard changes / Restore '" .. item.file .. "'?", "&Yes\n&No", 2)
+		if confirm ~= 1 then
+			return
+		end
+
+		if item.type == "staged" then
+			run_git({ "restore", "--staged", "--", item.file })
+			run_git({ "restore", "--", item.file })
+		elseif item.type == "unstaged" then
+			run_git({ "restore", "--", item.file })
+		elseif item.type == "untracked" then
+			if vim.fn.isdirectory(item.file) == 1 then
+				vim.fn.delete(item.file, "rf")
+			else
+				os.remove(item.file)
+			end
+		end
+
+		refresh()
+		vim.notify("↺ Restored: " .. item.file, vim.log.levels.INFO, { title = "Git Center" })
+	end, key_opts)
+
+	-- [R] en Normal: Restore / Discard all changes in current section (staged or unstaged/untracked)
+	vim.keymap.set("n", "R", function()
+		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
+		local item = M.line_map[row]
+
+		local is_staged_section = false
+		if (item and item.type == "staged") or (row >= (section_lines[2] or 0) and row < (section_lines[3] or 999)) then
+			is_staged_section = true
+		end
+
+		local sec_title = is_staged_section and "STAGED FILES" or "UNSTAGED & UNTRACKED FILES"
+		local confirm = vim.fn.confirm("⚠️ RESTORE ALL " .. sec_title .. "? Changes will be permanently lost!", "&Yes\n&No", 2)
+		if confirm ~= 1 then
+			return
+		end
+
+		if is_staged_section then
+			run_git({ "restore", "--staged", "." })
+			run_git({ "restore", "." })
+		else
+			run_git({ "restore", "." })
+			run_git({ "clean", "-fd" })
+		end
+
+		refresh()
+		vim.notify("↺ Restored all " .. sec_title:lower(), vim.log.levels.INFO, { title = "Git Center" })
+	end, key_opts)
+
+	-- [P] (Shift + p): Push to remote (con confirmación y selector de rama remota)
+	vim.keymap.set("n", "P", function()
+		local cur_info = M.get_git_info()
+		local branch = cur_info and cur_info.branch or "HEAD"
+
+		local confirm = vim.fn.confirm("🚀 Execute 'git push' for branch '" .. branch .. "'?", "&Yes\n&No", 1)
+		if confirm ~= 1 then
+			return
+		end
+
+		local function perform_push(remote_name, target_branch, set_u)
+			vim.notify("🚀 Pushing to " .. remote_name .. "/" .. target_branch .. "...", vim.log.levels.INFO, { title = "Git Center" })
+			local push_args = { "push" }
+			if set_u then
+				table.insert(push_args, "-u")
+			end
+			table.insert(push_args, remote_name)
+			table.insert(push_args, branch .. ":" .. target_branch)
+
+			local res = run_git(push_args)
+			local res_str = table.concat(res, "\n")
+			if res_str:match("fatal") or res_str:match("error") then
+				vim.notify("❌ Push failed:\n" .. res_str, vim.log.levels.ERROR, { title = "Git Center" })
+			else
+				vim.notify("✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!", vim.log.levels.INFO, { title = "Git Center" })
+			end
+			refresh()
+		end
+
+		local remotes = run_git({ "remote" })
+		if #remotes == 0 then
+			require("config.krs.input_modal").open({
+				label = "No remote found. Add remote URL (origin)",
+				default_value = "",
+				relative = "editor",
+				callback = function(ok, remote_url)
+					if ok and remote_url and remote_url ~= "" then
+						run_git({ "remote", "add", "origin", remote_url })
+						perform_push("origin", branch, true)
+					end
+				end,
+			})
+			return
+		end
+
+		local main_remote = remotes[1] or "origin"
+
+		local upstream_res = run_git({ "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}" })
+		local has_upstream = #upstream_res > 0 and not upstream_res[1]:match("fatal") and not upstream_res[1]:match("error")
+
+		if has_upstream then
+			vim.notify("🚀 Pushing to upstream...", vim.log.levels.INFO, { title = "Git Center" })
+			local res = run_git({ "push" })
+			local res_str = table.concat(res, "\n")
+			if res_str:match("fatal") or res_str:match("error") then
+				vim.notify("❌ Push failed:\n" .. res_str, vim.log.levels.ERROR, { title = "Git Center" })
+			else
+				vim.notify("✅ Push successful!", vim.log.levels.INFO, { title = "Git Center" })
+			end
+			refresh()
+			return
+		end
+
+		run_git({ "fetch", main_remote })
+		local raw_rbranches = run_git({ "branch", "-r" })
+		local remote_branches = {}
+		for _, rb in ipairs(raw_rbranches) do
+			local clean_b = rb:gsub("^%s*", ""):gsub("%s*$", "")
+			if clean_b ~= "" and not clean_b:match("%->") then
+				table.insert(remote_branches, clean_b)
+			end
+		end
+
+		local choices = {
+			"1. 🚀 Push and set upstream to " .. main_remote .. "/" .. branch .. " (git push -u " .. main_remote .. " " .. branch .. ")",
+		}
+		for i, rb in ipairs(remote_branches) do
+			table.insert(choices, string.format("%d. 🌿 Push to existing remote branch: %s", i + 1, rb))
+		end
+
+		pcall(vim.ui.select, choices, {
+			prompt = "No upstream branch set for '" .. branch .. "'. Select target branch:",
+		}, function(choice, idx)
+			if not choice or not idx then
+				return
+			end
+			if idx == 1 then
+				perform_push(main_remote, branch, true)
+			else
+				local chosen_rb = remote_branches[idx - 1]
+				if chosen_rb then
+					local target_b = chosen_rb:gsub("^[^/]+/", "")
+					perform_push(main_remote, target_b, true)
+				end
+			end
+		end)
+	end, key_opts)
+
+	-- [<F5>] / [<C-r>]: Refrescar Git Center
+	vim.keymap.set("n", "<F5>", refresh, key_opts)
+	vim.keymap.set("n", "<C-r>", refresh, key_opts)
+
 end
 
 _G.GitCenter = M
