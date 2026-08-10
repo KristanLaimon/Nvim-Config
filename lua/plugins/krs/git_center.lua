@@ -63,8 +63,8 @@ function M.toggle_git_center()
 end
 
 
--- Ejecutar comando Git nativo utilizando vim.system (Robusto en Windows/Linux, sin fallos de quoting)
-local function run_git(args, cwd)
+-- Lanzar proceso Git sin bloquear (permite correr varios en paralelo)
+local function spawn_git(args, cwd)
 	cwd = cwd or vim.fn.getcwd()
 	local cmd = { "git", "-C", cwd }
 
@@ -78,12 +78,22 @@ local function run_git(args, cwd)
 		end
 	end
 
-	local obj = vim.system(cmd, { text = true }):wait()
+	return vim.system(cmd, { text = true })
+end
+
+-- Esperar un proceso lanzado con spawn_git y parsear su salida en líneas
+local function collect_git(proc)
+	local obj = proc:wait()
 	local stdout = obj.stdout or ""
 	if stdout == "" then
 		return {}
 	end
 	return vim.split(stdout, "[\r\n]+", { trimempty = true })
+end
+
+-- Ejecutar comando Git nativo de forma síncrona (para acciones puntuales: stage, commit, etc.)
+local function run_git(args, cwd)
+	return collect_git(spawn_git(args, cwd))
 end
 
 -- Obtener métricas y metadatos completos de Git
@@ -96,13 +106,22 @@ function M.get_git_info()
 		end
 	end
 
+	-- Lanzar todos los procesos Git en paralelo (evita 3s+ de spawns secuenciales en Windows)
+	local p_numstat = spawn_git({ "diff", "--numstat" })
+	local p_numstat_cached = spawn_git({ "diff", "--cached", "--numstat" })
+	local p_staged = spawn_git({ "diff", "--name-only", "--cached" })
+	local p_unstaged = spawn_git({ "diff", "--name-only" })
+	local p_untracked = spawn_git({ "ls-files", "--others", "--exclude-standard" })
+	local p_graph = spawn_git({ "log", "--graph", "--oneline", "--all", "--decorate", "--color=never", "-n", "12" })
+	local p_branch = spawn_git({ "branch", "--show-current" })
+
 	-- 1. Branch
-	local branch_output = run_git({ "branch", "--show-current" })
+	local branch_output = collect_git(p_branch)
 	local branch = (branch_output and #branch_output > 0 and branch_output[1] ~= "") and branch_output[1] or "HEAD (Detached)"
 
 	-- 2. Lines + and -
-	local numstat = run_git({ "diff", "--numstat" })
-	local numstat_cached = run_git({ "diff", "--cached", "--numstat" })
+	local numstat = collect_git(p_numstat)
+	local numstat_cached = collect_git(p_numstat_cached)
 	local added_lines = 0
 	local deleted_lines = 0
 
@@ -122,16 +141,16 @@ function M.get_git_info()
 	end
 
 	-- 3. Staged Files
-	local staged_files = run_git({ "diff", "--name-only", "--cached" })
+	local staged_files = collect_git(p_staged)
 
 	-- 4. Unstaged Files
-	local unstaged_files = run_git({ "diff", "--name-only" })
+	local unstaged_files = collect_git(p_unstaged)
 
 	-- 5. Untracked Files
-	local untracked_files = run_git({ "ls-files", "--others", "--exclude-standard" })
+	local untracked_files = collect_git(p_untracked)
 
 	-- 6. Linear Git Graph
-	local graph = run_git({ "log", "--graph", "--oneline", "--all", "--decorate", "--color=never", "-n", "12" })
+	local graph = collect_git(p_graph)
 
 	return {
 		branch = branch,

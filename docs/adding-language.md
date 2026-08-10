@@ -62,7 +62,7 @@ require("mason-lspconfig").setup({
 ---
 
 ### Step 4: (Optional) Configure Auto-Formatting in `lua/plugins/lsp/formatting.lua`
-To enable auto-formatting on save or via `<leader>f`, open [`lua/plugins/lsp/formatting.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/formatting.lua) and add the filetype to `formatters_by_ft`:
+To enable auto-formatting on save or via `<leader>ff`, open [`lua/plugins/lsp/formatting.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/formatting.lua) and add the filetype to `formatters_by_ft`:
 
 ```lua
 formatters_by_ft = {
@@ -73,6 +73,10 @@ formatters_by_ft = {
     python = { "isort", "black", stop_after_first = true },
 }
 ```
+
+> ⚠️ **Astro is a special case.** `biome` cannot format `.astro` template markup at all (silent no-op), so `astro` is hardcoded to `{ "prettier" }` only — no `biome`/`prettierd`, and no project `.prettierrc` required (the `prettier` formatter's `condition` bypasses the rc-file check just for `ctx.filetype == "astro"`). It also always passes `--plugin prettier-plugin-astro`, which must be installed as a devDependency in every Astro project (`bun add -D prettier prettier-plugin-astro`) — otherwise prettier still fails to parse `.astro` files.
+>
+> To customize astro's prettier options (tabWidth, quotes, etc.) without turning `biome`-formatted filetypes (ts/js/css/svelte/...) onto prettier project-wide, don't add a generic `.prettierrc` — add `.prettierrc.astro.json` instead. Only astro's `args` function looks for that filename; every other filetype's `condition` only recognizes the standard `.prettierrc*` names, so they stay on `biome`.
 
 ---
 

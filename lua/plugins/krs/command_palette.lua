@@ -52,6 +52,14 @@ M.commands = {
 	{ name = "🧩 Plugin Manager (Lazy)", cmd = "Lazy", category = "Config" },
 	{ name = "🔄 Reload Neovim Configuration", cmd = "ReloadConfig", category = "Config" },
 	{ name = "🚪 Quit Neovim (Quit All)", cmd = "qa", category = "System" },
+
+	-- --------------------------------------------------------------------------
+	-- 🎮 Discord Rich Presence (cord.nvim)
+	-- --------------------------------------------------------------------------
+	{ name = "🎮 Discord: Toggle", cmd = "Cord toggle", category = "Discord" },
+	{ name = "🎮 Discord: Reconnect", cmd = "Cord reconnect", category = "Discord" },
+	{ name = "🎮 Discord: Shutdown", cmd = "Cord shutdown", category = "Discord" },
+	{ name = "🎮 Discord: Status", cmd = "Cord status", category = "Discord" },
 }
 
 -- Public function to dynamically add commands from any plugin or config

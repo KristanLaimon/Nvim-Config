@@ -99,7 +99,7 @@ local function set_session_options()
 	vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions"
 end
 
--- Save current session to .vim file
+-- Save current session to .vim file. Returns ok, err, neotree_was_open
 local function save_session_file(session_path)
 	set_session_options()
 
@@ -123,7 +123,7 @@ local function save_session_file(session_path)
 		pcall(vim.cmd, "Neotree show")
 	end
 
-	return ok, err
+	return ok, err, neotree_was_open
 end
 
 -- Logic to save a workspace
@@ -154,7 +154,7 @@ function M.save_workspace(name, callback)
 		local id = ws_item and ws_item.id or ("ws_" .. os.time() .. "_" .. math.random(1000, 9999))
 		local session_path = get_storage_dir() .. "/" .. id .. ".vim"
 
-		local ok, err = save_session_file(session_path)
+		local ok, err, neotree_open = save_session_file(session_path)
 		if not ok then
 			vim.notify("Error saving workspace: " .. tostring(err), vim.log.levels.ERROR)
 			return
@@ -168,6 +168,7 @@ function M.save_workspace(name, callback)
 			ws_item.buffers = buffers
 			ws_item.tab_count = tab_count
 			ws_item.session_file = session_path
+			ws_item.neotree_open = neotree_open
 		else
 			ws_item = {
 				id = id,
@@ -179,6 +180,7 @@ function M.save_workspace(name, callback)
 				session_file = session_path,
 				buffers = buffers,
 				tab_count = tab_count,
+				neotree_open = neotree_open,
 			}
 			table.insert(index, 1, ws_item)
 		end
@@ -278,6 +280,10 @@ function M.load_workspace(ws_or_identifier)
 	if not ok then
 		vim.notify("Error loading session: " .. tostring(err), vim.log.levels.ERROR, { title = "KRS Workspaces" })
 		return false
+	end
+
+	if target.neotree_open then
+		pcall(vim.cmd, "Neotree show")
 	end
 
 	target.updated_at = os.time()
@@ -419,6 +425,20 @@ function M.select_workspace()
 
 	local current_cwd = vim.fn.getcwd()
 	local show_all = false
+	do
+		-- No project opened yet (nothing saved under this cwd) -> default to showing everything
+		local index = load_index()
+		local has_for_cwd = false
+		for _, item in ipairs(index) do
+			if item.cwd == current_cwd then
+				has_for_cwd = true
+				break
+			end
+		end
+		if not has_for_cwd then
+			show_all = true
+		end
+	end
 
 	local function get_results()
 		local index = load_index()

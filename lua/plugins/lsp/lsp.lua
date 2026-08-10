@@ -261,7 +261,7 @@ return {
 							{
 								name = "prettierrc.json",
 								description = "Prettier configuration schema",
-								fileMatch = { "prettierrc.json", "prettier.config.json" },
+								fileMatch = { "prettierrc.json", "prettier.config.json", ".prettierrc.astro.json" },
 								url = get_schema_uri("json", "prettierrc.json"),
 							},
 							{
@@ -317,16 +317,33 @@ return {
 		dependencies = { "rafamadriz/friendly-snippets" },
 		version = "*",
 		opts = {
+			-- Never pop the menu when cursor sits inside an empty bracket pair (e.g. right after autopairs inserts "{}")
+			enabled = function()
+				local line = vim.api.nvim_get_current_line()
+				local col = vim.api.nvim_win_get_cursor(0)[2]
+				local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
+				local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
+				if pairs_map[before] == after then
+					return false
+				end
+				return true
+			end,
 			keymap = {
 				preset = "default",
 				["<CR>"] = { "accept", "fallback" },
 				["<C-space>"] = { "show", "show_documentation", "hide_documentation" },
 				["<C-@>"] = { "show", "show_documentation", "hide_documentation" },
+				["<Up>"] = { "select_prev", "fallback" },
+				["<Down>"] = { "select_next", "fallback" },
 			},
 			appearance = { nerd_font_variant = "mono" },
 			completion = {
 				menu = { auto_show = true },
 				documentation = { auto_show = false },
+				trigger = {
+					-- "{" and "[" open bracket-pair snippets on every keystroke otherwise
+					show_on_blocked_trigger_characters = { " ", "\n", "\t", "{", "[", "(" },
+				},
 			},
 			signature = {
 				enabled = true,
@@ -337,6 +354,18 @@ return {
 				implementation = "prefer_rust_with_warning",
 				prebuilt_binaries = {
 					download = true,
+				},
+				sorts = {
+					-- always rank snippets (LSP kind 15) below real completions, regardless of fuzzy score
+					function(a, b)
+						local a_snip, b_snip = a.kind == 15, b.kind == 15
+						if a_snip == b_snip then
+							return nil
+						end
+						return b_snip
+					end,
+					"score",
+					"sort_text",
 				},
 			},
 		},

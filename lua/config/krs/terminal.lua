@@ -13,6 +13,49 @@ local terminals = {} -- Structure: [n] = { buf = number|nil, win = number|nil }
 local selected_terminal = 1 -- Currently selected terminal index (1 by default)
 local code_win = nil -- Origin code window to return with clean focus
 
+-- Persisted terminal split height, so a mouse-dragged resize survives toggling
+local height_file = vim.fn.stdpath("state") .. "/terminal_height"
+
+local function load_saved_height()
+	local f = io.open(height_file, "r")
+	if f then
+		local content = f:read("*a")
+		f:close()
+		local h = tonumber(content)
+		if h and h >= 3 and h <= 100 then
+			return h
+		end
+	end
+	return 10
+end
+
+local terminal_height = load_saved_height()
+
+local function save_height(h)
+	if type(h) == "number" and h >= 3 and h <= 100 and h ~= terminal_height then
+		terminal_height = h
+		local f = io.open(height_file, "w")
+		if f then
+			f:write(tostring(h))
+			f:close()
+		end
+	end
+end
+
+vim.api.nvim_create_autocmd("WinResized", {
+	group = vim.api.nvim_create_augroup("KrsTerminalHeightSaver", { clear = true }),
+	callback = function()
+		for _, winid in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_is_valid(winid) then
+				local bufnr = vim.api.nvim_win_get_buf(winid)
+				if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "terminal" then
+					save_height(vim.api.nvim_win_get_height(winid))
+				end
+			end
+		end
+	end,
+})
+
 -- Build the `:terminal` command, dropping into WSL when cwd lives inside a
 -- WSL distro's filesystem (`\\wsl.localhost\<Distro>\...`) instead of the
 -- default Windows shell.
@@ -115,8 +158,8 @@ function M.open_terminal(n)
 		return
 	end
 
-	-- Create bottom split window (10 lines)
-	vim.cmd("botright 10split")
+	-- Create bottom split window, restoring last dragged height
+	vim.cmd("botright " .. terminal_height .. "split")
 	t.win = vim.api.nvim_get_current_win()
 
 	if is_valid_buf(t.buf) then

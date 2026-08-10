@@ -61,7 +61,7 @@ Mason, Conform and Treesitter are preconfigured to install and manage everything
 | **JSON** | `jsonls` *(SchemaStore auto)* | `prettierd` / `prettier` | `json` |
 | **JavaScript / TS / React** | `ts_ls` | `prettierd` / `prettier` | `javascript`, `typescript`, `tsx` |
 | **HTML / CSS** | `cssls` / `html` | `prettierd` / `prettier` | `html`, `css` |
-| **Svelte / Astro** | `svelte`, `astro` | `prettierd` / `prettier` | `svelte`, `astro` |
+| **Svelte / Astro** | `svelte`, `astro` | `biome` (default) — `.astro` always uses `prettier` (needs `prettier-plugin-astro` installed in the project; biome can't format `.astro` templates at all) | `svelte`, `astro` |
 | **Go** | `gopls` | `gofumpt`, `goimports` | `go`, `gomod`, `gowork`, `gosum` |
 | **C# / .csproj** | `omnisharp` (`.cs`), `lemminx` (`.csproj`, `.props`, `.targets` — treated as XML) | — | `c_sharp` |
 | **YAML / TOML** | `yamlls`, `taplo` | — | `yaml`, `toml` |
@@ -183,7 +183,7 @@ No autocmd/pattern changes needed — it already matches every filetype.
 | `<C-+>` / `<C-=>` | n, i, v, t | Increase font size (`+1pt`, persisted) |
 | `<C-->` | n, i, v, t | Decrease font size (`-1pt`, persisted) |
 | `<C-0>` | n, i, v, t | Reset font size to default (`14pt`) |
-| `<leader>f` | n, v | Format file or selection (LSP / Conform) |
+| `<leader>ff` | n, v | Format file or selection (LSP / Conform) |
 | `<F2>` | n | Rename file on disk (or item inside Neo-tree) |
 | `<C-w>` | n | Close current buffer (VSCode tab-close style) |
 | `<C-_>` | n, v | Comment line (`gcc`) or selection (`gc`) |

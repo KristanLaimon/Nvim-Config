@@ -12,15 +12,16 @@
 -- 3. Stores project-specific schema activations in .krsnvim/types.json (or .nvimkrs).
 -- 4. Applies them per language:
 --      - lua_ls  : Lua.workspace.library, live via didChangeConfiguration
---      - tsgo    : a single generated krs-types.d.ts at the project root, holding
---                  /// <reference path> lines pointing straight into the schema
---                  store. Nothing is installed or copied into the project.
---                  Needs a tsconfig.json/jsconfig.json, since tsgo's inferred
---                  projects ignore the file; a minimal one is created when no
---                  directory above the root has any. Also requires Automatic Type
---                  Acquisition to be off (see lua/plugins/lsp/lsp.lua) or tsgo
---                  supplies its own @types a few seconds after attach and the
---                  enable/disable state means nothing.
+--      - tsgo    : a single generated .krsnvim/types.d.ts holding /// <reference
+--                  path> lines pointing straight into the schema store. Nothing is
+--                  installed or copied into the project. Changes are pushed with
+--                  didChangeWatchedFiles, so toggling applies without a restart.
+--                  Needs a tsconfig.json/jsconfig.json whose `include` lists
+--                  .krsnvim/**/*.d.ts (default globs skip dot-directories); one is
+--                  created, or the glob patched in, when missing. Also requires
+--                  Automatic Type Acquisition to be off (see lua/plugins/lsp/lsp.lua)
+--                  or tsgo supplies its own @types a few seconds after attach and
+--                  the enable/disable state means nothing.
 -- 5. Offers an emergent Telescope popup menu (accessed via Command Palette or :TypeInjector).
 -- ============================================================================
 
@@ -357,18 +358,37 @@ end
 -- undici-types there).
 --
 -- Deactivating removes the file, and with it every injected type.
+--
+-- tsgo is told about the change with workspace/didChangeWatchedFiles rather than
+-- being restarted. The old code ran `:LspRestart tsgo` inside a pcall, but that
+-- command does not exist here (E492) -- the pcall swallowed it and every toggle was
+-- a silent no-op, so nothing took effect until nvim was restarted. The notification
+-- is also instant and keeps the client and its warm project state alive.
 function M.sync_ts_type_links(root, active_names)
 	local norm_root = vim.fs.normalize(root)
 	local ref_file = norm_root .. "/" .. M.REF_FILE
 	local entries = active_schema_entries(active_names or {})
 
+	-- 1 = Created, 3 = Deleted (LSP FileChangeType)
+	local function notify_tsgo(kind, also_config)
+		local changes = { { uri = vim.uri_from_fname(ref_file), type = kind } }
+		if also_config then
+			table.insert(changes, { uri = vim.uri_from_fname(norm_root .. "/tsconfig.json"), type = 1 })
+		end
+		for _, client in ipairs(vim.lsp.get_clients({ name = "tsgo" })) do
+			client:notify("workspace/didChangeWatchedFiles", { changes = changes })
+		end
+	end
+
 	if #entries == 0 then
 		if vim.fn.filereadable(ref_file) == 1 then
 			vim.fn.delete(ref_file)
+			notify_tsgo(3, false)
 		end
 		return
 	end
 
+	local had_config = vim.fn.filereadable(norm_root .. "/tsconfig.json") == 1
 	ensure_ts_project_config(norm_root)
 
 	local ref_dir = vim.fs.dirname(ref_file)
@@ -381,6 +401,8 @@ function M.sync_ts_type_links(root, active_names)
 		table.insert(ref_lines, '/// <reference path="' .. path .. '" />')
 	end
 	vim.fn.writefile(ref_lines, ref_file)
+
+	notify_tsgo(1, not had_config)
 end
 
 -- Live apply active schema settings to running LSP clients
@@ -399,19 +421,10 @@ function M.apply_lsp_settings(root, opts)
 			client.notify("workspace/didChangeConfiguration", { settings = client.config.settings })
 		end
 	end
-	-- 2. Apply to TypeScript / JavaScript.
-	-- Link active schemas into <root>/node_modules/@types, which is the ONLY place
-	-- TypeScript looks by default. A generated d.ts full of /// <reference path> is
-	-- inert: that file is never part of an inferred project's program, so tsgo never
-	-- reads it. Directory junctions are used on Windows (no admin rights needed).
+	-- 2. Apply to TypeScript / JavaScript: rewrite the generated reference file and
+	-- tell tsgo it changed. sync_ts_type_links handles the notification itself, so
+	-- toggling takes effect immediately without restarting the client.
 	M.sync_ts_type_links(root, active_data.typescript_javascript)
-
-	-- Restart tsgo ONLY when explicitly requested (e.g. from user menu toggle)
-	if opts.restart_tsgo then
-		vim.schedule(function()
-			pcall(vim.cmd, "LspRestart tsgo")
-		end)
-	end
 end
 
 -- Asynchronously install npm type package into /nvim-data/schemas-langs/typescript_javascript/<schema_name>
@@ -479,7 +492,7 @@ function M.install_npm_types(input_pkg, callback)
 					M.save_project_types(root, active_data)
 				end
 
-				M.apply_lsp_settings(root, { restart_tsgo = true })
+				M.apply_lsp_settings(root)
 
 				local ver_str = M.get_schema_version("typescript_javascript", schema_folder) or ""
 				vim.notify("✅ Successfully installed " .. full_npm_pkg .. " " .. ver_str, vim.log.levels.INFO, { title = "KRS Type Injector" })
@@ -513,7 +526,7 @@ function M.delete_schema(lang, schema_name, callback)
 	end
 	active_data[lang] = new_list
 	M.save_project_types(root, active_data)
-	M.apply_lsp_settings(root, { restart_tsgo = true })
+	M.apply_lsp_settings(root)
 
 	vim.notify("🗑️ Deleted schema '" .. schema_name .. "'", vim.log.levels.INFO, { title = "KRS Type Injector" })
 	if callback then callback() end
@@ -610,7 +623,7 @@ function M.open_menu()
 									table.sort(new_list)
 									active_data[lang] = new_list
 									M.save_project_types(root, active_data)
-									M.apply_lsp_settings(root, { restart_tsgo = true })
+									M.apply_lsp_settings(root)
 									vim.notify(
 										"Schema '" .. selected_item.name .. "' is now " .. (active_set[selected_item.name] and "ACTIVE 🟢" or "INACTIVE 🔴"),
 										vim.log.levels.INFO,
@@ -653,7 +666,7 @@ function M.open_menu()
 							table.sort(new_list)
 							active_data[lang] = new_list
 							M.save_project_types(root, active_data)
-							M.apply_lsp_settings(root, { restart_tsgo = true })
+							M.apply_lsp_settings(root)
 						elseif choice:find("2.") then
 							vim.ui.input({ prompt = "Enter version: " }, function(v)
 								if v then M.install_npm_types("@types/" .. selected_item.name .. "@" .. v) end

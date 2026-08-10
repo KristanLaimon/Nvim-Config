@@ -79,8 +79,13 @@ end
 
 function M.setup()
 	vim.keymap.set("n", "?", function()
+		-- Leave "?" as native backward-search in normal code buffers
+		if M.get_context() == "editor" then
+			return "?"
+		end
 		M.show_help()
-	end, { noremap = true, silent = true, desc = "Context Help" })
+		return ""
+	end, { noremap = true, silent = true, expr = true, desc = "Context Help" })
 
 	vim.keymap.set("n", "<F1>", function()
 		M.show_help()

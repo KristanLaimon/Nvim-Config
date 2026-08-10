@@ -150,6 +150,41 @@ local function cursor_ui_select(items, opts, on_choice)
 	local prompt = opts.prompt or "Available Code Actions:"
 	prompt = prompt:gsub("^%s*", ""):gsub("%s*$", "")
 
+	-- Sort so preferred / quickfix actions surface first instead of raw LSP order
+	local kind_priority = {
+		quickfix = 1,
+		["refactor.rewrite"] = 2,
+		refactor = 3,
+		["source.fixAll"] = 4,
+		["source.organizeImports"] = 5,
+		source = 6,
+	}
+	local order = {}
+	for i in ipairs(items) do
+		order[i] = i
+	end
+	table.sort(order, function(a, b)
+		local ia, ib = items[a], items[b]
+		local action_a = ia.action or ia
+		local action_b = ib.action or ib
+		local pref_a = action_a.isPreferred and 0 or 1
+		local pref_b = action_b.isPreferred and 0 or 1
+		if pref_a ~= pref_b then
+			return pref_a < pref_b
+		end
+		local kind_a = kind_priority[action_a.kind] or 99
+		local kind_b = kind_priority[action_b.kind] or 99
+		if kind_a ~= kind_b then
+			return kind_a < kind_b
+		end
+		return a < b
+	end)
+	local sorted_items = {}
+	for i, idx in ipairs(order) do
+		sorted_items[i] = items[idx]
+	end
+	items = sorted_items
+
 	local formatted_items = {}
 	for i, item in ipairs(items) do
 		local text = opts.format_item and opts.format_item(item) or tostring(item)
@@ -203,6 +238,13 @@ local function cursor_ui_select(items, opts, on_choice)
 	end
 
 	local function confirm_choice()
+		local ok, cursor = pcall(vim.api.nvim_win_get_cursor, win)
+		if ok then
+			local idx = cursor[1] - 2
+			if idx >= 1 and idx <= #items then
+				selected_idx = idx
+			end
+		end
 		close_win()
 		if on_choice and items[selected_idx] then
 			on_choice(items[selected_idx], selected_idx)
@@ -431,7 +473,7 @@ vim.keymap.set({ "n", "i", "v" }, "<leader>fw", function()
 	require("config.krs.file_explorer").open_wsl_explorer()
 end, { noremap = true, silent = true, desc = "Open Floating WSL File Explorer" })
 
-vim.keymap.set({ "n", "v" }, "<leader>f", function()
+vim.keymap.set({ "n", "v" }, "<leader>ff", function()
 	require("conform").format({ async = true, lsp_fallback = true })
 end, { desc = "Format file or range" })
 
@@ -491,11 +533,114 @@ vim.keymap.set(
 -- Open/Close (Sidebar)
 vim.keymap.set("n", "<C-S-Space>", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
 
--- F2: rename. Inside neo-tree uses its rename; in normal buffer renames file on disk.
+-- Floating inline rename box: opens a real (vim-editable) 1-line buffer next
+-- to the symbol, prefilled with its current name. `:w` confirms and fires
+-- the LSP rename; <Esc> or closing the window cancels.
+local function lsp_rename_float()
+	local old_name = vim.fn.expand("<cword>")
+	if old_name == "" then
+		return
+	end
+
+	local orig_win = vim.api.nvim_get_current_win()
+	local line = vim.api.nvim_get_current_line()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local col = cursor[2]
+	local start_col = col
+	while start_col > 0 and line:sub(start_col, start_col):match("[%w_]") do
+		start_col = start_col - 1
+	end
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[buf].buftype = "acwrite"
+	vim.bo[buf].bufhidden = "wipe"
+	vim.bo[buf].swapfile = false
+	vim.bo[buf].filetype = "krsrename"
+	vim.api.nvim_buf_set_name(buf, "Rename: " .. old_name)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, { old_name })
+
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "cursor",
+		row = 1,
+		col = -(col - start_col),
+		width = math.max(#old_name + 4, 12),
+		height = 1,
+		style = "minimal",
+		border = "rounded",
+		title = " Rename ",
+		title_pos = "center",
+	})
+
+	vim.cmd("startinsert!")
+
+	local min_width = math.max(#old_name + 4, 12)
+	local function resize()
+		if not vim.api.nvim_win_is_valid(win) then
+			return
+		end
+		local text = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
+		vim.api.nvim_win_set_config(win, { width = math.max(#text + 4, min_width) })
+	end
+
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
+		buffer = buf,
+		callback = resize,
+	})
+
+	local function cancel()
+		if vim.api.nvim_win_is_valid(win) then
+			vim.bo[buf].modified = false
+			vim.api.nvim_win_close(win, true)
+		end
+	end
+
+	vim.keymap.set("n", "<Esc>", cancel, { buffer = buf, silent = true })
+
+	local function confirm()
+		vim.cmd("write")
+	end
+	vim.keymap.set({ "n", "i" }, "<CR>", confirm, { buffer = buf, silent = true })
+
+	vim.api.nvim_create_autocmd("BufWriteCmd", {
+		buffer = buf,
+		callback = function()
+			vim.bo[buf].modified = false
+			local new_name = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			if vim.api.nvim_win_is_valid(win) then
+				vim.api.nvim_win_close(win, true)
+			end
+			if vim.api.nvim_win_is_valid(orig_win) then
+				vim.api.nvim_set_current_win(orig_win)
+			end
+			if new_name and new_name ~= "" and new_name ~= old_name then
+				vim.lsp.buf.rename(new_name)
+			end
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("WinClosed", {
+		pattern = tostring(win),
+		once = true,
+		callback = function()
+			if vim.api.nvim_buf_is_valid(buf) then
+				vim.bo[buf].modified = false
+			end
+		end,
+	})
+end
+
+-- F2: rename. Inside neo-tree uses its rename; in a code buffer with an
+-- attached LSP renames the symbol under cursor; otherwise renames file on disk.
 vim.keymap.set("n", "<F2>", function()
 	if vim.bo.filetype == "neo-tree" then
 		vim.api.nvim_feedkeys("r", "m", false)
 		return
+	end
+
+	for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
+		if client:supports_method("textDocument/rename") then
+			return lsp_rename_float()
+		end
 	end
 
 	local old_path = vim.api.nvim_buf_get_name(0)

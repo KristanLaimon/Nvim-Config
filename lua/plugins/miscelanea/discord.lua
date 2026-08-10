@@ -12,6 +12,8 @@ return {
       tooltip = "Neovim",
     },
     display = {
+      theme = "minecraft",
+      flavor = "dark",
       show_time = true,
       show_repository = true,
     },
