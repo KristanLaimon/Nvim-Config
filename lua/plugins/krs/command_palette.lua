@@ -18,18 +18,9 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 📁 Files & Search
 	-- --------------------------------------------------------------------------
-	{ name = "🔍 Find Files (respecting .gitignore)", keys = "<C-k>", category = "Files" },
 	{ name = "🔍 Find Files (ignoring .gitignore)", cmd = "TelescopeFindFilesNoIgnore", category = "Files" },
-	{ name = "🔍 Find & Open File Left (Split Left)", keys = "<C-S-h>", category = "Files" },
-	{ name = "🔍 Find & Open File Down (Split Down)", keys = "<C-S-j>", category = "Files" },
-	{ name = "🔍 Find & Open File Up (Split Up)", keys = "<C-S-k>", category = "Files" },
-	{ name = "🔍 Find & Open File Right (Split Right)", keys = "<C-S-l>", category = "Files" },
-	{ name = "📝 Search Text in Files (Live Grep)", keys = "<C-f>", category = "Files" },
-	{ name = "📂 Open Folder", keys = "<C-S-o>", category = "Files" },
-	{ name = "⭐ Recent Projects", keys = "<C-S-r>", category = "Files" },
-	{ name = "📁 Floating Desktop File Explorer", keys = "<C-S-f>", category = "Files" },
+	{ name = "📂 Open Project Root in File Explorer", cmd = "OpenRootInExplorer", category = "Files" },
 	{ name = "🐧 Browse WSL Files", cmd = "TelescopeFileBrowserWSL", category = "Files" },
-	{ name = "🖥️ Toggle Selected Terminal", keys = "<C-;>", category = "Terminal" },
 
 	-- --------------------------------------------------------------------------
 	-- 🦊 Workspaces & Sessions
@@ -39,32 +30,15 @@ M.commands = {
 	{ name = "🚪 Close Workspace & Go to Main Menu", cmd = "WorkspaceClose", category = "Workspace" },
 
 	-- --------------------------------------------------------------------------
-	-- 🛠️ Tasks & Code Execution
-	-- --------------------------------------------------------------------------
-	{ name = "🚀 Run Project Default Task", keys = "<C-S-a>", category = "Tasks" },
-	{ name = "🛠️ Open Project Tasks Menu", keys = "<leader>ta", category = "Tasks" },
-
-	-- --------------------------------------------------------------------------
 	-- 🌲 File Explorer & Git
 	-- --------------------------------------------------------------------------
 	{ name = "🌳 Toggle File Explorer (Neo-tree)", cmd = "Neotree toggle", category = "Explorer" },
-	{ name = "🏷️ Rename Current File (F2)", keys = "<F2>", category = "Explorer" },
 	{ name = "🐙 Toggle Git Panel (Neogit)", cmd = "Neogit", category = "Git" },
 
 	-- --------------------------------------------------------------------------
-	-- 💻 Terminals
+	-- 🧠 LSP, Diagnostics & Type Injection
 	-- --------------------------------------------------------------------------
-	{ name = "💻 Toggle Terminal 1", keys = "<C-;>", category = "Terminal" },
-	{ name = "💻 Toggle Terminal 2", keys = "<leader>t2", category = "Terminal" },
-	{ name = "💻 Toggle Terminal 3", keys = "<leader>t3", category = "Terminal" },
-
-	-- --------------------------------------------------------------------------
-	-- 🧠 LSP, Diagnostics & Formatting
-	-- --------------------------------------------------------------------------
-	{ name = "💡 Quick-Fix / Code Actions (VSCode)", keys = "<C-.>", category = "LSP" },
-	{ name = "🎯 Go to Symbol Definition", keys = "<A-j>", category = "LSP" },
-	{ name = "⚠️ View Error / Diagnostic Detail at Caret", keys = "<A-k>", category = "LSP" },
-	{ name = "🎨 Format File (Conform)", keys = "<leader>f", category = "LSP" },
+	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
 	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
 	{ name = "📦 Nuget Package Manager (C#)", cmd = "NugetManager", category = "LSP" },
@@ -75,9 +49,6 @@ M.commands = {
 	{ name = "🔍 Increase Font Size", cmd = "FontSizeIncrease", category = "UI" },
 	{ name = "🔍 Decrease Font Size", cmd = "FontSizeDecrease", category = "UI" },
 	{ name = "🔍 Reset Font Size", cmd = "FontSizeReset", category = "UI" },
-	{ name = "🖼️ View Image with Chafa", keys = "<leader>i", category = "UI" },
-	{ name = "🎬 Open Image/Video with OS Default Program", keys = "<C-S-Enter>", category = "UI" },
-	{ name = "📂 Open Project Root in File Explorer", cmd = "OpenRootInExplorer", category = "Files" },
 	{ name = "🧩 Plugin Manager (Lazy)", cmd = "Lazy", category = "Config" },
 	{ name = "🔄 Reload Neovim Configuration", cmd = "ReloadConfig", category = "Config" },
 	{ name = "🚪 Quit Neovim (Quit All)", cmd = "qa", category = "System" },

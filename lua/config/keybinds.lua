@@ -116,6 +116,13 @@ vim.keymap.set(
 	{ noremap = true, silent = true, desc = "Show parameter signature help" }
 )
 
+-- Graceful Hover Documentation (K) without E149 errors
+vim.keymap.set("n", "K", function()
+	pcall(function()
+		vim.lsp.buf.hover({ border = "rounded" })
+	end)
+end, { noremap = true, silent = true, desc = "Show hover documentation" })
+
 -- Errors / Diagnostics
 local function show_diagnostic_float()
 	vim.diagnostic.open_float({ border = "rounded", scope = "cursor", focusable = true })
@@ -399,6 +406,20 @@ end
 vim.keymap.set({ "n", "i", "v", "t" }, "<C-`>", function()
 	require("config.krs.tasks").toggle_last_slot_window()
 end, { noremap = true, silent = true, desc = "Toggle last task output window" })
+
+-- Ctrl + Click a URL (in any buffer, e.g. task/terminal output) to open it in the browser
+vim.keymap.set({ "n", "i", "v", "t" }, "<C-LeftMouse>", function()
+	local mouse = vim.fn.getmousepos()
+	if mouse.winid == 0 then
+		return
+	end
+	vim.api.nvim_set_current_win(mouse.winid)
+	pcall(vim.api.nvim_win_set_cursor, mouse.winid, { mouse.line, math.max(mouse.column - 1, 0) })
+	local url = vim.fn.expand("<cWORD>"):match("https?://[^%s\"'<>%)%]]+")
+	if url then
+		vim.ui.open(url)
+	end
+end, { noremap = true, silent = true, desc = "Ctrl+Click: open URL under cursor in browser" })
 
 -- Floating Desktop File Explorer (Ctrl + Shift + F)
 vim.keymap.set({ "n", "i", "v" }, "<C-S-f>", function()

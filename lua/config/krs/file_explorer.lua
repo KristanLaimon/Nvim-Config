@@ -9,6 +9,44 @@
 
 local M = {}
 
+local favorites_file = vim.fn.stdpath("data") .. "/project_favorites.json"
+
+local function load_favorites()
+	local f = io.open(favorites_file, "r")
+	if not f then
+		return {}
+	end
+	local content = f:read("*a")
+	f:close()
+	local ok, data = pcall(vim.json.decode, content)
+	if ok and type(data) == "table" then
+		return data
+	end
+	return {}
+end
+
+local function save_favorites(favs)
+	local ok, encoded = pcall(vim.json.encode, favs)
+	if ok then
+		local f = io.open(favorites_file, "w")
+		if f then
+			f:write(encoded)
+			f:close()
+		end
+	end
+end
+
+local function normalize_path(p)
+	if not p or p == "" then
+		return ""
+	end
+	local clean = p:gsub("\\", "/"):gsub("/$", "")
+	if vim.fn.has("win32") == 1 or vim.fn.has("wsl") == 1 then
+		clean = clean:sub(1, 1):lower() .. clean:sub(2)
+	end
+	return clean
+end
+
 -- Get Desktop path cross-platform (Windows / macOS / Linux)
 function M.get_desktop_path()
 	local home = vim.fn.expand("~")
@@ -42,6 +80,8 @@ function M.open_desktop_explorer(opts)
 		curr_dir = M.get_desktop_path()
 	end
 
+	local favs = load_favorites()
+
 	-- Scan items using Neovim native API (fs_scandir)
 	local entries = {}
 	local handle = vim.uv.fs_scandir(curr_dir)
@@ -52,18 +92,28 @@ function M.open_desktop_explorer(opts)
 				break
 			end
 			local full_path = curr_dir .. "/" .. name
+			local norm_path = normalize_path(full_path)
 			local is_dir = (type == "directory")
+			local is_fav = favs[norm_path] == true
+			local icon = is_dir and "📁 " or "📄 "
+			local fav_mark = is_fav and "⭐ " or ""
+
 			table.insert(entries, {
 				name = name,
 				path = full_path,
+				norm = norm_path,
 				is_dir = is_dir,
-				display = (is_dir and "📁 " or "📄 ") .. name,
+				is_favorite = is_fav,
+				display = fav_mark .. icon .. name,
 			})
 		end
 	end
 
-	-- Sort: Directories first, then files alphabetically
+	-- Sort: Favorites first, then Directories, then files alphabetically
 	table.sort(entries, function(a, b)
+		if a.is_favorite ~= b.is_favorite then
+			return a.is_favorite
+		end
 		if a.is_dir ~= b.is_dir then
 			return a.is_dir
 		end
@@ -72,14 +122,16 @@ function M.open_desktop_explorer(opts)
 
 	pickers.new({
 		prompt_title = " 📁 Explorer: " .. curr_dir .. " ",
-		results_title = " Files / Folders | Press [?] for help ",
+		results_title = " Files / Folders | [Ctrl+F]=Favorite | Press [?] for help ",
 		finder = finders.new_table({
 			results = entries,
 			entry_maker = function(entry)
+				local fav_prefix = entry.is_favorite and "0_" or "1_"
+				local dir_prefix = entry.is_dir and "0_" or "1_"
 				return {
 					value = entry,
 					display = entry.display,
-					ordinal = (entry.is_dir and "0_" or "1_") .. entry.name,
+					ordinal = fav_prefix .. dir_prefix .. entry.name,
 				}
 			end,
 		}),
@@ -219,6 +271,61 @@ function M.open_desktop_explorer(opts)
 				end)
 			end
 			map("n", "d", delete_item)
+
+			-- Key '<C-f>': Toggle Favorite (folder or file)
+			local toggle_favorite = function()
+				local selection = action_state.get_selected_entry()
+				local target_path = nil
+				local target_name = nil
+
+				if selection and selection.value then
+					target_path = selection.value.path
+					target_name = selection.value.name
+				else
+					target_path = curr_dir
+					target_name = vim.fn.fnamemodify(curr_dir, ":t")
+				end
+
+				if not target_path or target_path == "" then
+					return
+				end
+
+				local norm = normalize_path(target_path)
+				local current_favs = load_favorites()
+
+				if current_favs[norm] then
+					current_favs[norm] = nil
+					vim.notify("Removed from favorites: " .. target_name, vim.log.levels.INFO, { title = "Explorer Favorites" })
+				else
+					current_favs[norm] = true
+					if vim.fn.isdirectory(target_path) == 1 then
+						local history_ok, history = pcall(require, "project_nvim.utils.history")
+						if history_ok and history.recent_projects then
+							local exists = false
+							for _, p in ipairs(history.recent_projects) do
+								if normalize_path(p) == norm then
+									exists = true
+									break
+								end
+							end
+							if not exists then
+								table.insert(history.recent_projects, target_path)
+								pcall(history.write_projects_to_history)
+							end
+						end
+					end
+					vim.notify("⭐ Saved as favorite: " .. target_name, vim.log.levels.INFO, { title = "Explorer Favorites" })
+				end
+
+				save_favorites(current_favs)
+
+				actions.close(prompt_bufnr)
+				vim.schedule(function()
+					M.open_desktop_explorer({ path = curr_dir })
+				end)
+			end
+			map("i", "<C-f>", toggle_favorite)
+			map("n", "<C-f>", toggle_favorite)
 
 			-- Keys 'h' and '<BS>': Navigate to parent directory
 			local go_parent = function()

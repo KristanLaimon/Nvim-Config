@@ -57,6 +57,7 @@ function M.show_help()
 			"r : Rename          | d : Delete",
 			"c : Copy            | m : Move / Cut",
 			"o : Open Folder as Active Project (CWD)",
+			"Ctrl + F : Toggle Favorite folder/file",
 			"Tab: Multi-select items",
 		}
 	else

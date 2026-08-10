@@ -1,0 +1,23 @@
+---@meta
+-- LÖVE 2D Game Engine Global Types Definition
+-- Injected dynamically by KRS Type Injector
+
+---@class love
+---@field graphics table
+---@field audio table
+---@field event table
+---@field filesystem table
+---@field font table
+---@field image table
+---@field keyboard table
+---@field math table
+---@field mouse table
+---@field physics table
+---@field sound table
+---@field system table
+---@field thread table
+---@field timer table
+---@field touch table
+---@field video table
+---@field window table
+love = love or {}

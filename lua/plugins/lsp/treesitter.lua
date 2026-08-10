@@ -10,6 +10,7 @@ local parsers = {
 	"typescript",
 	"javascript",
 	"tsx",
+	"jsx",
 	"svelte",
 	"astro",
 	"html",

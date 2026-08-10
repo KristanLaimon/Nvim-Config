@@ -27,6 +27,19 @@ local function save_width(w)
   end
 end
 
+-- Force other splits back to equal width when neo-tree opens/closes. `equalalways`
+-- should already do this, but neo-tree's own resize event doesn't always fire it.
+vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
+  group = vim.api.nvim_create_augroup("NeoTreeEqualize", { clear = true }),
+  callback = function(args)
+    if vim.bo[args.buf].filetype == "neo-tree" then
+      vim.schedule(function()
+        pcall(vim.cmd, "wincmd =")
+      end)
+    end
+  end,
+})
+
 local group = vim.api.nvim_create_augroup("NeoTreeWidthSaver", { clear = true })
 vim.api.nvim_create_autocmd("WinResized", {
   group = group,

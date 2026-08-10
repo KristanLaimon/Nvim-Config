@@ -2,9 +2,9 @@
 -- 🦊 KRS CONFIG: Per-Project Task Runner & Code Executor
 -- ============================================================================
 -- HOW THIS MODULE WORKS:
--- 1. Detects project root using vim.fs.find (looks for .nvimkrs, package.json, Makefile, Cargo.toml, etc.).
+-- 1. Detects project root using vim.fs.find (looks for .krsnvim, .nvimkrs, package.json, Makefile, Cargo.toml, etc.).
 -- 2. Automatically scans build scripts in Makefile, package.json, Cargo.toml or go.mod.
--- 3. Allows saving custom tasks and sequential task chains in .nvimkrs.
+-- 3. Allows saving custom tasks and sequential task chains in .krsnvim/tasks.json.
 -- 4. Supports Task Chains: if a step fails, execution STOPS immediately
 --    and opens an error alert floating popup in Neovim.
 -- 5. Renders an interactive Telescope menu with shortcuts:
@@ -31,10 +31,22 @@ local function load_legacy_data()
 	return ok and type(data) == "table" and data or {}
 end
 
--- Get project .nvimkrs configuration file path
+-- Get project tasks configuration file path (.krsnvim/tasks.json, fallback to .nvimkrs)
 local function get_krs_filepath(root)
 	local norm_root = root:gsub("\\", "/")
-	return norm_root .. "/.nvimkrs"
+	local krs_dir = norm_root .. "/.krsnvim"
+	local krs_tasks_file = krs_dir .. "/tasks.json"
+
+	if vim.fn.filereadable(krs_tasks_file) == 1 then
+		return krs_tasks_file
+	end
+
+	local nvimkrs_file = norm_root .. "/.nvimkrs"
+	if vim.fn.filereadable(nvimkrs_file) == 1 then
+		return nvimkrs_file
+	end
+
+	return krs_tasks_file
 end
 
 -- Get current project root directory
@@ -43,7 +55,7 @@ function M.get_project_root()
 	if current == "" then
 		current = vim.fn.getcwd()
 	end
-	local root_files = { ".nvimkrs", "Makefile", "package.json", "Cargo.toml", ".git", "go.mod", "pyproject.toml" }
+	local root_files = { ".krsnvim", ".nvimkrs", "Makefile", "package.json", "Cargo.toml", ".git", "go.mod", "pyproject.toml" }
 	local match = vim.fs.find(root_files, { upward = true, path = current })
 	if match and #match > 0 then
 		return vim.fs.dirname(match[1])
@@ -98,7 +110,7 @@ function M.discover_tasks(root)
 	return discovered
 end
 
--- Get saved tasks from .nvimkrs in project root
+-- Get saved tasks from .krsnvim/tasks.json (or .nvimkrs fallback) in project root
 function M.get_project_data(root)
 	local filepath = get_krs_filepath(root)
 	local f = io.open(filepath, "r")
@@ -114,7 +126,7 @@ function M.get_project_data(root)
 		end
 	end
 
-	-- Fallback to legacy storage if .nvimkrs doesn't exist yet
+	-- Fallback to legacy storage if .krsnvim/tasks.json / .nvimkrs doesn't exist yet
 	local key = root:gsub("\\", "/"):lower()
 	local legacy_all = load_legacy_data()
 	local legacy_data = legacy_all[key]
@@ -125,9 +137,14 @@ function M.get_project_data(root)
 	return { default_task = nil, custom_tasks = {} }
 end
 
--- Save task data to .nvimkrs file in project root
+-- Save task data to .krsnvim/tasks.json file in project root
 function M.save_project_data(root, pdata)
-	local filepath = get_krs_filepath(root)
+	local norm_root = root:gsub("\\", "/")
+	local krs_dir = norm_root .. "/.krsnvim"
+	if vim.fn.isdirectory(krs_dir) == 0 then
+		vim.fn.mkdir(krs_dir, "p")
+	end
+	local filepath = krs_dir .. "/tasks.json"
 	local data_to_save = {
 		default_task = pdata.default_task,
 		custom_tasks = pdata.custom_tasks or {},
@@ -239,6 +256,7 @@ end
 -- in slot 1 survives while slot 2 runs something else.
 M.slots = {}
 M.last_slot = nil
+M.origin_win = nil -- window to return focus to when a slot window is closed
 
 -- Find a slot to run a new task in: an empty one, or one whose previous job
 -- already finished (job_id cleared by on_exit below). nil if all 4 busy.
@@ -263,7 +281,24 @@ function M.toggle_slot_window(n)
 	if s.win and vim.api.nvim_win_is_valid(s.win) then
 		pcall(vim.api.nvim_win_close, s.win, true)
 		s.win = nil
+		if M.origin_win and vim.api.nvim_win_is_valid(M.origin_win) then
+			pcall(vim.api.nvim_set_current_win, M.origin_win)
+		else
+			pcall(vim.cmd, "wincmd p")
+		end
 	else
+		local current = vim.api.nvim_get_current_win()
+		local active_slot_win = nil
+		for _, slot in pairs(M.slots) do
+			if slot.win and vim.api.nvim_win_is_valid(slot.win) then
+				active_slot_win = slot.win
+				break
+			end
+		end
+		if current ~= active_slot_win then
+			M.origin_win = current
+		end
+
 		vim.cmd("botright 12split")
 		s.win = vim.api.nvim_get_current_win()
 		vim.api.nvim_win_set_buf(s.win, s.buf)
