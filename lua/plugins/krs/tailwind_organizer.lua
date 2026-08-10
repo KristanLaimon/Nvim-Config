@@ -164,11 +164,14 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 
 	local row1 = {} -- Size, Position & CORE Layout properties
 	local row2 = {} -- Aesthetic Basic properties (colors, text-align, spacing, etc.)
+	local hover_row = {} -- Dedicated row for all hover: classes
 	local screen_rows = {} -- Keyed by screen prefix
 
 	for _, cls in ipairs(tokens) do
 		local screen_prefix = get_screen_prefix(cls)
-		if screen_prefix then
+		if cls:match("hover:") then
+			table.insert(hover_row, cls)
+		elseif screen_prefix then
 			if not screen_rows[screen_prefix] then
 				screen_rows[screen_prefix] = {}
 			end
@@ -183,6 +186,7 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 	-- Alphabetize per row (each row restarts alphabetical order A-Z)
 	table.sort(row1)
 	table.sort(row2)
+	table.sort(hover_row)
 
 	-- Sort screen keys by priority order
 	local screen_keys = {}
@@ -210,6 +214,9 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 	end
 	if #row2 > 0 then
 		table.insert(all_rows, table.concat(row2, " "))
+	end
+	if #hover_row > 0 then
+		table.insert(all_rows, table.concat(hover_row, " "))
 	end
 	for _, k in ipairs(screen_keys) do
 		table.insert(all_rows, table.concat(screen_rows[k], " "))
@@ -253,8 +260,8 @@ end
 function M.organize_full_text(full_text)
 	local result = full_text
 
-	-- Match double-quoted attributes (class="...", className="...", :class="...")
-	result = result:gsub('()([%w%:%-]+class%s*=%s*)(")([^"]-)(")', function(pos, prefix, q1, body, q2)
+	-- Match double-quoted attributes (class="...", className="...", :class="...", class:list="...")
+	result = result:gsub('()([%:%w%-]*class[%w%-]*%s*=%s*)(")([^"]-)(")', function(pos, prefix, q1, body, q2)
 		local base_indent = find_indent(result, pos)
 		local row_indent = base_indent .. "  "
 		local cleaned = body:gsub("%s+", " "):match("^%s*(.-)%s*$")
@@ -266,7 +273,7 @@ function M.organize_full_text(full_text)
 	end)
 
 	-- Match single-quoted attributes
-	result = result:gsub("()([%w%:%-]+class%s*=%s*)(')([^']-)(')", function(pos, prefix, q1, body, q2)
+	result = result:gsub("()([%:%w%-]*class[%w%-]*%s*=%s*)(')([^']-)(')", function(pos, prefix, q1, body, q2)
 		local base_indent = find_indent(result, pos)
 		local row_indent = base_indent .. "  "
 		local cleaned = body:gsub("%s+", " "):match("^%s*(.-)%s*$")
@@ -278,7 +285,7 @@ function M.organize_full_text(full_text)
 	end)
 
 	-- Match JSX template literals: className={`...`} or class={`...`}
-	result = result:gsub('()([%w%:%-]+class%s*=%s*{`)(.-)(`})', function(pos, prefix, body, suffix)
+	result = result:gsub('()([%:%w%-]*class[%w%-]*%s*=%s*{`)(.-)(`})', function(pos, prefix, body, suffix)
 		local base_indent = find_indent(result, pos)
 		local row_indent = base_indent .. "  "
 		local cleaned = body:gsub("%s+", " "):match("^%s*(.-)%s*$")
@@ -336,7 +343,7 @@ end
 local plugin_spec = {
 	name = "tailwind_organizer",
 	dir = vim.fn.stdpath("config"),
-	cmd = { "TailwindOrganizerToggle", "TailwindOrganize", "TailwindOrganizerStatus" },
+	lazy = false,
 	keys = {
 		{
 			"<leader>tw",
@@ -375,11 +382,11 @@ local plugin_spec = {
 			M.show_status()
 		end, { desc = "Show Tailwind Organizer Status" })
 
-		-- Autocmd for Auto-format on save
+		-- Autocmd for Auto-format on save (:w)
 		local group = vim.api.nvim_create_augroup("TailwindOrganizerGroup", { clear = true })
 		vim.api.nvim_create_autocmd("BufWritePre", {
 			group = group,
-			pattern = { "*.html", "*.jsx", "*.tsx", "*.vue", "*.svelte", "*.astro", "*.php", "*.blade.php", "*.md", "*.css" },
+			pattern = "*",
 			callback = function(args)
 				if M.enabled then
 					M.organize_buffer(args.buf)
