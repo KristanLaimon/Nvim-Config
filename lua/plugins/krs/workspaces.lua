@@ -99,30 +99,70 @@ local function set_session_options()
 	vim.opt.sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,localoptions"
 end
 
+-- Helper to check if Neo-tree is open in any window/tabpage
+local function is_neotree_open()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_is_valid(win) then
+			local buf = vim.api.nvim_win_get_buf(win)
+			if vim.api.nvim_buf_is_valid(buf) then
+				local ft = vim.bo[buf].filetype
+				local bname = vim.api.nvim_buf_get_name(buf)
+				if ft == "neo-tree" or bname:match("neo%-tree") then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- Helper to force delete/wipe all neo-tree buffers so mksession! never serializes dead neo-tree buffers
+local function purge_neotree_buffers()
+	for _, b in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(b) then
+			local ft = vim.bo[b].filetype
+			local bname = vim.api.nvim_buf_get_name(b)
+			if ft == "neo-tree" or bname:match("neo%-tree") then
+				pcall(vim.api.nvim_buf_delete, b, { force = true })
+			end
+		end
+	end
+end
+
 -- Save current session to .vim file. Returns ok, err, neotree_was_open
 local function save_session_file(session_path)
 	set_session_options()
 
+	local neotree_was_open = is_neotree_open()
+
 	-- Temporarily close Neo-tree and any active terminal windows before saving session
-	local neotree_was_open = false
+	pcall(vim.cmd, "Neotree close")
+
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		if vim.api.nvim_win_is_valid(win) then
 			local buf = vim.api.nvim_win_get_buf(win)
-			local ft = vim.bo[buf].filetype
-			local bt = vim.bo[buf].buftype
-			if ft == "neo-tree" then
-				neotree_was_open = true
-				pcall(vim.cmd, "Neotree close")
-			elseif bt == "terminal" or ft == "TaskRunner" or ft == "toggleterm" then
-				pcall(vim.api.nvim_win_close, win, true)
+			if vim.api.nvim_buf_is_valid(buf) then
+				local ft = vim.bo[buf].filetype
+				local bt = vim.bo[buf].buftype
+				if bt == "terminal" or ft == "TaskRunner" or ft == "toggleterm" then
+					pcall(vim.api.nvim_win_close, win, true)
+				end
 			end
 		end
 	end
 
+	-- Force purge all neo-tree buffers from memory so mksession! doesn't save corrupt neo-tree buffers
+	purge_neotree_buffers()
+
 	local ok, err = pcall(vim.cmd, "mksession! " .. vim.fn.fnameescape(session_path))
 
+	-- Re-open Neo-tree cleanly if it was open before saving
 	if neotree_was_open then
-		pcall(vim.cmd, "Neotree show")
+		local cwd = vim.fn.getcwd()
+		pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(cwd))
+		pcall(function()
+			require("neo-tree.sources.manager").refresh("filesystem")
+		end)
 	end
 
 	return ok, err, neotree_was_open
@@ -270,12 +310,15 @@ function M.load_workspace(ws_or_identifier)
 	local cur_cwd = vim.fn.getcwd():gsub("\\", "/"):lower()
 	local target_cwd = target.cwd and target.cwd:gsub("\\", "/"):lower() or cur_cwd
 	local is_same_project = (cur_cwd == target_cwd)
+	local current_neotree_was_open = is_neotree_open()
 
 	if target.cwd and vim.fn.getcwd() ~= target.cwd then
 		pcall(vim.api.nvim_set_current_dir, target.cwd)
 	end
 
+	-- 1. Close Neo-tree and purge neo-tree buffers before restoring session
 	pcall(vim.cmd, "Neotree close")
+	purge_neotree_buffers()
 
 	for _, b in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(b) then
@@ -295,6 +338,21 @@ function M.load_workspace(ws_or_identifier)
 		return false
 	end
 
+	-- 2. Post-source cleanup: Purge any zombie neo-tree buffers or windows restored from old session files
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_is_valid(win) then
+			local b = vim.api.nvim_win_get_buf(win)
+			if vim.api.nvim_buf_is_valid(b) then
+				local ft = vim.bo[b].filetype
+				local bname = vim.api.nvim_buf_get_name(b)
+				if ft == "neo-tree" or bname:match("neo%-tree") then
+					pcall(vim.api.nvim_win_close, win, true)
+				end
+			end
+		end
+	end
+	purge_neotree_buffers()
+
 	-- Clean up stale terminal buffers ONLY when switching to a different project
 	if not is_same_project then
 		for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -309,10 +367,15 @@ function M.load_workspace(ws_or_identifier)
 		end)
 	end
 
-	if target.neotree_open then
-		pcall(vim.cmd, "Neotree show")
+	-- 3. Determine if Neo-tree should be opened and cleanly show it
+	local should_show_neotree = (target.neotree_open == true) or (target.neotree_open == nil and current_neotree_was_open)
+	if should_show_neotree then
+		local cwd = target.cwd or vim.fn.getcwd()
+		pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(cwd))
+		pcall(function()
+			require("neo-tree.sources.manager").refresh("filesystem")
+		end)
 	end
-
 
 	target.updated_at = os.time()
 	save_index(index)
@@ -404,6 +467,7 @@ function M.close_to_menu()
 
 	local close_all_and_open_alpha = function()
 		pcall(vim.cmd, "Neotree close")
+		purge_neotree_buffers()
 		pcall(vim.cmd, "only")
 		vim.cmd("Alpha")
 		local alpha_buf = vim.api.nvim_get_current_buf()
