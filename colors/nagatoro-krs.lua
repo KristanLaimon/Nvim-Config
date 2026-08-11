@@ -120,7 +120,6 @@ local highlights = {
 	["@variable"] = { fg = p.fg },
 	["@variable.builtin"] = { fg = p.keyword, italic = true },
 	["@variable.parameter"] = { fg = p.string },
-	["@variable.member"] = { fg = p.fg },
 	["@function"] = { fg = p.func, bold = true },
 	["@function.builtin"] = { fg = p.func, bold = true },
 	["@function.call"] = { fg = p.func },

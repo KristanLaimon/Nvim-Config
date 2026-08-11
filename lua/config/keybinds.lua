@@ -538,13 +538,7 @@ end
 
 vim.keymap.set(
 	{ "n", "i", "v" },
-	"<A-b>",
-	dap_toggle_breakpoint,
-	{ noremap = true, silent = true, desc = "Toggle Breakpoint" }
-)
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<M-b>",
+	"<C-b>",
 	dap_toggle_breakpoint,
 	{ noremap = true, silent = true, desc = "Toggle Breakpoint" }
 )

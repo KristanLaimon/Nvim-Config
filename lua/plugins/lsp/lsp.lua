@@ -350,22 +350,8 @@ return {
 		dependencies = { "rafamadriz/friendly-snippets" },
 		version = "*",
 		opts = {
-			-- Never pop the menu when cursor sits inside an empty bracket pair (e.g. right after autopairs inserts "{}")
 			enabled = function()
-				if vim.bo.filetype == "krsinputmodal" or vim.b.completion == false then
-					return false
-				end
-				local line = vim.api.nvim_get_current_line()
-				local col = vim.api.nvim_win_get_cursor(0)[2]
-				local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
-				local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
-				if pairs_map[before] == after then
-					return false
-				end
-				if after == ">" or after == "}" or line:sub(col + 1):match("^%s*[>}]") then
-					return false
-				end
-				return true
+				return vim.bo.filetype ~= "krsinputmodal" and vim.b.completion ~= false
 			end,
 			keymap = {
 				preset = "default",
@@ -377,7 +363,18 @@ return {
 			},
 			appearance = { nerd_font_variant = "mono" },
 			completion = {
-				menu = { auto_show = true },
+				menu = {
+					-- Don't auto-pop inside a freshly inserted empty pair ("{}" from autopairs).
+					-- Only auto-show is suppressed: <C-space> still opens the menu there,
+					-- which is what `import { | }` needs.
+					auto_show = function()
+						local line = vim.api.nvim_get_current_line()
+						local col = vim.api.nvim_win_get_cursor(0)[2]
+						local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
+						local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
+						return pairs_map[before] ~= after
+					end,
+				},
 				documentation = { auto_show = false },
 				trigger = {
 					-- "{" and "[" open bracket-pair snippets on every keystroke otherwise

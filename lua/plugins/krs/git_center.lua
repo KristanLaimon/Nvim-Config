@@ -70,10 +70,9 @@ function M.toggle_git_center()
 end
 
 
--- Lanzar proceso Git sin bloquear (permite correr varios en paralelo)
-local function spawn_git(args, cwd)
-	cwd = cwd or vim.fn.getcwd()
-	local cmd = { "git", "-C", cwd }
+-- Construir la lista de argumentos del comando git
+local function git_cmd(args, cwd)
+	local cmd = { "git", "-C", cwd or vim.fn.getcwd() }
 
 	if type(args) == "string" then
 		for word in args:gmatch("%S+") do
@@ -85,7 +84,20 @@ local function spawn_git(args, cwd)
 		end
 	end
 
-	return vim.system(cmd, { text = true })
+	return cmd
+end
+
+-- Lanzar proceso Git sin bloquear (permite correr varios en paralelo)
+local function spawn_git(args, cwd)
+	return vim.system(git_cmd(args, cwd), { text = true })
+end
+
+-- Ejecutar git en segundo plano: on_done(ok, output) se llama en el hilo principal
+local function run_git_async(args, on_done, cwd)
+	vim.system(git_cmd(args, cwd), { text = true }, vim.schedule_wrap(function(obj)
+		local out = ((obj.stderr or "") .. (obj.stdout or "")):gsub("%s+$", "")
+		on_done(obj.code == 0, out)
+	end))
 end
 
 -- Esperar un proceso lanzado con spawn_git y parsear su salida en líneas
@@ -1018,14 +1030,14 @@ function M.open_git_center()
 			table.insert(push_args, remote_name)
 			table.insert(push_args, branch .. ":" .. target_branch)
 
-			local res = run_git(push_args)
-			local res_str = table.concat(res, "\n")
-			if res_str:match("fatal") or res_str:match("error") then
-				vim.notify("❌ Push failed:\n" .. res_str, vim.log.levels.ERROR, { title = "Git Center" })
-			else
-				vim.notify("✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!", vim.log.levels.INFO, { title = "Git Center" })
-			end
-			refresh()
+			run_git_async(push_args, function(ok, out)
+				if ok then
+					vim.notify("✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!", vim.log.levels.INFO, { title = "Git Center" })
+				else
+					vim.notify("❌ Push failed:\n" .. out, vim.log.levels.ERROR, { title = "Git Center" })
+				end
+				refresh()
+			end)
 		end
 
 		local remotes = run_git({ "remote" })
@@ -1051,14 +1063,14 @@ function M.open_git_center()
 
 		if has_upstream then
 			vim.notify("🚀 Pushing to upstream...", vim.log.levels.INFO, { title = "Git Center" })
-			local res = run_git({ "push" })
-			local res_str = table.concat(res, "\n")
-			if res_str:match("fatal") or res_str:match("error") then
-				vim.notify("❌ Push failed:\n" .. res_str, vim.log.levels.ERROR, { title = "Git Center" })
-			else
-				vim.notify("✅ Push successful!", vim.log.levels.INFO, { title = "Git Center" })
-			end
-			refresh()
+			run_git_async({ "push" }, function(ok, out)
+				if ok then
+					vim.notify("✅ Push successful!", vim.log.levels.INFO, { title = "Git Center" })
+				else
+					vim.notify("❌ Push failed:\n" .. out, vim.log.levels.ERROR, { title = "Git Center" })
+				end
+				refresh()
+			end)
 			return
 		end
 
