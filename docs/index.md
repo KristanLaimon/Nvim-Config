@@ -1,54 +1,73 @@
-# 🦊 KRS Neovim Configuration Wiki
+# 🦊 KrsVim Wiki
 
-Welcome to the official documentation and wiki for **KRS Neovim**, a custom, high-performance, modular Neovim configuration built for speed, productivity, and modern floating UI components.
+Documentation for **KrsVim** — a Windows-first, WSL-aware Neovim config built around floating UI modules in `lua/plugins/krs/`.
 
 ---
 
-## 📌 Quick Table of Contents
+## 📌 Table of Contents
 
-| Topic | Description |
+### Setup
+| Page | Contents |
 | :--- | :--- |
-| ⌨️ [**Keyboard Shortcuts & Keybinds**](keybinds.md) | Complete list of all QOL, LSP, navigation, split, and module keybindings |
-| 📝 [**Reusable Input Modal Component**](input-modal.md) | Documentation on the floating input dialog used for rename, new files, and git commits |
-| 🖥️ [**Multi-Terminal Manager**](terminals.md) | 9 independent terminal buffers with `<Alt+1..9>` switching and `<C-;>` toggling |
-| 🛠️ [**Task Runner & Chains**](tasks.md) | Per-project build runner, task chains, background slots, and `<C-S-;>` output window |
-| 🗂️ [**Workspaces & Session Manager**](workspaces.md) | Project workspace saving/loading (`<C-S-w>`), clean session state excluding terminals |
-| 🐙 [**Git Control Center**](git-center.md) | Instant Git Control Center (`<C-S-g>`), staging, restore (`r`/`R`), push (`P`), live diffs |
-| 📁 [**File Explorers & Move Picker**](file-explorer.md) | Desktop & WSL explorers, folder picker, and Neo-tree move file picker (`m` / `O`) |
-| 🎨 [**Color Palette & Aesthetics**](color-palette.md) | Modern color schemes, highlights, and custom visual elements |
-| 🧰 [**Command Palette**](command-palette.md) | Interactive command launcher and utility shortcuts |
-| 🌐 [**Adding Languages & LSPs**](adding-language.md) | Installing and configuring new LSPs, formatters, and linters |
-| 🐞 [**Debug Adapters (DAP)**](debug-adapters.md) | How debugging works end to end, adding a debugger, and diagnosing one that silently does nothing |
-| 📄 [**JSON & TOML Schemas**](schemas-json.md) | Auto-validation and completion for configuration files |
+| ⚙️ [**Installation & Dependencies**](installation.md) | External CLIs, Scoop one-liner, what each tool is used for |
+| 🛠️ [**Languages, LSP & Formatting**](languages.md) | Mason servers, Conform formatters, Treesitter parsers, completion tuning |
+| 🌐 [**Adding a Language / LSP**](adding-language.md) | Step-by-step for a new server, formatter and parser |
+| 📦 [**Plugin Inventory**](plugins.md) | Every third-party plugin and every custom `krs` module |
+| 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` specs are wired, the `lazydir` fix, the `config/krs` migration |
+
+### Daily driving
+| Page | Contents |
+| :--- | :--- |
+| ⌨️ [**Keybinds**](keybinds.md) | Full shortcut reference, by domain |
+| 🧰 [**Command Palette**](command-palette.md) | `<C-S-p>` launcher and how to register commands |
+| 🗂️ [**Workspaces & Sessions**](workspaces.md) | Per-project session slots (`<C-S-w>`) |
+| 🐙 [**Git Control Center**](git-center.md) | Staging, restore, push, commit form (`<C-S-g>`) |
+| 📁 [**File Explorers**](file-explorer.md) | Desktop & WSL explorers, folder picker, Neo-tree move picker |
+| 🖥️ [**Multi-Terminal Manager**](terminals.md) | 9 terminals, `<A-1>`..`<A-9>`, auto-WSL |
+| 🛠️ [**Task Runner**](tasks.md) | Per-project tasks, chains, background output slots |
+| 🎛️ [**Editor Quality of Life**](editor-qol.md) | Smart quit, context help, colorscheme preview, image viewer, font sizing, Nuget, PHP tool check |
+| 🎨 [**Color Palette & Themes**](color-palette.md) | Palette architecture and theme swapping |
+
+### Running & debugging code
+| Page | Contents |
+| :--- | :--- |
+| 🚀 [**Launch Profiles**](launch-profiles.md) | `.krsnvim/launch.json`, smart launch (`<C-S-s>`), profile editor (`<C-S-q>`), dev-server bridge |
+| 🐞 [**Debug Adapters (DAP)**](debug-adapters.md) | How debugging works end to end, per-language debugger modules, diagnosing a silent adapter |
+| 🔴 [**Breakpoints**](breakpoints.md) | Persistence across sessions, disabled breakpoints, conditions & logpoints |
+
+### Codegen & schemas
+| Page | Contents |
+| :--- | :--- |
+| 🌬️ [**Tailwind Organizer**](tailwind-organizer.md) | Multi-row class sorting on save |
+| 🧬 [**Type Injector**](type-injector.md) | Per-project Lua/TS type schemas and `@types` installer |
+| 📝 [**Input Modal Component**](input-modal.md) | The reusable floating input used everywhere |
+| 📄 [**JSON Schemas**](schemas-json.md) / [**TOML Schemas**](schemas-toml.md) | Local schema catalogs and validation |
 
 ---
 
-## 🚀 Key Features Overview
+## 🚀 What makes this config different
 
-1. **Ultra-Fast & Modular Architecture**
-   - Built on `lazy.nvim` with custom modules in `lua/plugins/krs/` (debug adapters in `lua/plugins/krs/debuggers/`).
-   - Asynchronous execution for instant UI response (< 30ms loading times).
-
-2. **Unified Custom Floating UI**
-   - Clean, rounded floating dialogs for input prompts, diagnostics, code actions, terminals, git control, and file exploration.
-   - Global `vim.ui.input` override utilizing the reusable `input_modal` component.
-
-3. **International Keyboard Layout Support**
-   - Native keymap support for both **US Standard** and **US International** keyboard layouts (`<C-'>`, `<C-/>`, `<C-_>`, `<C-S-'>`).
-   - Clean terminal mode (`t` mode) key handling without PTY character leakage.
-
-4. **Clean Session & Workspace Preservation**
-   - Sessions isolate project state and window layouts without saving stale terminal buffers or polluting recent project history when viewing documentation.
+1. **Everything is a local module.** `lua/plugins/krs/*.lua` files are real lazy.nvim specs that live in-repo — no plugin repos, no `setup()` boilerplate. See [Module Architecture](module-architecture.md).
+2. **Per-project state, not global state.** Tasks, launch profiles, breakpoints and type schemas are stored under `.krsnvim/` in the project itself (`tasks.json`, `launch.json`, `breakpoints.json`, `types.json`).
+3. **A real debugger story.** Seven languages wired through per-language modules, plus a Bun adapter that VSCode never shipped standalone, a repl completion source that asks the debug adapter instead of the buffer, and breakpoints that survive a restart.
+4. **Unified floating UI.** Input prompts, diagnostics, code actions, terminals, git and file explorers all use the same rounded floating look, with `vim.ui.input` globally overridden by [`input_modal`](input-modal.md).
+5. **Two keyboard layouts.** US Standard and US-International both mapped (`<C-'>`, `<C-/>`, `<C-_>`, `<C-S-'>`), and terminal mode handled without PTY character leakage.
 
 ---
 
-## 💡 Quick Launch Shortcuts
+## 💡 Quick launch shortcuts
 
-- **Dashboard / Main Menu**: `<Ctrl + Shift + M>`
-- **Workspaces Picker**: `<Ctrl + Shift + W>`
-- **Git Control Center**: `<Ctrl + Shift + G>`
-- **Desktop File Explorer**: `<Ctrl + Shift + F>`
-- **Project Tasks Menu**: `<Ctrl + Shift + T>`
-- **Toggle Task Output**: `<Ctrl + `>` / `<Ctrl + Shift + O>`
-- **Toggle Active Terminal**: `<Ctrl + ;>`
-- **Select Terminal #1..9**: `<Alt + 1..9>`
+| Shortcut | Opens |
+| :--- | :--- |
+| `<C-S-m>` | Dashboard / main menu |
+| `<C-S-p>` | Command palette |
+| `<C-S-w>` | Workspaces picker |
+| `<C-S-g>` | Git Control Center |
+| `<C-S-f>` | Desktop file explorer |
+| `<C-S-t>` | Project tasks menu |
+| `<C-S-s>` | Run default launch profile / stop the running session |
+| `<C-S-q>` | Launch profile manager |
+| `<C-b>` | Toggle breakpoint |
+| `<C-;>` | Toggle active terminal |
+| `<A-1>`..`<A-9>` | Select terminal #1..9 |
+| `?` / `<F1>` | Context-aware help for whatever is focused |

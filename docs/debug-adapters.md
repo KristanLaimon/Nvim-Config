@@ -7,6 +7,10 @@ You do not need to know anything about debuggers to start here. By the end you s
 able to add a new language's debugger yourself, and — more importantly — diagnose it when
 it silently does nothing, which is what debugger integrations do 90% of the time.
 
+> **Related:** [Launch Profiles](launch-profiles.md) is the layer above this one — it builds
+> DAP configurations from a per-project `launch.json` so you don't hand-write them.
+> [Breakpoints](breakpoints.md) covers persistence, disabled breakpoints and the signs.
+
 ---
 
 ## 1. The mental model: three processes, not one
@@ -176,19 +180,125 @@ Without that mapping, a `launch.json` entry with `"type": "bun"` would only be o
 buffers whose *filetype* is literally `bun` — i.e. never. The table tells nvim-dap which
 filetypes each adapter type is relevant for.
 
+`load_launchjs` is deprecated: nvim-dap reads `.vscode/launch.json` on demand now. It still
+needs this table, for exactly the reason above.
+
+### 3.4 One file per language: `lua/plugins/krs/debuggers/`
+
+Both tables used to be filled inline in `dap.lua`. They are now split one module per
+language, each returning a `function(dap)` that registers its own adapter and appends its
+own configurations:
+
+```
+lua/plugins/krs/debuggers/
+├── _shared.lua   -- js-debug registration, skipFiles, web filetypes, the `add` helper
+├── bun.lua       -- 🐰 Bun's WebKit-inspector adapter
+├── node.lua      -- 🚀 pwa-node (js-debug)
+├── browsers.lua  -- 🌐 Chrome / 🔷 Edge / 🦊 Firefox
+├── python.lua    -- 🐍 debugpy
+├── csharp.lua    -- 🎯 netcoredbg
+├── php.lua       -- 🐘 Xdebug
+└── go.lua        -- 🐹 delve, via nvim-dap-go
+```
+
+`dap.lua` just walks a list:
+
+```lua
+for _, language in ipairs({ "bun", "node", "browsers", "python", "csharp", "php", "go" }) do
+  local ok, err = pcall(function()
+    require("plugins.krs.debuggers." .. language)(dap)
+  end)
+  if not ok then
+    vim.notify("DAP: failed to load debugger '" .. language .. "': " .. tostring(err), vim.log.levels.WARN)
+  end
+end
+```
+
+Three things follow from this shape:
+
+- **List order is picker order.** The first configuration of the first module is what `<F5>`
+  runs by default. Bun sits first because that's this config's usual JS runtime.
+- **A broken module can't take the others down.** Each `require` is `pcall`'d and warns by
+  name.
+- **These files are not lazy specs.** lazy's directory import only walks subdirectories
+  containing an `init.lua`, so `debuggers/` is invisible to `{ import = "plugins.krs" }` —
+  which is precisely why plain modules can live there. See
+  [Module Architecture](module-architecture.md#-subdirectories-are-invisible-to-import).
+
+`_shared.lua` holds what more than one module needs:
+
+| Export | Why it's shared |
+| :--- | :--- |
+| `js_debug(dap)` | Registers `pwa-node`, `pwa-chrome` and `pwa-msedge` from the same js-debug install (Edge is Chromium: same server, different binary). Idempotent, because both `node.lua` and `browsers.lua` call it and neither knows the load order. Falls back from `dapDebugServer.js` (server mode) to the `.cmd` shim (executable mode) |
+| `add(dap, filetypes, configs)` | **Appends** configs so bun, node and browsers can share `typescript`. The first module to claim a filetype clears it first — `mason-nvim-dap`'s `default_setup` has already pushed its own generic entries ("Python: Launch file", "Chrome: Debug") into the same tables, and those would otherwise sit in the picker next to the configured ones |
+| `js_skip` | `<node_internals>/**`, `**/node_modules/**`. Without it js-debug stops inside node internals and the tsx loader — and nvim-dap force-lists every frame's buffer, so each one becomes a bufferline tab with a long absolute path |
+| `web_filetypes` | `typescript`, `javascript`, `typescriptreact`, `javascriptreact`, `svelte`, `vue`, `astro`. Also fed to `type_to_filetypes` |
+
+Browser modules come in two shapes: **Launch** (starts the dev server if nothing is serving,
+then opens the browser on it — `url` is a function, resolved inside nvim-dap's coroutine, so
+it can wait for the port; see [Dev Server Bridge](launch-profiles.md#-dev-server-bridge-pluginskrsdev_server)),
+and **Attach** (starts nothing; Chromium must already be running with
+`--remote-debugging-port=9222`).
+
+Python prefers the project's virtualenv interpreter over whatever `python` resolves to on
+`PATH`, so imports match what the project actually installed. Go adds nothing by hand —
+`nvim-dap-go` already registers the adapter and the standard configurations.
+
+`tests/dap_debuggers_check.lua` fails loudly if this wiring drifts (config counts and
+per-filetype ordering):
+
+```
+nvim --headless -n -S tests/dap_debuggers_check.lua
+```
+
+### 3.5 The layer around the session
+
+Also in `dap.lua`, and worth knowing because most of it exists to work around a specific
+misbehaviour:
+
+| Piece | What it does |
+| :--- | :--- |
+| **UI layout** | Scopes/stacks/breakpoints/watches on the **right** at `0.24` of the width, repl + console at the bottom at `0.26`. Right, not left, keeps the code window between the file tree and the debugger instead of sandwiched between two fixed-width panels; fractional sizes scale with the terminal, unlike the default flat 40 columns |
+| **UI open timing** | Opened on `launch`/`attach`, not on `event_initialized`, so a session that never reaches "initialized" is still visible instead of failing invisibly |
+| **`switchbuf`** | Forced to `useopen,usevisible,uselast`. nvim 0.12 defaults to `uselast`, which only reuses the current window when its `buftype` is `""` — stop with focus in the console and the source lands in `winnr('#')` instead of the code window |
+| **ANSI output (baleia)** | nvim-dap writes adapter `output` events as plain text, so runtimes that colorize (Bun, anything with `FORCE_COLOR`) show literal `[0m[33m1[0m`. baleia turns the escapes back into highlights, applied globally to `dap-repl` and `dapui_console` |
+| **Virtual text** | IntelliJ-style: values at end-of-line, floored at column 80, so code is never pushed right (the plugin's `inline` default shifts the rest of the line). Values truncated at 60 chars, linked to `Comment` so only what changed on this step stands out |
+| **`krs_prefer_disk_source`** | js-debug returns a non-zero `sourceReference` for scripts Node ran through in-memory TypeScript stripping, even though the file exists on disk. `source_to_bufnr` checks `sourceReference` before `path`, so nvim-dap opens `dap-src://…` with adapter-served content: a duplicate buffer, no breakpoint signs, junk in the bufferline. A `before.stackTrace` listener zeroes the ref when the path is readable, sending it back to the real file |
+| **`krs_jump_on_pause`** | nvim-dap only jumps to the stopped frame when `reason ~= "pause" or allThreadsStopped`. js-debug always reports `allThreadsStopped = false`, so a `debugger` statement, pause-on-entry or the pause button leaves the session stopped with no source buffer and no cursor move. This listener fetches the top frame and jumps for it |
+| **Signs & highlights** | 🦊 breakpoint, 🔶 conditional, 💬 logpoint, ⭕ rejected, 🟡 stopped — see [Breakpoints](breakpoints.md). The highlight groups are re-applied on `ColorScheme`, since `:colorscheme` clears user-defined groups |
+
+### 3.6 Repl completion ("immediate window")
+
+The repl is a normal buffer, so blink.cmp's default sources offered string methods and words
+scraped from the file — useless while stopped at a breakpoint. `lua/krs/dap_repl_source.lua`
+asks the **debug adapter** instead, so the menu only holds what exists in the current frame.
+
+- Enabled only while `dap.session()` is live; triggers on `.`, `[`, `"`, `'`.
+- If the adapter advertises `supportsCompletionsRequest`, it sends a `completions` request for
+  the current frame and maps `targets` to items.
+- If it doesn't, it falls back to `scopes` → `variables` and lists the frame's variables, with
+  each value squashed to one line as the item detail.
+- nvim-dap prefixes repl lines with `dap> `; that prefix is stripped before the text reaches
+  the adapter, otherwise every completion is computed against the wrong column.
+
 ---
 
 ## 4. The recipe: adding a debugger for a new language
 
 1. **Find the adapter.** Check `:Mason` first (`debugpy`, `delve`, `js-debug-adapter`,
    `codelldb`, `netcoredbg`, `php-debug-adapter`). Mason installs the binary; it does not
-   configure anything.
-2. **Register it in `dap.adapters`.** Read the adapter's README for whether it is `executable`
-   or `server`, and what argv it expects. Guard with `vim.fn.filereadable(...) == 1` so a
-   missing install degrades quietly instead of erroring at startup.
-3. **Add configs to `dap.configurations[filetype]`.** Copy field names from that adapter's
-   own docs, not from another adapter's.
-4. **Verify with the real handshake** (next section). "It opened a UI" is not verification;
+   configure anything. Add its **nvim-dap adapter name** (not the Mason package name —
+   `js` → js-debug-adapter, `python` → debugpy, `coreclr` → netcoredbg) to `ensure_installed`
+   in `dap.lua`.
+2. **Create `lua/plugins/krs/debuggers/<language>.lua`** returning `function(dap) … end`.
+   Register the adapter (`executable` or `server`, per its README), guarded with
+   `vim.fn.filereadable(...) == 1` so a missing install degrades quietly instead of erroring
+   at startup.
+3. **Append configs** with `_shared.add(dap, { "<filetype>" }, { … })`. Copy field names from
+   that adapter's own docs, not from another adapter's.
+4. **Add the module name to the list in `dap.lua`**, in the position you want it to occupy in
+   the picker. Add the type to `type_to_filetypes` if `launch.json` should offer it too.
+5. **Verify with the real handshake** (next section). "It opened a UI" is not verification;
    stopping on a breakpoint and seeing the right line is.
 
 If Mason has no adapter, you are in the harder case — which is exactly the Bun story.

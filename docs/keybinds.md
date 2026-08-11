@@ -1,106 +1,180 @@
-# ⌨️ Keyboard Shortcuts & Keybinds Reference
+# ⌨️ Keybinds
 
-This document provides a comprehensive cheatsheet of all keyboard shortcuts in KRS Neovim, categorized by domain.
+Leader is `<Space>`. Global mappings live in `lua/config/keybinds.lua`; module-local ones are defined by the module itself.
 
----
-
-## 🛠️ General Editor & Clipboard (VSCode Style)
-
-| Shortcut | Mode | Action | Description |
-| :--- | :---: | :--- | :--- |
-| `<C-s>` | Normal, Insert, Visual | Save File | Writes buffer to disk (`:w`) |
-| `<C-c>` | Visual | Copy | Copy selection to system clipboard (`"+y`) |
-| `<C-v>` | Normal, Visual, Insert | Paste | Paste from system clipboard (`"+p` / `<C-r>+`) |
-| `<C-z>` | Normal, Visual, Insert | Undo | Undo last edit |
-| `<C-y>` / `<C-S-z>` | Normal, Insert | Redo | Redo previous change |
+Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focused, and `<C-S-p>` fuzzy-searches every registered command.
 
 ---
 
-## 💬 Code Commenting (US Standard & US-International Support)
-
-*`Ctrl + ;` is non-dead on US-International layout and works seamlessly across all layouts.*
+## 🛠️ General editing (VSCode-flavoured)
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `<C-;>` / `<C-'>` / `<C-S-;>` / `<C-S-'>` | Normal, Insert | Toggle line comment (`gcc`) |
-| `<C-;>` / `<C-'>` / `<C-S-;>` / `<C-S-'>` | Visual | Toggle selection comment (`gc`) |
-| `<C-;>` / `<C-'>` / `<C-S-;>` / `<C-S-'>` | Terminal | Exits insert mode and comments code line |
+| `<C-s>` | n, i, v | Save file (`:w`) |
+| `<C-c>` | v | Copy selection to system clipboard |
+| `<C-v>` / `<C-S-v>` | n, i, v, t | Paste from system clipboard |
+| `<C-z>` | n, i, v | Undo |
+| `<C-y>` / `<C-S-z>` | n, i | Redo |
+| `<C-w>` | n | Close current buffer (tab-close style) |
+| `<C-'>` / `<C-S-'>` / `<C-">` / `` <C-`> `` / `<C-~>` / `<C-^>` / `<C-acute>` | n, i, v, t | Toggle comment — line, or selection in visual mode |
+| `<leader>ff` | n, v | Format file or selection (Conform, LSP fallback) |
+| `<F2>` | n | Rename symbol, file on disk, or Neo-tree item |
+| `<C-+>` / `<C-=>` | n, i, v, t | Increase font size (persisted) |
+| `<C-->` | n, i, v, t | Decrease font size |
+| `<C-0>` | n, i, v, t | Reset font size |
+| `<leader>i` | n | View image as pixel art (`chafa`) |
+| `<C-S-Enter>` | n | Open image/video with the OS default app |
+| `<C-LeftMouse>` | all | Open the URL under the cursor in a browser |
+| `:q` / `:q!` / `<leader>q` | n, Cmd | Smart quit — split → tab → dashboard → quit |
+| `<leader>cd` | n | Open the default netrw directory browser |
+| `<leader>mp` | n | Markdown preview |
+| `:ReloadConfig` | Cmd | Reload the Neovim configuration |
 
+> Commenting is mapped across a whole family of keys because `'` is a dead key on US-International, ES and Latam layouts — one of them will reach Neovim whatever your layout does. From terminal mode it leaves insert, hops to the previous window, and comments there.
 
 ---
 
-## 🪟 Window Splits, Resizing & Buffer Navigation
+## 🪟 Windows, splits & buffers
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `<C-h>` / `<C-l>` | Normal | Move cursor to left / right window split |
-| `<C-Left>` / `<C-Right>` | Normal | Resize window width (narrower / wider) |
-| `<C-Up>` / `<C-Down>` | Normal | Resize window height (taller / shorter) |
-| `<C-S-h>` / `<C-S-j>` / `<C-S-k>` / `<C-S-l>` | Normal, Insert, Visual | Find file and open in Split (Left / Down / Up / Right) |
-| `<A-h>` / `<A-Left>` | Normal | Cycle to Previous Buffer |
-| `<A-l>` / `<A-Right>` | Normal | Cycle to Next Buffer |
+| `<C-h>` / `<C-l>` | n | Focus left / right window |
+| `<C-S-j>` / `<C-S-k>` | n | Focus bottom / top window |
+| `<C-S-h>` / `<C-S-j>` / `<C-S-k>` / `<C-S-l>` | n, i, v | Find a file and open it in a split (left / down / up / right) |
+| `<C-Left>` / `<C-Right>` | n | Widen / narrow the window |
+| `<C-Up>` / `<C-Down>` | n | Taller / shorter |
+| `gt` / `<A-l>` / `<A-Right>` | n | Next buffer |
+| `gT` / `<A-h>` / `<A-Left>` | n | Previous buffer |
+| `<C-A-Left>` / `<C-A-Right>` | n | Move the current tab left / right |
+| `<leader>bh` / `<leader>bl` | n | Move the current tab left / right (leader variant) |
+
+> While a debug session is running, `<C-S-j>` toggles the repl instead of moving down, and `<A-h>` / `<C-S-h>` flip the breakpoint under the cursor when there is one. Both fall through to the mapping above otherwise.
 
 ---
 
-## 💡 LSP, Diagnostics & Code Intellisense
+## 💡 LSP, diagnostics & completion
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `K` | Normal | Show Hover Documentation |
-| `<C-j>` | Normal, Insert, Visual | Trigger Signature & Parameter Help |
-| `<A-k>` / `<M-k>` / `<leader>k` | Normal, Insert, Visual | Open Diagnostic Floating Window |
-| `<leader>u` / `<leader>o` | Normal | Previous / Next Diagnostic Error |
-| `<C-.>` | Normal, Insert, Visual | VSCode Quick Fix / Code Actions (Dropdown at Caret) |
-| `<A-j>` / `<M-j>` / `<C-S-d>` | Normal, Insert, Visual | Go to Symbol Definition (with Telescope fallback) |
-| `<F2>` | Normal | LSP / File Rename using floating `input_modal` component |
-| `<leader>ff` | Normal, Visual | Format file or selection with `conform` |
+| `K` | n | Hover documentation |
+| `<A-k>` / `<M-k>` / `<A-j>` / `<M-j>` / `<C-S-d>` | n, i, v | Go to definition (Telescope fallback) |
+| `<C-j>` | n, i, v | Signature / parameter help |
+| `<C-.>` | n, i, v | Code actions / quick fix at the caret |
+| `<leader>k` | n | Diagnostic float under the cursor |
+| `<leader>u` / `<leader>o` | n | Previous / next diagnostic |
+| `<C-o>` | n | Jump back in the jump list |
+| `<CR>` | i | Accept the highlighted completion |
+| `<C-space>` / `<C-@>` | i | Force the completion menu / documentation open |
 
 ---
 
-## 🖥️ Terminal & Task Runner Shortcuts
+## 🐞 Debugging
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `<Alt + 1..9>` | Normal, Insert, Terminal | Select & switch to terminal buffer #1..9 |
-| `<Ctrl + ;>` | Normal, Insert, Terminal | Toggle open/hidden for currently selected terminal |
-| `<C-S-t>` | Normal, Insert, Visual | Open Per-Project Task Menu (Telescope) |
-| `<C-S-a>` | Normal, Insert, Visual | Run Default Task or Open Task Menu |
-| `<C-1..4>` | Normal, Insert, Visual, Terminal | Toggle Background Task Output Slot #1..4 |
-| `<C-`>` / `<C-S-o>` | Normal, Insert, Visual, Terminal | Toggle Last Active Task Output Window |
-| `<C-v>` / `<C-S-v>` | Terminal, Insert, Normal | Paste OS clipboard into Terminal |
-| `<C-c>` / `<C-S-c>` | Visual (Terminal & Buffers) | Copy selected text to OS clipboard |
-| `:TaskRestart` / `<C-S-p>` | All | Kill & Restart active project task |
-| `<C-LeftMouse>` | All | Open URL under cursor in web browser |
+| `<C-b>` | n, i, v | Toggle breakpoint |
+| `<A-h>` / `<M-h>` / `<C-S-h>` | n, i, v | Enable ⇄ disable breakpoint under the cursor |
+| `<C-S-s>` | n, i, v | Run the default [launch profile](launch-profiles.md) — or stop the running session |
+| `<C-S-q>` | n, i, v | Launch profile manager |
+| `<F5>` | n, i, v | Start / continue (raw DAP) |
+| `<F10>` / `<F11>` / `<F12>` | n, i, v | Step over / into / out |
+| `<C-S-x>` | n, i, v | Terminate the debugger and close the UI |
+| `<leader>du` | n | Toggle the DAP UI |
+| `<C-S-j>` | n | Toggle the repl (while a session is live) |
+| `:DapBreakpointsDisableAll` / `EnableAll` / `RemoveAll` | Cmd | Bulk breakpoint operations |
 
 ---
 
-## 🐙 Git Control Center & Workspaces
+## 🚀 Launch, tasks & terminals
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `<C-S-g>` / `<C-S-G>` | All | Toggle Git Control Center |
-| `s` / `S` | Git Center | Stage Selected File / Stage All Files |
-| `u` / `U` | Git Center | Unstage Selected File / Unstage All Files |
-| `r` | Git Center | Discard changes / Restore single file under cursor (with confirmation) |
-| `R` | Git Center | Discard changes / Restore entire section (staged or unstaged) |
-| `P` | Git Center | Push to Remote (with confirmation and remote branch selector) |
-| `c` / `m` / `t` | Git Center | Edit Commit Title / Description / Tag via `input_modal` |
-| `C` | Git Center | Execute Commit & Tag |
-| `<C-S-w>` | All | Open Workspaces & Sessions Manager |
-| `<C-S-m>` | All | Return to Main Menu (Alpha Dashboard) |
+| `<C-S-t>` / `<leader>ta` | n, i, v | Task menu (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
+| `<C-S-a>` | n, i, v | Run the project's default task |
+| `<C-1>`..`<C-4>` | n, i, v, t | Toggle the output window for background task slot 1-4 |
+| `` <C-`> `` / `<C-S-o>` / `<C-[>` | n, i, v, t | Toggle the last-focused task output window |
+| `:TaskRestart` / `:TaskKill` | Cmd | Restart / kill the active task |
+| `<A-1>`..`<A-9>` | n, i, t | Select & switch to terminal #1-#9 (spawned on first use) |
+| `<C-;>` / `<C-S-;>` / `<C-S-:>` / `<A-;>` / `<C-A-;>` | n, i, t | Toggle the selected terminal panel |
+| `<C-w>c` | n (terminal) | Close the active terminal window |
+
+> Up to 4 tasks run in the background at once; closing an output window doesn't kill the job. A terminal whose `cwd` sits inside a WSL distro path launches `wsl.exe` there automatically.
 
 ---
 
-## 📁 File Explorer & Neo-tree Shortcuts
+## 🗂️ Workspaces & sessions
+
+| Shortcut / Command | Mode | Action |
+| :--- | :---: | :--- |
+| `<C-S-w>` / `<leader>ww` | n, i, v, t | Open the Workspaces picker |
+| `<leader>ws` | n | Save the current UI state as a workspace |
+| `<C-S-m>` / `<leader>wm` | n, i, v, t | Close the session and return to the dashboard (with save prompt) |
+| `<leader>w1`..`<leader>w9` | n | Load workspace slot 1-9 directly |
+| `:WorkspaceSave [name]` / `:WorkspaceLoad [name\|slot]` | Cmd | Save / load by name or slot |
+| `:WorkspaceDelete` / `:WorkspaceRename` | Cmd | Delete / rename |
+| `:Workspaces` / `:WorkspaceSelect` | Cmd | Open the picker |
+
+**Inside the picker:** `<Enter>` load · `a`/`<C-a>` save as new · `s`/`<C-s>` overwrite · `d`/`<C-d>`/`<Del>` delete · `r`/`<C-r>`/`<F2>` rename · `g`/`<C-g>` toggle current-project vs all-projects · `1`-`9` jump to slot.
+
+---
+
+## 🔍 Finding things
+
+| Shortcut | Mode | Action |
+| :--- | :---: | :--- |
+| `<C-k>` / `<C-/>` / `<C-_>` | n, i | Find files, respecting `.gitignore` |
+| `<C-A-k>` / `<C-S-/>` / `<C-?>` / `<leader>fa` | n, i, v | Find files, ignoring `.gitignore` |
+| `<C-f>` | n, i | Live grep across the project |
+| `<C-S-o>` | n, i | Open any folder as a project |
+| `<C-S-f>` | n, i, v | Floating Desktop file explorer |
+| `<leader>fw` | n, i, v | Floating WSL file explorer (Windows only) |
+| `<C-S-r>` | n | Recent projects |
+| `<leader>fh` | n | Search help tags |
+| `<C-S-p>` | n, i, v, t | Command palette |
+
+**Inside Recent Projects:** `<C-f>` toggles favourite (pins to the bottom), `<C-r>` removes from history.
+
+---
+
+## 🌴 Neo-tree
 
 | Shortcut | Context | Action |
 | :--- | :---: | :--- |
-| `<C-S-Space>` / `<leader>e` | Normal | Toggle Neo-tree Sidebar |
-| `<C-S-f>` | All | Open Desktop Floating File Explorer |
-| `<leader>fw` | All | Open WSL Floating File Explorer |
-| `<C-S-o>` | All | Open Folder Picker |
-| `r` | Neo-tree | Rename file/folder via `input_modal` |
-| `m` | Neo-tree | Move file/folder via Floating File Explorer (`root_dir` + `O` to confirm) |
-| `a` / `A` / `<C-n>` / `<C-S-n>` | Neo-tree | Create new file or folder via `input_modal` |
-| `<C-/>` / `<C-_>` | Neo-tree, Normal, Insert | Find files respecting `.gitignore` |
-| `<C-S-/>` / `<C-?>` | Neo-tree, Normal, Insert | Find all files ignoring `.gitignore` |
+| `<leader>e` / `<C-S-Space>` | n | Toggle the sidebar |
+| `a` / `A` / `<C-n>` | Neo-tree | New file or folder (end with `/` for a folder) |
+| `r` | Neo-tree | Rename via the input modal |
+| `d` | Neo-tree | Delete |
+| `c` | Neo-tree | Copy |
+| `m` | Neo-tree | Move via the floating explorer (`O` confirms the destination) |
+
+---
+
+## 🐙 Git
+
+| Shortcut | Mode | Action |
+| :--- | :---: | :--- |
+| `<C-S-g>` | n, i, v, t | Toggle the [Git Control Center](git-center.md) |
+| `s` / `S` | Git Center | Stage selected / stage all |
+| `u` / `U` | Git Center | Unstage selected / unstage all |
+| `r` / `R` | Git Center | Restore file under cursor / whole section (confirmed) |
+| `c` / `m` / `t` | Git Center | Edit commit title / description / tag |
+| `C` | Git Center | Commit (and tag) |
+| `P` | Git Center | Push (confirmed, with remote branch selector) |
+| `<Enter>` | Neogit status | Open the diff in a vertical split |
+| `d` | Neogit status | Quick diff preview |
+
+---
+
+## 📦 Language-specific
+
+| Shortcut / Command | Action |
+| :--- | :--- |
+| `<leader>ng` / `:NugetManager` | Nuget picker for the project's `.csproj` (`a` add, `u` update, `d` remove) |
+| `<leader>ns` / `<leader>nc` | Show / hide inline `package.json` versions |
+| `<leader>nu` / `<leader>nd` / `<leader>ni` / `<leader>np` | Update / delete / install / change version of the package under the cursor |
+| `<leader>tw` / `:TailwindOrganize` | [Organize Tailwind classes](tailwind-organizer.md) in the current buffer |
+| `<leader>tt` / `:TailwindOrganizerToggle` | Toggle organize-on-save |
+| `:KrsTypes` / `:TypeInjector` | [Type injector](type-injector.md) menu |
+| `:PHPCheckTools` | PHP / Composer / Intelephense / Pint / Xdebug diagnostic modal |
+| `:KrsBunDapInstall` | Build the Bun debug adapter |
+| `:NvimWiki` | Open this wiki |
