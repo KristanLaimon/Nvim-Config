@@ -70,6 +70,14 @@ M.commands = {
 	{ name = "ℹ️ Tailwind Organizer Status", cmd = "TailwindOrganizerStatus", category = "Tailwind" },
 
 	-- --------------------------------------------------------------------------
+	-- 🐞 Debugging & Breakpoints
+	-- --------------------------------------------------------------------------
+	{ name = "🐾 Enable/Disable Breakpoint (Cursor)", cmd = "DapBreakpointToggleEnabled", category = "Debug" },
+	{ name = "✅ Enable All Breakpoints", cmd = "DapBreakpointsEnableAll", category = "Debug" },
+	{ name = "🚫 Disable All Breakpoints (Keep Them)", cmd = "DapBreakpointsDisableAll", category = "Debug" },
+	{ name = "🗑️ Remove All Breakpoints", cmd = "DapBreakpointsRemoveAll", category = "Debug" },
+
+	-- --------------------------------------------------------------------------
 	-- 🛠️ Tasks & Code Execution
 	-- --------------------------------------------------------------------------
 	{ name = "🔄 Restart Current Task (Kill & Rerun)", cmd = "TaskRestart", category = "Tasks" },

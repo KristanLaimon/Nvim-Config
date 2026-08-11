@@ -7,6 +7,7 @@ return {
 			"jay-babu/mason-nvim-dap.nvim",
 			"theHamsta/nvim-dap-virtual-text",
 			"leoluz/nvim-dap-go",
+			"m00qek/baleia.nvim",
 		},
 		config = function()
 			local dap = require("dap")
@@ -17,76 +18,6 @@ return {
 			-- and the source lands in winnr('#') instead of the code window. Prefer a
 			-- window already showing the file, then any visible one.
 			dap.defaults.fallback.switchbuf = "useopen,usevisible,uselast"
-
-			-- Without this js-debug stops inside node internals and the tsx/ts-node
-			-- loader. nvim-dap force-lists every frame's buffer (session.lua: buflisted
-			-- = true), so each one becomes a bufferline tab with a long absolute path.
-			local js_skip = { "<node_internals>/**", "**/node_modules/**" }
-
-			-- ----------------------------------------------------------------------
-			-- Browser configurations (Vite / Astro / SvelteKit / Next / Angular)
-			-- ----------------------------------------------------------------------
-			-- Two shapes per browser:
-			--   Launch  — starts the dev server if nothing is serving yet, then opens
-			--             the browser on it. `url` is a function; nvim-dap resolves
-			--             config values inside a coroutine, so it can wait for the port.
-			--   Attach  — never starts anything. Chromium needs to have been started
-			--             with --remote-debugging-port=9222 for this to find it.
-			local function browser_configs()
-				local dev = function()
-					return require("plugins.krs.dev_server").url()
-				end
-				local existing = function()
-					return require("plugins.krs.dev_server").existing_url()
-				end
-
-				local configs = {}
-				-- ponytail: no sourceMapPathOverrides. js-debug's defaults already resolve
-				-- vite's /@fs/ and webpack:// layouts; add overrides only if a framework
-				-- shows unbound (⭕) breakpoints.
-				for _, browser in ipairs({
-					{ type = "pwa-chrome", icon = "🌐", label = "Chrome" },
-					{ type = "pwa-msedge", icon = "🔷", label = "Edge" },
-				}) do
-					table.insert(configs, {
-						type = browser.type,
-						request = "launch",
-						name = browser.icon .. " Launch " .. browser.label .. " + Dev Server",
-						url = dev,
-						webRoot = "${workspaceFolder}",
-						sourceMaps = true,
-						skipFiles = js_skip,
-						-- false = use the real profile instead of a throwaway one, so the
-						-- session, extensions and logins are the ones already set up.
-						userDataDir = false,
-					})
-					table.insert(configs, {
-						type = browser.type,
-						request = "attach",
-						name = browser.icon .. " Attach to running " .. browser.label .. " (port 9222)",
-						port = 9222,
-						url = existing,
-						webRoot = "${workspaceFolder}",
-						sourceMaps = true,
-						skipFiles = js_skip,
-					})
-				end
-
-				-- Firefox has no CDP, so js-debug cannot drive it — this is the separate
-				-- firefox-debug-adapter. reAttach reuses an already-open Firefox instead
-				-- of spawning a second one, which is the closest it gets to "attach".
-				table.insert(configs, {
-					type = "firefox",
-					request = "launch",
-					name = "🦊 Launch Firefox + Dev Server",
-					reAttach = true,
-					url = dev,
-					webRoot = "${workspaceFolder}",
-					firefoxExecutable = vim.fn.exepath("firefox"),
-				})
-
-				return configs
-			end
 
 			local mason_dap_ok, mason_dap = pcall(require, "mason-nvim-dap")
 			if mason_dap_ok then
@@ -111,189 +42,33 @@ return {
 				})
 			end
 
-			-- Setup Go DAP helper if available
-			local dap_go_ok, dap_go = pcall(require, "dap-go")
-			if dap_go_ok then
-				dap_go.setup()
+			-- ----------------------------------------------------------------------
+			-- Per-language adapters & configurations
+			-- ----------------------------------------------------------------------
+			-- One module per language/debugger in lua/plugins/krs/debuggers/. Each
+			-- returns a function(dap) that registers its own adapter and appends its
+			-- configurations. Order here is the order they appear in the picker, so
+			-- the first entry of the first module is what <F5> runs by default.
+			-- Adding a language = one new file there + its name in this list.
+			for _, language in ipairs({
+				"bun",
+				"node",
+				"browsers",
+				"python",
+				"csharp",
+				"php",
+				"go",
+			}) do
+				local ok, err = pcall(function()
+					require("plugins.krs.debuggers." .. language)(dap)
+				end)
+				if not ok then
+					vim.notify(
+						"DAP: failed to load debugger '" .. language .. "': " .. tostring(err),
+						vim.log.levels.WARN
+					)
+				end
 			end
-
-			-- ----------------------------------------------------------------------
-			-- JS/TS/Bun Debug Adapters (js-debug-adapter)
-			-- ----------------------------------------------------------------------
-			local mason_path = (vim.fn.stdpath("data") .. "/mason/packages/js-debug-adapter"):gsub("\\", "/")
-			local dap_server = mason_path .. "/js-debug/src/dapDebugServer.js"
-			local cmd_bin = mason_path .. "/js-debug-adapter.cmd"
-
-			if vim.fn.filereadable(dap_server) == 1 then
-				dap.adapters["pwa-node"] = {
-					type = "server",
-					host = "localhost",
-					port = "${port}",
-					executable = {
-						command = "node",
-						args = { dap_server, "${port}" },
-					},
-				}
-				dap.adapters["pwa-chrome"] = {
-					type = "server",
-					host = "localhost",
-					port = "${port}",
-					executable = {
-						command = "node",
-						args = { dap_server, "${port}" },
-					},
-				}
-				-- Edge is Chromium: same js-debug server, different browser binary.
-				dap.adapters["pwa-msedge"] = dap.adapters["pwa-chrome"]
-			elseif vim.fn.filereadable(cmd_bin) == 1 then
-				dap.adapters["pwa-node"] = {
-					type = "executable",
-					command = cmd_bin,
-				}
-				dap.adapters["pwa-chrome"] = {
-					type = "executable",
-					command = cmd_bin,
-				}
-				dap.adapters["pwa-msedge"] = dap.adapters["pwa-chrome"]
-			end
-
-			-- ----------------------------------------------------------------------
-			-- Bun Debug Adapter
-			-- ----------------------------------------------------------------------
-			-- Bun speaks the WebKit inspector protocol, not CDP, so pwa-node cannot
-			-- drive it. `bun_dap` checks out Bun's own adapter and gives it the stdio
-			-- entry point the VSCode extension never shipped. See its header comment.
-			local bun_dap = require("plugins.krs.bun_dap")
-			if bun_dap.installed() then
-				dap.adapters.bun = {
-					type = "executable",
-					command = "bun",
-					args = { bun_dap.server },
-				}
-			end
-
-			-- ----------------------------------------------------------------------
-			-- PHP Configuration (Xdebug)
-			-- ----------------------------------------------------------------------
-			dap.configurations.php = {
-				{
-					type = "php",
-					request = "launch",
-					name = "Listen for Xdebug",
-					port = 9003,
-				},
-			}
-
-			-- ----------------------------------------------------------------------
-			-- TypeScript / JavaScript / Bun / Node.js Configurations
-			-- ----------------------------------------------------------------------
-			-- Node cannot execute .ts directly. Same resolver the launch profiles use.
-			local function ts_launch()
-				return require("plugins.krs.launch_profiles").ts_runtime(vim.fn.getcwd(), vim.fn.expand("%:p"))
-			end
-
-			for _, language in
-				ipairs({
-					"typescript",
-					"javascript",
-					"typescriptreact",
-					"javascriptreact",
-					"svelte",
-					"vue",
-					"astro",
-				})
-			do
-				dap.configurations[language] = {
-					{
-						-- Bun's own adapter; it spawns `bun --inspect-wait` itself, so no
-						-- runtimeExecutable/runtimeArgs here. .ts needs no loader either.
-						type = "bun",
-						request = "launch",
-						name = "🐰 Launch Current File (Bun)",
-						program = "${file}",
-						cwd = "${workspaceFolder}",
-						stopOnEntry = false,
-						watchMode = false,
-					},
-					{
-						type = "bun",
-						request = "attach",
-						name = "🐰 Attach to Bun (--inspect)",
-						-- `bun --inspect` prints the ws:// URL it is listening on; paste it.
-						url = function()
-							return vim.fn.input("Bun inspector URL: ", "ws://localhost:6499/", "file")
-						end,
-					},
-					{
-						type = "pwa-node",
-						request = "launch",
-						name = "🚀 Launch Current File (Node/TS)",
-						program = "${file}",
-						cwd = "${workspaceFolder}",
-						-- integratedTerminal keeps the process inside a nvim terminal buffer;
-						-- without it Windows pops external cmd.exe windows for npx/.cmd shims.
-						console = "integratedTerminal",
-						sourceMaps = true,
-						skipFiles = js_skip,
-						runtimeExecutable = function()
-							return ts_launch().exe
-						end,
-						runtimeArgs = function()
-							return ts_launch().args
-						end,
-					},
-					{
-						type = "pwa-node",
-						request = "attach",
-						name = "🔗 Attach to Node Process",
-						processId = require("dap.utils").pick_process,
-						cwd = "${workspaceFolder}",
-						skipFiles = js_skip,
-					},
-					unpack(browser_configs()),
-				}
-			end
-
-			-- ----------------------------------------------------------------------
-			-- Python Configuration
-			-- ----------------------------------------------------------------------
-			dap.configurations.python = {
-				{
-					type = "python",
-					request = "launch",
-					name = "Launch Current File (Python)",
-					program = "${file}",
-					cwd = "${workspaceFolder}",
-					console = "integratedTerminal",
-					pythonPath = function()
-						local cwd = vim.fn.getcwd()
-						if vim.fn.executable(cwd .. "/venv/Scripts/python.exe") == 1 then
-							return cwd .. "/venv/Scripts/python.exe"
-						elseif vim.fn.executable(cwd .. "/.venv/Scripts/python.exe") == 1 then
-							return cwd .. "/.venv/Scripts/python.exe"
-						elseif vim.fn.executable(cwd .. "/venv/bin/python") == 1 then
-							return cwd .. "/venv/bin/python"
-						elseif vim.fn.executable(cwd .. "/.venv/bin/python") == 1 then
-							return cwd .. "/.venv/bin/python"
-						end
-						return "python"
-					end,
-				},
-			}
-
-			-- ----------------------------------------------------------------------
-			-- C# (.NET) Configuration
-			-- ----------------------------------------------------------------------
-			dap.configurations.cs = {
-				{
-					type = "coreclr",
-					name = "Launch DLL (C#)",
-					request = "launch",
-					program = function()
-						return vim.fn.input("Path to dll: ", vim.fn.getcwd() .. "/bin/Debug/", "file")
-					end,
-				},
-			}
 
 			-- Standard VS Code route: if the project has .vscode/launch.json, its
 			-- configurations show up in the picker alongside the ones above.
@@ -301,8 +76,7 @@ return {
 			-- now. It still needs this table to know which filetypes a `type` applies to,
 			-- otherwise a config is only offered when filetype == type (so `"type": "bun"`
 			-- would only ever appear in a file of filetype "bun", i.e. never).
-			local web_filetypes =
-				{ "typescript", "javascript", "typescriptreact", "javascriptreact", "svelte", "vue", "astro" }
+			local web_filetypes = require("plugins.krs.debuggers._shared").web_filetypes
 			require("dap.ext.vscode").type_to_filetypes = {
 				bun = web_filetypes,
 				["pwa-node"] = web_filetypes,
@@ -336,9 +110,46 @@ return {
 				},
 			})
 
+			-- nvim-dap writes adapter `output` events into the repl as plain text, so
+			-- runtimes that colorize (Bun, anything with FORCE_COLOR) show literal
+			-- `[0m[33m1[0m`. baleia turns those escapes back into highlights.
+			-- Global: every adapter's output goes through the same two buffers.
+			local baleia_ok, baleia = pcall(require, "baleia")
+			if baleia_ok then
+				local colorize = baleia.setup({ line_starts_at = 1 })
+				vim.api.nvim_create_autocmd("FileType", {
+					group = vim.api.nvim_create_augroup("KrsDapAnsi", { clear = true }),
+					pattern = { "dap-repl", "dapui_console" },
+					callback = function(args)
+						colorize.automatically(args.buf)
+					end,
+				})
+			end
+
 			local virtual_text_ok, virtual_text = pcall(require, "nvim-dap-virtual-text")
 			if virtual_text_ok then
-				virtual_text.setup()
+				virtual_text.setup({
+					-- IntelliJ-style: values sit past the end of the line, aligned at a
+					-- fixed column, so code is never pushed right (the plugin default on
+					-- 0.10+ is "inline", which shifts the rest of the line).
+					-- virt_text_win_col is a floor: longer lines push the value further
+					-- right instead of overlapping their own code.
+					virt_text_pos = "eol",
+					virt_text_win_col = 80,
+					commented = true,
+					only_first_definition = false,
+					all_references = true,
+					clear_on_continue = true,
+					display_callback = function(variable)
+						local value = variable.value:gsub("%s+", " ")
+						if #value > 60 then
+							value = value:sub(1, 59) .. "…"
+						end
+						return variable.name .. " = " .. value
+					end,
+				})
+				-- Faint by default; only values that changed on this step stand out.
+				vim.api.nvim_set_hl(0, "NvimDapVirtualText", { link = "Comment", default = true })
 			end
 
 			-- nvim-dap only jumps to the stopped frame when

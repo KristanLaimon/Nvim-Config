@@ -307,6 +307,79 @@ debug your own cached output.
 
 ---
 
+## 5.6 Case study: "Node debug is broken — it exits in 200ms"
+
+The bug report:
+
+```js
+async function Hola() {
+    console.log("Before Hola");
+    for (const i of [1, 2, 3, 4, 5]) console.log("i => ", i);
+    console.log("After Hola");
+}
+Hola();
+```
+
+> `pwa-node` starts and ends in 200ms. Bun is fine. Is the rest of my debuggers broken too?
+
+**There was no bug.** The script has no blocking work. With no breakpoint bound, the correct
+behaviour of a debug session is: launch, run, print, `terminated`. 200ms *is* success.
+
+It looks like a failure only because §5.3 trained the eye: "session ends instantly" was a real
+defect once, for Bun, for a completely different reason. The symptom repeated; the cause did not.
+
+### How it was settled in one command
+
+Instead of clicking `<F5>` and guessing, drive the *real* config headless and print the events —
+the §6.3 idea, applied to nvim-dap rather than to the adapter:
+
+```lua
+-- scratch.lua — nvim --headless -n -S scratch.lua
+require("lazy").load({ plugins = { "nvim-dap" } })
+local dap = require("dap")
+vim.cmd("edit " .. vim.fn.expand("~/tmp/hola.js"))
+vim.fn.cursor(3, 1)
+dap.toggle_breakpoint()                       -- BEFORE dap.run, always
+
+for _, e in ipairs({ "event_stopped", "event_terminated", "event_output", "setBreakpoints" }) do
+  dap.listeners.after[e]["probe"] = function(_, err, body)
+    print("[T] " .. e .. " " .. vim.inspect(err) .. " " .. vim.inspect(body):sub(1, 300))
+  end
+end
+
+local cfg
+for _, c in ipairs(dap.configurations.javascript) do
+  if c.name:find("Node") and c.request == "launch" then cfg = c end   -- request, not just name:
+end                                                                    -- "Node" also matches Attach
+dap.run(cfg)
+vim.defer_fn(function() print("alive: " .. tostring(dap.session() ~= nil)) vim.cmd("qa!") end, 6000)
+```
+
+Two runs, two facts:
+
+| Run | Result |
+| :--- | :--- |
+| breakpoint set before `dap.run` | `event_stopped { reason = "breakpoint", hitBreakpointIds = { 1 } }` — works, `.js` and `.ts` alike |
+| no breakpoint | `Before Hola … After Hola`, then `event_terminated` — the reported "200ms" |
+
+Verdict in under two minutes, with no restarts and no other debuggers touched.
+
+### Lessons
+
+1. **"Fast exit" is not evidence of anything on its own.** Ask first what the program was
+   *supposed* to do while stopped. A 200ms script with no breakpoint has no failure mode to see.
+2. **A matching symptom is not a matching cause.** §5.3's instant exit was `configurationDone`
+   ordering. This one was an empty breakpoint list. Pattern-matching on the symptom would have
+   sent you back into `bun_dap.lua` for nothing.
+3. **Reproduce before diagnosing — headless, with the actual config.** Not `dapmin.lua` (that
+   bisects config vs environment); this loads *your* config and prints the event trace, which is
+   the difference between "node is broken" and "node stopped at line 3".
+4. **Suspect the report's scope claim.** "Is the rest broken too?" assumed one shared defect. One
+   run of the real config disproved it without auditing seven debugger modules.
+5. **Set the breakpoint before launch.** On a script this short there is no "during".
+
+---
+
 ## 6. How to debug the debugger
 
 When a session "does nothing", work down this list in order. It goes from cheapest to most
@@ -373,7 +446,8 @@ Why this is worth writing rather than clicking through the UI:
 | :--- | :--- |
 | `No configuration found for ''` | Filetype not detected, or no `dap.configurations[ft]` entry |
 | Picker never offers your `launch.json` entry | Missing `type_to_filetypes` mapping (§3.3) |
-| Session starts, exits instantly, no `stopped` | Program ran before `configurationDone` (§5.3), or it genuinely crashed — check `output` events |
+| Session starts, exits instantly, no `stopped` | **First: is a breakpoint actually bound?** A short script with none exits in ~200ms and that is correct (§5.6). Otherwise: program ran before `configurationDone` (§5.3), or it crashed — check `output` events |
+| Breakpoint sign turns `⭕` after launch | `DapBreakpointRejected` — adapter refused to bind it. Wrong `cwd`, file never loaded by the program, or sourcemap mismatch |
 | Breakpoints show unverified / hollow | Adapter can't map the file: `cwd` wrong, sourcemaps off, or a path-case/separator mismatch on Windows |
 | Stops, but shows the wrong file or a blank buffer | Source resolution or UI, not the protocol — use `dapdiag.lua` |
 | External `cmd.exe` window pops up (Windows) | Adapter spawning a `.cmd` shim; use `console = "integratedTerminal"` |
@@ -454,3 +528,6 @@ Independent of debuggers:
    "Seems to work now" is not.
 7. **Distrust your first theory when it's comfortable.** "Race condition" felt right and cost
    real time; reading five lines of source ended it.
+8. **Confirm the bug exists before fixing it.** A repeat symptom is not a repeat cause, and
+   sometimes the system is behaving exactly as designed (§5.6). Reproducing costs minutes;
+   chasing a phantom costs an afternoon.

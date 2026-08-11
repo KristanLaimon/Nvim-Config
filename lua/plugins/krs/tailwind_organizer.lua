@@ -437,7 +437,7 @@ end
 
 function M.reload()
 	package.loaded["plugins.krs.tailwind_organizer"] = nil
-	package.loaded["config.krs.tailwind_organizer"] = nil
+	package.loaded["plugins.krs.tailwind_organizer"] = nil
 	local reloaded = require("plugins.krs.tailwind_organizer")
 	reloaded.setup()
 	vim.notify("🔄 Tailwind Organizer reloaded in-memory!", vim.log.levels.INFO, { title = "Tailwind Organizer" })

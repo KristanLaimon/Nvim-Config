@@ -15,6 +15,14 @@ vim.filetype.add({
 
 return {
 	{
+		-- Its own spec so `:Mason` exists on an empty nvim too. Without this, mason
+		-- is only ever pulled in as an nvim-lspconfig dependency, and setup() (which
+		-- registers the command) runs on BufReadPre — no file open, no :Mason.
+		"williamboman/mason.nvim",
+		cmd = "Mason",
+		opts = {},
+	},
+	{
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPre", "BufNewFile" },
 		cmd = { "LspInfo", "LspInstall", "LspStart" },
@@ -380,7 +388,14 @@ return {
 				enabled = true,
 				window = { border = "rounded" },
 			},
-			sources = { default = { "lsp", "path", "snippets", "buffer" } },
+			sources = {
+				default = { "lsp", "path", "snippets", "buffer" },
+				-- Debug repl completes from the stopped frame only, never lsp/buffer words.
+				per_filetype = { ["dap-repl"] = { "dap" } },
+				providers = {
+					dap = { name = "DAP", module = "krs.dap_repl_source", async = true },
+				},
+			},
 			fuzzy = {
 				implementation = "prefer_rust_with_warning",
 				prebuilt_binaries = {

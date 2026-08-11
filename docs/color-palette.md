@@ -7,7 +7,7 @@ This guide explains how to manage, customize, and extend colorschemes in this Ne
 ## 📁 Key Files & Directories
 
 - **Theme Plugin Specification:** [`lua/plugins/ui/themes.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/ui/themes.lua)
-- **Live Colorscheme Previewer:** [`lua/config/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/krs/colorscheme_preview.lua)
+- **Live Colorscheme Previewer:** [`lua/plugins/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/colorscheme_preview.lua)
 
 ---
 
@@ -46,7 +46,7 @@ Lualine is configured with `theme = "auto"`, meaning it dynamically adapts its p
 
 ## 🦊 Live Colorscheme Previewer
 
-The configuration includes an active live colorscheme preview module [`lua/config/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/config/krs/colorscheme_preview.lua).
+The configuration includes an active live colorscheme preview module [`lua/plugins/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/colorscheme_preview.lua).
 
 ### How it Works:
 1. Type `:colorscheme <theme>` in Command Mode and hit `<Tab>` to cycle through themes.

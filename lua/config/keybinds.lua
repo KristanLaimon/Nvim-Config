@@ -164,9 +164,50 @@ local split_binds = {
 	l = { "<C-S-l>", "<C-S-L>" },
 }
 
+-- While a debug session is running, <C-S-j> toggles the repl ("immediate window")
+-- instead of opening a file split: hidden -> open and focus, visible -> focus,
+-- already focused -> close the whole bottom layout.
+local function dap_toggle_repl()
+	local dap_ok, dap = pcall(require, "dap")
+	if not dap_ok or not dap.session() then
+		return false
+	end
+	local dapui_ok, dapui = pcall(require, "dapui")
+	if not dapui_ok then
+		return false
+	end
+	local repl_win
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "dap-repl" then
+			repl_win = win
+			break
+		end
+	end
+	if repl_win == vim.api.nvim_get_current_win() then
+		-- layout 2 is the bottom { repl, console } panel from dapui.setup()
+		pcall(dapui.close, { layout = 2 })
+	elseif repl_win then
+		vim.api.nvim_set_current_win(repl_win)
+	else
+		pcall(dapui.open, { layout = 2 })
+		vim.schedule(function()
+			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+				if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "dap-repl" then
+					vim.api.nvim_set_current_win(win)
+					return
+				end
+			end
+		end)
+	end
+	return true
+end
+
 for dir, keys in pairs(split_binds) do
 	for _, key in ipairs(keys) do
 		vim.keymap.set(split_modes, key, function()
+			if dir == "j" and dap_toggle_repl() then
+				return
+			end
 			open_find_files_split(dir)
 		end, { noremap = true, silent = true, desc = "Find file and open in split (" .. dir .. ")" })
 	end
@@ -551,9 +592,16 @@ vim.keymap.set(
 )
 
 -- Per-Project Launch Profiles (Ctrl + Shift + S runs the default, Ctrl + Shift + Q opens the UI)
+-- Same key stops an already running session, so start/stop is one toggle.
+-- Resuming from a breakpoint stays on <F5>.
 vim.keymap.set({ "n", "i", "v" }, "<C-S-s>", function()
+	local ok, dap = pcall(require, "dap")
+	if ok and dap.session() then
+		dap_terminate()
+		return
+	end
 	require("plugins.krs.launch_profiles").handle_smart_launch()
-end, { noremap = true, silent = true, desc = "Run Default Launch Profile (or open wizard)" })
+end, { noremap = true, silent = true, desc = "Start/Stop Debugging (or run default launch profile)" })
 
 for _, lhs in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
@@ -754,3 +802,38 @@ vim.keymap.set("n", "<F2>", function()
 end, { noremap = true, silent = true, desc = "Rename symbol or file" })
 
 
+
+-- Alt+h / Ctrl+Shift+h flip the breakpoint under the cursor between enabled and
+-- disabled, keeping it on the line (grey paw sign). Both keys already do
+-- something else (cycle buffers, split left), and <C-S-h> is claimed by a lazy
+-- `keys` spec in telescope.lua, so the mapping is installed on VimEnter — last
+-- writer wins — and the previous mapping is replayed whenever the cursor line
+-- has no breakpoint to flip.
+vim.api.nvim_create_autocmd("VimEnter", {
+	group = vim.api.nvim_create_augroup("KrsDapBreakpointEnableKeys", { clear = true }),
+	callback = function()
+		for _, lhs in ipairs({ "<A-h>", "<M-h>", "<C-S-h>", "<C-S-H>" }) do
+			for _, mode in ipairs({ "n", "i", "v" }) do
+				local prev = vim.fn.maparg(lhs, mode, false, true)
+				local function fallback()
+					if type(prev) ~= "table" then
+						return
+					end
+					if prev.callback then
+						prev.callback()
+					elseif prev.rhs and prev.rhs ~= "" then
+						local keys = vim.api.nvim_replace_termcodes(prev.rhs, true, true, true)
+						vim.api.nvim_feedkeys(keys, prev.noremap == 1 and "n" or "m", false)
+					end
+				end
+				vim.keymap.set(mode, lhs, function()
+					local ok, mod = pcall(require, "plugins.krs.dap_breakpoints")
+					if ok and mod.toggle_enabled({ silent = true }) then
+						return
+					end
+					fallback()
+				end, { noremap = true, silent = true, desc = "Enable/Disable Breakpoint" })
+			end
+		end
+	end,
+})

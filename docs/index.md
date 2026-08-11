@@ -26,7 +26,7 @@ Welcome to the official documentation and wiki for **KRS Neovim**, a custom, hig
 ## 🚀 Key Features Overview
 
 1. **Ultra-Fast & Modular Architecture**
-   - Built on `lazy.nvim` with custom modules in `lua/config/krs/` and `lua/plugins/krs/`.
+   - Built on `lazy.nvim` with custom modules in `lua/plugins/krs/` (debug adapters in `lua/plugins/krs/debuggers/`).
    - Asynchronous execution for instant UI response (< 30ms loading times).
 
 2. **Unified Custom Floating UI**

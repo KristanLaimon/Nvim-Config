@@ -79,6 +79,10 @@ function M.open(opts)
 	local finished = false
 
 	local function close_win()
+		-- <CR> confirms from insert mode, but closing the float does not leave it:
+		-- focus returns to the caller's buffer still in insert, which moves the cursor
+		-- and fires blink.cmp there. Leave insert before giving the window back.
+		vim.cmd("stopinsert")
 		if vim.api.nvim_buf_is_valid(buf) then
 			pcall(function()
 				vim.bo[buf].modified = false

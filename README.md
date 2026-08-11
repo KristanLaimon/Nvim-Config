@@ -85,7 +85,7 @@ No autocmd/pattern changes needed — it already matches every filetype.
 
 ## 📦 Installed Plugins & Custom Modules
 
-### 🛠️ Custom-Tailored Plugins & Modules (`lua/plugins/krs`, `lua/config/krs`)
+### 🛠️ Custom-Tailored Plugins & Modules (`lua/plugins/krs`)
 
 | Feature | Location | What it does | Keybindings |
 |---|---|---|---|
@@ -93,16 +93,16 @@ No autocmd/pattern changes needed — it already matches every filetype.
 | **Command Palette** | `lua/plugins/krs/command_palette.lua` | VSCode-style `Ctrl+Shift+P` fuzzy command list — runs Vim commands, simulated keypresses, or Lua functions from one picker. | `<C-S-p>` |
 | **Git Control Center** | `lua/plugins/krs/git_center.lua` | Custom floating Git UI: stage/unstage, diff preview, commit form (title/description/tag), stash, and undo — no external Git plugin needed for the daily flow. | `<C-S-g>` |
 | **Nuget Package Manager** | `lua/plugins/krs/nuget.lua` | CRUD for `<PackageReference>` in a `.csproj` via `dotnet add/remove package`, through a Telescope picker. Only activates when the project actually has a `.csproj`. | `<leader>ng`, `:NugetManager` |
-| **Desktop File Explorer** | `lua/config/krs/file_explorer.lua` | Pure-Lua floating file browser (no external file-manager binary), starts at `~/Desktop`. Create/rename/delete files & folders, drill in/out, set a folder as the active project. | `<C-S-f>` |
-| **WSL File Explorer** | `lua/config/krs/file_explorer.lua` | Same explorer, rooted at a WSL distro's filesystem (`\\wsl.localhost\<Distro>\`). Lists installed distros if there's more than one. Windows-only. | `<leader>fw`, `:TelescopeFileBrowserWSL` |
+| **Desktop File Explorer** | `lua/plugins/krs/file_explorer.lua` | Pure-Lua floating file browser (no external file-manager binary), starts at `~/Desktop`. Create/rename/delete files & folders, drill in/out, set a folder as the active project. | `<C-S-f>` |
+| **WSL File Explorer** | `lua/plugins/krs/file_explorer.lua` | Same explorer, rooted at a WSL distro's filesystem (`\\wsl.localhost\<Distro>\`). Lists installed distros if there's more than one. Windows-only. | `<leader>fw`, `:TelescopeFileBrowserWSL` |
 | **Open Folder Picker** | `lua/plugins/editor/telescope.lua` | Generic "open any folder as project" picker, independent of the Desktop explorer. | `<C-S-o>` |
 | **Recent Projects** | `lua/plugins/editor/project.lua` | `project.nvim` wrapped in a custom picker with favorites (pinned to the bottom) and per-entry delete. | `<C-S-r>` |
-| **Multi-Terminal Manager** | `lua/config/krs/terminal.lua` | 9 lazily-spawned terminals, toggle/select independently. If the terminal's `cwd` sits inside a WSL distro path, it launches `wsl.exe` there instead of the default Windows shell — automatic, no config needed. | `<A-1>`..`<A-9>`, `<C-;>` |
-| **Task & Script Manager** | `lua/config/krs/tasks.lua` | Per-project tasks stored in `.krsnvim/tasks.json`; run, chain, or set a default task detected from `Makefile`/`package.json`/etc. | `<C-S-t>`, `<leader>ta`, `<C-S-a>` |
-| **Live Colorscheme Previewer** | `lua/config/krs/colorscheme_preview.lua` | Previews the theme live as you tab through `:colorscheme <Tab>`, reverts if you cancel. | `:colorscheme <Tab>` |
-| **Pixel-Art Image Viewer** | `lua/config/krs/image_viewer.lua` | Renders images as terminal pixel art via `chafa` in a floating window; can also hand off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
-| **Buffer Cleaner & Smart Quit** | `lua/config/krs/buffer_cleaner.lua` | Makes `:q` context-aware (close split → close tab → back to dashboard → quit), and sweeps empty `[No Name]` buffers automatically. | `:q` / `:q!` |
-| **Context Help** | `lua/config/krs/context_help.lua` | `?` / `<F1>` shows a tiny, context-aware cheatsheet (different content in Neo-tree, Git, Telescope, editor). | `?`, `<F1>` |
+| **Multi-Terminal Manager** | `lua/plugins/krs/terminal.lua` | 9 lazily-spawned terminals, toggle/select independently. If the terminal's `cwd` sits inside a WSL distro path, it launches `wsl.exe` there instead of the default Windows shell — automatic, no config needed. | `<A-1>`..`<A-9>`, `<C-;>` |
+| **Task & Script Manager** | `lua/plugins/krs/tasks.lua` | Per-project tasks stored in `.krsnvim/tasks.json`; run, chain, or set a default task detected from `Makefile`/`package.json`/etc. | `<C-S-t>`, `<leader>ta`, `<C-S-a>` |
+| **Live Colorscheme Previewer** | `lua/plugins/krs/colorscheme_preview.lua` | Previews the theme live as you tab through `:colorscheme <Tab>`, reverts if you cancel. | `:colorscheme <Tab>` |
+| **Pixel-Art Image Viewer** | `lua/plugins/krs/image_viewer.lua` | Renders images as terminal pixel art via `chafa` in a floating window; can also hand off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
+| **Buffer Cleaner & Smart Quit** | `lua/plugins/krs/buffer_cleaner.lua` | Makes `:q` context-aware (close split → close tab → back to dashboard → quit), and sweeps empty `[No Name]` buffers automatically. | `:q` / `:q!` |
+| **Context Help** | `lua/plugins/krs/context_help.lua` | `?` / `<F1>` shows a tiny, context-aware cheatsheet (different content in Neo-tree, Git, Telescope, editor). | `?`, `<F1>` |
 
 ### Core & LSP
 | Plugin | Purpose |
