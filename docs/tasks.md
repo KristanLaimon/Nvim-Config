@@ -1,4 +1,4 @@
-# 🛠️ Per-Project Task Runner & Executor (`config.krs.tasks`)
+# 🛠️ Per-Project Task Runner & Executor (`plugins.krs.tasks`)
 
 The **KRS Task Runner** provides automatic project build detection, custom task chains, background task slots, and error popups for seamless development workflows.
 
@@ -13,12 +13,15 @@ The **KRS Task Runner** provides automatic project build detection, custom task 
 
 ---
 
-## ⌨️ Shortcuts
+## ⌨️ Shortcuts & User Commands
 
 - `<C-S-t>`: Open Task Manager (Telescope)
 - `<C-S-a>`: Run Default Task or Open Task Menu
 - `<C-1..4>`: Toggle Background Task Slot 1..4
-- `<C-S-;>`: Toggle Last Active Task Output Terminal
+- `<C-`>` / `<C-S-o>`: Toggle Last Active Task Output Terminal
+- `:TaskRestart`: Kill and restart the active task (or via Command Palette `<C-S-p>` -> `🔄 Restart Current Task (Kill & Rerun)`)
+- `:TaskKill`: Stop/kill the currently running task process
+- `:TaskRunDefault`: Execute the default task directly
 - `d` (inside menu): Set selected task as project default
 - `a` (inside menu): Add custom single command task
 - `c` (inside menu): Add chained multi-step task

@@ -1,7 +1,7 @@
 return {
 	{
 		"stevearc/conform.nvim",
-		event = { "BufWritePre", "BufNewFile" },
+		event = { "BufReadPre", "BufNewFile" },
 		cmd = { "ConformInfo" },
 		opts = {
 			formatters_by_ft = {
@@ -14,19 +14,26 @@ return {
 				typescriptreact = { "prettierd", "prettier", "biome", stop_after_first = true },
 				css = { "prettierd", "prettier", "biome", stop_after_first = true },
 				html = { "prettierd", "prettier", "biome", stop_after_first = true },
-				-- biome only formats the frontmatter/script block of these, never the
-				-- template markup -- prefer prettier when configured, else fall back
-				-- to biome so frontmatter still gets formatted
 				svelte = { "prettierd", "prettier", "biome", stop_after_first = true },
-				-- biome doesn't format .astro at all. prettierd can't take the
-				-- --plugin flag astro needs, so plain prettier only here.
 				astro = { "prettier" },
 				dockerfile = { "dockerfmt" },
+				php = { "pint", "php_cs_fixer", stop_after_first = true },
+				blade = { "blade-formatter", "pint", stop_after_first = true },
 			},
 			formatters = {
+				pint = {
+					condition = function(self, ctx)
+						return vim.fn.executable("pint") == 1
+							or vim.fs.find({ "vendor/bin/pint", "vendor/bin/pint.bat" }, { path = ctx.filename, upward = true })[1] ~= nil
+					end,
+				},
+				php_cs_fixer = {
+					condition = function(self, ctx)
+						return vim.fn.executable("php-cs-fixer") == 1
+							or vim.fs.find({ "vendor/bin/php-cs-fixer", "vendor/bin/php-cs-fixer.bat" }, { path = ctx.filename, upward = true })[1] ~= nil
+					end,
+				},
 				prettier = {
-					-- astro always uses prettier (no rc file needed, plugin below);
-					-- everything else only if the project opted into prettier via rc file
 					condition = function(self, ctx)
 						return ctx.filetype == "astro"
 							or vim.fs.find({
@@ -47,9 +54,6 @@ return {
 						local args = { "--stdin-filepath", "$FILENAME" }
 						if ctx.filetype == "astro" then
 							vim.list_extend(args, { "--plugin", "prettier-plugin-astro" })
-							-- separate config name so a project's .prettierrc.astro.json
-							-- doesn't also flip ts/js/css/etc onto prettier (their
-							-- condition only looks for the standard .prettierrc names)
 							local cfg = vim.fs.find(
 								{ ".prettierrc.astro.json" },
 								{ path = ctx.filename, upward = true }
@@ -85,10 +89,6 @@ return {
 			},
 			default_format_opts = {
 				lsp_format = "fallback",
-				-- biome's LSP attaches to astro/svelte too, but only formats the
-				-- frontmatter -- its full-document edit fights astro-ls/svelteserver.
-				-- conform's biome formatter (above) already covers the frontmatter,
-				-- so drop the LSP client here to avoid double-formatting/conflicts.
 				filter = function(client)
 					return not (
 						client.name == "biome"

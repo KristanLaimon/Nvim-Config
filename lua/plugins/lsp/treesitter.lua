@@ -25,6 +25,9 @@ local parsers = {
 	"yaml",
 	"toml",
 	"editorconfig",
+	"php",
+	"phpdoc",
+	"blade",
 }
 
 return {

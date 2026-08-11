@@ -18,6 +18,7 @@ Welcome to the official documentation and wiki for **KRS Neovim**, a custom, hig
 | 🎨 [**Color Palette & Aesthetics**](color-palette.md) | Modern color schemes, highlights, and custom visual elements |
 | 🧰 [**Command Palette**](command-palette.md) | Interactive command launcher and utility shortcuts |
 | 🌐 [**Adding Languages & LSPs**](adding-language.md) | Installing and configuring new LSPs, formatters, and linters |
+| 🐞 [**Debug Adapters (DAP)**](debug-adapters.md) | How debugging works end to end, adding a debugger, and diagnosing one that silently does nothing |
 | 📄 [**JSON & TOML Schemas**](schemas-json.md) | Auto-validation and completion for configuration files |
 
 ---
@@ -48,6 +49,6 @@ Welcome to the official documentation and wiki for **KRS Neovim**, a custom, hig
 - **Git Control Center**: `<Ctrl + Shift + G>`
 - **Desktop File Explorer**: `<Ctrl + Shift + F>`
 - **Project Tasks Menu**: `<Ctrl + Shift + T>`
-- **Toggle Task Output**: `<Ctrl + Shift + ;>`
+- **Toggle Task Output**: `<Ctrl + `>` / `<Ctrl + Shift + O>`
 - **Toggle Active Terminal**: `<Ctrl + ;>`
 - **Select Terminal #1..9**: `<Alt + 1..9>`

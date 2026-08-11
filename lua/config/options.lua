@@ -8,6 +8,8 @@ vim.opt.expandtab = false
 vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
+vim.opt.showmode = false -- Hide native mode text (-- INSERT --) from bottom cmdline
+vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle
 
 -- Performance & Clipboard Optimizations
 vim.opt.clipboard = "unnamedplus" -- Use system clipboard by default
@@ -110,17 +112,4 @@ end
 
 setup_path_env()
 
--- GUI & Font configuration with persistence (KRS Modules)
-require("config.krs.font").setup()
-require("config.krs.terminal").setup()
-require("config.krs.image_viewer").setup()
-require("config.krs.colorscheme_preview").setup()
-require("config.krs.buffer_cleaner").setup()
-require("config.krs.file_explorer").setup()
-require("config.krs.context_help").setup()
-require("config.krs.type_injector").setup()
-require("config.krs.input_modal").setup_ui_input_override()
-
-
-
-
+-- GUI & Font configuration with persistence (KRS Plugins are loaded via Lazy)

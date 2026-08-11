@@ -66,7 +66,10 @@ This document provides a comprehensive cheatsheet of all keyboard shortcuts in K
 | `<C-S-t>` | Normal, Insert, Visual | Open Per-Project Task Menu (Telescope) |
 | `<C-S-a>` | Normal, Insert, Visual | Run Default Task or Open Task Menu |
 | `<C-1..4>` | Normal, Insert, Visual, Terminal | Toggle Background Task Output Slot #1..4 |
-| `<C-S-:>` / `<C-S-;>` | Normal, Insert, Visual, Terminal | Toggle Last Active Task Output Window |
+| `<C-`>` / `<C-S-o>` | Normal, Insert, Visual, Terminal | Toggle Last Active Task Output Window |
+| `<C-v>` / `<C-S-v>` | Terminal, Insert, Normal | Paste OS clipboard into Terminal |
+| `<C-c>` / `<C-S-c>` | Visual (Terminal & Buffers) | Copy selected text to OS clipboard |
+| `:TaskRestart` / `<C-S-p>` | All | Kill & Restart active project task |
 | `<C-LeftMouse>` | All | Open URL under cursor in web browser |
 
 ---

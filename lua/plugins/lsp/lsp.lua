@@ -8,6 +8,9 @@ vim.filetype.add({
 		props = "xml",
 		targets = "xml",
 	},
+	pattern = {
+		[".*%.blade%.php"] = "blade",
+	},
 })
 
 return {
@@ -22,6 +25,34 @@ return {
 		},
 		opts = {
 			servers = {
+				intelephense = {
+					settings = {
+						intelephense = {
+							files = {
+								maxSize = 1000000,
+							},
+							stubs = {
+								"bcmath",
+								"Core",
+								"curl",
+								"date",
+								"hash",
+								"json",
+								"mbstring",
+								"openssl",
+								"pcre",
+								"PDO",
+								"Reflection",
+								"SPL",
+								"standard",
+								"tokenizer",
+								"zlib",
+								"laravel",
+								"phpunit",
+							},
+						},
+					},
+				},
 				taplo = {},
 				yamlls = {
 					settings = {
@@ -52,19 +83,6 @@ return {
 							on_dir(root)
 						end
 					end,
-					-- Automatic Type Acquisition must stay OFF. In a project with no
-					-- tsconfig.json, ATA downloads @types/* into
-					-- %LOCALAPPDATA%/Microsoft/TypeScript/<ver> and injects them a few
-					-- seconds after attach -- that is the "types were missing, then
-					-- IntelliSense came back on its own" behaviour. It hides the
-					-- "install type definitions" error and makes the Type Injector's
-					-- enable/disable state meaningless.
-					--
-					-- "js/ts" is the section tsgo actually asks for over
-					-- workspace/configuration (alongside typescript/javascript/editor).
-					-- Neither `init_options.disableAutomaticTypeAcquisition` nor
-					-- tsserver's `preferences.disableAutomaticTypingAcquisition` has any
-					-- effect here -- both were verified inert against this binary.
 					settings = {
 						["js/ts"] = {
 							disableAutomaticTypeAcquisition = true,
@@ -85,7 +103,7 @@ return {
 				},
 				astro = {},
 				html = {
-					filetypes = { "html", "templ", "hbs" },
+					filetypes = { "html", "templ", "hbs", "php", "blade" },
 				},
 				cssls = {
 					settings = {
@@ -106,6 +124,8 @@ return {
 						"svelte",
 						"vue",
 						"astro",
+						"php",
+						"blade",
 					},
 					settings = {
 						tailwindCSS = {
@@ -131,6 +151,8 @@ return {
 						"svelte",
 						"vue",
 						"astro",
+						"php",
+						"blade",
 					},
 				},
 				omnisharp = {
@@ -141,6 +163,7 @@ return {
 				},
 				lemminx = {},
 				dockerls = {},
+				gopls = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -154,7 +177,7 @@ return {
 
 							workspace = {
 								checkThirdParty = false,
-								library = require("config.krs.type_injector").get_active_lua_libraries(),
+								library = require("plugins.krs.type_injector").get_active_lua_libraries(),
 							},
 
 							completion = {
@@ -184,6 +207,7 @@ return {
 			require("mason").setup()
 			require("mason-lspconfig").setup({
 				ensure_installed = {
+					"intelephense",
 					"lua_ls",
 					"jsonls",
 					"taplo",
@@ -199,6 +223,7 @@ return {
 					"omnisharp",
 					"lemminx",
 					"dockerls",
+					"gopls",
 				},
 				handlers = {
 					function(server_name)
@@ -319,11 +344,17 @@ return {
 		opts = {
 			-- Never pop the menu when cursor sits inside an empty bracket pair (e.g. right after autopairs inserts "{}")
 			enabled = function()
+				if vim.bo.filetype == "krsinputmodal" or vim.b.completion == false then
+					return false
+				end
 				local line = vim.api.nvim_get_current_line()
 				local col = vim.api.nvim_win_get_cursor(0)[2]
 				local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
 				local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
 				if pairs_map[before] == after then
+					return false
+				end
+				if after == ">" or after == "}" or line:sub(col + 1):match("^%s*[>}]") then
 					return false
 				end
 				return true

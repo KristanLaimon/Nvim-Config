@@ -55,7 +55,7 @@ return {
 				mappings = {
 					n = {
 						["?"] = function()
-							require("config.krs.context_help").show_help()
+							require("plugins.krs.context_help").show_help()
 						end,
 					},
 				},
@@ -68,8 +68,8 @@ return {
 			if vim.fn.isdirectory(cwd .. "/.git") == 1 then
 				is_git = true
 			else
-				local out = vim.fn.system("git -C " .. vim.fn.shellescape(cwd) .. " rev-parse --is-inside-work-tree 2>NUL")
-				if out and out:match("true") then
+				local obj = vim.system({ "git", "-C", cwd, "rev-parse", "--is-inside-work-tree" }, { text = true }):wait()
+				if obj and obj.code == 0 and obj.stdout and obj.stdout:match("true") then
 					is_git = true
 				end
 			end
@@ -219,7 +219,7 @@ return {
 				end
 
 				pcall(function()
-					require('config.krs.wsl').add_recent_project(norm_path)
+					require('plugins.krs.wsl').add_recent_project(norm_path)
 				end)
 			end
 
@@ -324,10 +324,10 @@ return {
 		vim.keymap.set({ 'n', 'i' }, '<C-S-o>', open_folder_picker, { desc = 'Telescope open folder' })
 
 		vim.api.nvim_create_user_command('TelescopeFileBrowserDesktop', function()
-			require('config.krs.file_explorer').open_desktop_explorer()
+			require('plugins.krs.file_explorer').open_desktop_explorer()
 		end, {})
 		vim.keymap.set({ 'n', 'i' }, '<C-S-f>', function()
-			require('config.krs.file_explorer').open_desktop_explorer()
+			require('plugins.krs.file_explorer').open_desktop_explorer()
 		end, { desc = 'Open Desktop File Explorer' })
 
 		local function open_find_files_split(direction)

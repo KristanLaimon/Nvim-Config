@@ -267,6 +267,10 @@ function M.load_workspace(ws_or_identifier)
 		return false
 	end
 
+	local cur_cwd = vim.fn.getcwd():gsub("\\", "/"):lower()
+	local target_cwd = target.cwd and target.cwd:gsub("\\", "/"):lower() or cur_cwd
+	local is_same_project = (cur_cwd == target_cwd)
+
 	if target.cwd and vim.fn.getcwd() ~= target.cwd then
 		pcall(vim.api.nvim_set_current_dir, target.cwd)
 	end
@@ -275,7 +279,13 @@ function M.load_workspace(ws_or_identifier)
 
 	for _, b in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(b) then
-			pcall(vim.api.nvim_buf_delete, b, { force = true })
+			local bt = vim.bo[b].buftype
+			local ft = vim.bo[b].filetype
+			local is_task = vim.b[b].krs_is_task or ft == "TaskRunner"
+			-- Only delete buffers if switching to a DIFFERENT project root (preserve tasks in same project)
+			if not (is_same_project and (bt == "terminal" or is_task or ft == "toggleterm")) then
+				pcall(vim.api.nvim_buf_delete, b, { force = true })
+			end
 		end
 	end
 
@@ -285,11 +295,18 @@ function M.load_workspace(ws_or_identifier)
 		return false
 	end
 
-	-- Clean up any terminal buffers or windows that might have been saved in older session files
-	for _, b in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(b) and (vim.bo[b].buftype == "terminal" or vim.bo[b].filetype == "TaskRunner") then
-			pcall(vim.api.nvim_buf_delete, b, { force = true })
+	-- Clean up stale terminal buffers ONLY when switching to a different project
+	if not is_same_project then
+		for _, b in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_valid(b) and (vim.bo[b].buftype == "terminal" or vim.bo[b].filetype == "TaskRunner") then
+				pcall(vim.api.nvim_buf_delete, b, { force = true })
+			end
 		end
+	else
+		-- Re-sync tasks slots when staying in the same project workspace
+		pcall(function()
+			require("plugins.krs.tasks").sync_task_slots()
+		end)
 	end
 
 	if target.neotree_open then
@@ -638,23 +655,14 @@ function M.select_workspace()
 	create_picker()
 end
 
-_G.Workspaces = M
-
--- Plugin Specification for Lazy.nvim
-local plugin_spec = {
-	name = "workspaces",
-	dir = vim.fn.stdpath("config"),
-	event = "VeryLazy",
-	dependencies = {
-		"nvim-lua/plenary.nvim",
-		"nvim-telescope/telescope.nvim",
-	},
-	config = function()
-		-- User Commands
+function M.setup()
+	if vim.fn.exists(":WorkspaceSave") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceSave", function(opts)
 			M.save_workspace(opts.args ~= "" and opts.args or nil)
 		end, { nargs = "?", desc = "Save state as workspace" })
+	end
 
+	if vim.fn.exists(":WorkspaceLoad") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceLoad", function(opts)
 			local arg = opts.args
 			if arg == "" then
@@ -664,11 +672,15 @@ local plugin_spec = {
 				M.load_workspace(num or arg)
 			end
 		end, { nargs = "?", desc = "Load saved workspace" })
+	end
 
+	if vim.fn.exists(":WorkspaceDelete") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceDelete", function(opts)
 			M.delete_workspace(opts.args ~= "" and opts.args or nil)
 		end, { nargs = "?", desc = "Delete workspace" })
+	end
 
+	if vim.fn.exists(":WorkspaceRename") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceRename", function(opts)
 			local args = vim.split(opts.args, "%s+", { trimempty = true })
 			if #args >= 2 then
@@ -677,62 +689,88 @@ local plugin_spec = {
 				M.select_workspace()
 			end
 		end, { nargs = "*", desc = "Rename workspace" })
+	end
 
+	if vim.fn.exists(":WorkspaceSelect") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceSelect", function()
 			M.select_workspace()
 		end, {})
+	end
 
+	if vim.fn.exists(":Workspaces") == 0 then
 		vim.api.nvim_create_user_command("Workspaces", function()
 			M.select_workspace()
 		end, {})
+	end
 
+	if vim.fn.exists(":WorkspaceClose") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceClose", function()
 			M.close_to_menu()
 		end, { desc = "Close session and return to main menu" })
+	end
 
+	if vim.fn.exists(":WorkspaceMenu") == 0 then
 		vim.api.nvim_create_user_command("WorkspaceMenu", function()
 			M.close_to_menu()
 		end, { desc = "Close session and return to main menu" })
+	end
 
-		-- Global Keymaps
-		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-w>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.select_workspace()
-		end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
-
-		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-W>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.select_workspace()
-		end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
-
-		vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-m>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.close_to_menu()
-		end, { noremap = true, silent = true, desc = "Close and return to Menu" })
-
-		vim.keymap.set("n", "<leader>ws", function()
-			M.save_workspace()
-		end, { desc = "Save Workspace" })
-
-		vim.keymap.set("n", "<leader>ww", function()
-			M.select_workspace()
-		end, { desc = "Select Workspace" })
-
-		vim.keymap.set("n", "<leader>wm", function()
-			M.close_to_menu()
-		end, { desc = "Close and return to Menu" })
-
-		for i = 1, 9 do
-			vim.keymap.set("n", "<leader>w" .. i, function()
-				M.load_workspace(i)
-			end, { desc = "Load Workspace slot " .. i })
+	-- Global Keymaps
+	vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-w>", function()
+		if vim.fn.mode() == "t" then
+			vim.cmd("stopinsert")
 		end
+		M.select_workspace()
+	end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
+
+	vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-W>", function()
+		if vim.fn.mode() == "t" then
+			vim.cmd("stopinsert")
+		end
+		M.select_workspace()
+	end, { noremap = true, silent = true, desc = "Open Workspaces UI" })
+
+	vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-m>", function()
+		if vim.fn.mode() == "t" then
+			vim.cmd("stopinsert")
+		end
+		M.close_to_menu()
+	end, { noremap = true, silent = true, desc = "Close and return to Menu" })
+
+	vim.keymap.set("n", "<leader>ws", function()
+		M.save_workspace()
+	end, { desc = "Save Workspace" })
+
+	vim.keymap.set("n", "<leader>ww", function()
+		M.select_workspace()
+	end, { desc = "Select Workspace" })
+
+	vim.keymap.set("n", "<leader>wm", function()
+		M.close_to_menu()
+	end, { desc = "Close and return to Menu" })
+
+	for i = 1, 9 do
+		vim.keymap.set("n", "<leader>w" .. i, function()
+			M.load_workspace(i)
+		end, { desc = "Load Workspace slot " .. i })
+	end
+end
+
+M.setup()
+
+_G.Workspaces = M
+
+-- Plugin Specification for Lazy.nvim
+local plugin_spec = {
+	name = "krs_workspaces",
+	dir = require("krs.lazydir").for_module(),
+	lazy = false,
+	dependencies = {
+		"nvim-lua/plenary.nvim",
+		"nvim-telescope/telescope.nvim",
+	},
+	config = function()
+		M.setup()
 	end,
 }
 

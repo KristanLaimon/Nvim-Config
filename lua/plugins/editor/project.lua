@@ -142,7 +142,7 @@ return {
 			local raw_projects = history.get_recent_projects() or {}
 			-- WSL recents dropped: isdirectory() over \\wsl.localhost\... is slow
 			-- enough (network stat) to make the picker noticeably laggy to open.
-			local wsl_ok, wsl = pcall(require, 'config.krs.wsl')
+			local wsl_ok, wsl = pcall(require, 'plugins.krs.wsl')
 			local favs = load_favorites()
 
 			local non_fav_items = {}

@@ -27,6 +27,38 @@ local function save_width(w)
   end
 end
 
+-- Pin the sidebar width. neo-tree does not set 'winfixwidth' itself, so any
+-- `wincmd =` (dap-ui opening its panels, plain splits) steals its width.
+-- winfixwidth only blocks *shrinking* though: when a neighbour closes, nvim
+-- hands the freed columns to the sidebar and it swallows the screen. So the
+-- width is also re-asserted whenever a window closes.
+local fix_group = vim.api.nvim_create_augroup("NeoTreeFixWidth", { clear = true })
+
+local function pin_width()
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win)
+    if buf and vim.bo[buf].filetype == "neo-tree" then
+      vim.wo[win].winfixwidth = true
+      if vim.api.nvim_win_get_width(win) ~= saved_width then
+        pcall(vim.api.nvim_win_set_width, win, saved_width)
+      end
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "neo-tree",
+  group = fix_group,
+  callback = pin_width,
+})
+
+vim.api.nvim_create_autocmd("WinClosed", {
+  group = fix_group,
+  callback = function()
+    vim.schedule(pin_width)
+  end,
+})
+
 -- Force other splits back to equal width when neo-tree opens/closes. `equalalways`
 -- should already do this, but neo-tree's own resize event doesn't always fire it.
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
@@ -80,7 +112,10 @@ return {
     config = function ()
 	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
 	require("neo-tree").setup {
-	    close_if_last_window = true,
+	    -- Was true: while dap-ui tears its panels down neo-tree can momentarily be
+	    -- the last window, close itself, and take the whole nvim session with it.
+	    -- Smart-Quit (<C-q>) still handles quitting explicitly.
+	    close_if_last_window = false,
 	    window = {
 		width = saved_width,
 		mappings = {
@@ -102,7 +137,7 @@ return {
 		open_with_system_app = function(state)
 		    local node = state.tree:get_node()
 		    if node and node.path then
-			require("config.krs.image_viewer").open_with_system_app(node.path)
+			require("plugins.krs.image_viewer").open_with_system_app(node.path)
 		    end
 		end,
 		rename_with_modal = function(state)
@@ -113,7 +148,7 @@ return {
 		    local old_path = node.path
 		    local old_name = node.name
 
-		    require("config.krs.input_modal").open({
+		    require("plugins.krs.input_modal").open({
 			label = "Rename (" .. old_name .. ")",
 			default_value = old_name,
 			relative = "editor",
@@ -141,7 +176,7 @@ return {
 		    if not node or not node.path then
 			return
 		    end
-		    require("config.krs.file_explorer").open_move_picker({
+		    require("plugins.krs.file_explorer").open_move_picker({
 			source_path = node.path,
 			root_dir = vim.fn.getcwd(),
 		    })
@@ -153,7 +188,7 @@ return {
 		    end
 		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
 
-		    require("config.krs.input_modal").open({
+		    require("plugins.krs.input_modal").open({
 			label = "New File / Folder",
 			default_value = "",
 			relative = "editor",

@@ -51,7 +51,7 @@ M.commands = {
     { 
         name = "🧹 Clean Unused Buffers", 
         fn = function()
-            require("config.krs.buffer_cleaner").clean_buffers()
+            require("plugins.krs.buffer_cleaner").clean_buffers()
         end, 
         category = "Buffer" 
     },

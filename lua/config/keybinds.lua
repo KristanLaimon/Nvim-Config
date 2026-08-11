@@ -2,9 +2,8 @@
 vim.g.mapleader = " "
 vim.keymap.set("n", "<leader>cd", vim.cmd.Ex)
 
--- VSCode Migration (Old habits never die)
--- Comment keymapping for US Standard & US International keyboard layouts (Ctrl + ; and Ctrl + ')
-local comment_keys = { "<C-;>", "<C-:>", "<C-S-;>", "<C-S-:>", "<C-'>", "<C-S-'>" }
+-- Comment keymapping (Ctrl + ' for US Standard, US International, ES & Latam dead-key layouts)
+local comment_keys = { "<C-'>", "<C-S-'>", '<C-">', "<C-`>", "<C-~>", "<C-^>", "<C-acute>" }
 
 local function comment_line()
 	local mode = vim.api.nvim_get_mode().mode
@@ -36,7 +35,7 @@ end
 
 
 -- Global Search Keymaps: Ctrl+/ (respect .gitignore) vs Ctrl+Shift+/ (search all files)
-local gitignore_search_keys = { "<C-/>", "<C-_>" }
+local gitignore_search_keys = { "<C-/>" }
 for _, key in ipairs(gitignore_search_keys) do
 	vim.keymap.set({ "n", "i" }, key, function()
 		if _G.FindFilesGitignore then
@@ -62,7 +61,18 @@ end
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
 -- QOL Features & Clipboard (Ctrl+C = Copy, Ctrl+V = Paste from system)
-vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, desc = "Copy to clipboard" })
+local function paste_clipboard_to_terminal()
+	local clip = vim.fn.getreg("+")
+	if not clip or clip == "" then
+		clip = vim.fn.getreg("*")
+	end
+	if clip and clip ~= "" then
+		vim.api.nvim_paste(clip, true, -1)
+	end
+end
+
+vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, silent = true, desc = "Copy to OS clipboard" })
+vim.keymap.set("v", "<C-S-c>", '"+y', { noremap = true, silent = true, desc = "Copy to OS clipboard" })
 vim.keymap.set(
 	{ "n", "v" },
 	"<C-v>",
@@ -74,6 +84,18 @@ vim.keymap.set(
 	"<C-v>",
 	"<C-r>+",
 	{ noremap = true, silent = true, desc = "Paste from system clipboard" }
+)
+vim.keymap.set(
+	"t",
+	"<C-v>",
+	paste_clipboard_to_terminal,
+	{ noremap = true, silent = true, desc = "Paste OS clipboard into terminal" }
+)
+vim.keymap.set(
+	"t",
+	"<C-S-v>",
+	paste_clipboard_to_terminal,
+	{ noremap = true, silent = true, desc = "Paste OS clipboard into terminal" }
 )
 -- Undo / Redo (Ctrl+Z = Undo, Ctrl+Y / Ctrl+Shift+Z = Redo)
 vim.keymap.set("n", "<C-z>", "u", { noremap = true, silent = true, desc = "Undo" })
@@ -181,18 +203,6 @@ local function show_diagnostic_float()
 	vim.diagnostic.open_float({ border = "rounded", scope = "cursor", focusable = true })
 end
 
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<A-k>",
-	show_diagnostic_float,
-	{ noremap = true, silent = true, desc = "Show detailed diagnostic info" }
-)
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<M-k>",
-	show_diagnostic_float,
-	{ noremap = true, silent = true, desc = "Show detailed diagnostic info" }
-)
 vim.keymap.set("n", "<leader>k", show_diagnostic_float, { desc = "Show diagnostic info" })
 vim.keymap.set("n", "<leader>u", vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
 vim.keymap.set("n", "<leader>o", vim.diagnostic.goto_next, { desc = "Next diagnostic" })
@@ -404,6 +414,18 @@ end
 
 vim.keymap.set(
 	{ "n", "i", "v" },
+	"<A-k>",
+	goto_definition,
+	{ noremap = true, silent = true, desc = "Go to definition" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<M-k>",
+	goto_definition,
+	{ noremap = true, silent = true, desc = "Go to definition" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
 	"<A-j>",
 	goto_definition,
 	{ noremap = true, silent = true, desc = "Go to definition" }
@@ -426,12 +448,35 @@ local function dap_toggle_breakpoint()
 	local ok, dap = pcall(require, "dap")
 	if ok then
 		dap.toggle_breakpoint()
+		vim.defer_fn(function()
+			pcall(function()
+				require("plugins.krs.dap_breakpoints").save_breakpoints()
+			end)
+		end, 100)
 	end
 end
 local function dap_continue()
 	local ok, dap = pcall(require, "dap")
 	if ok then
 		dap.continue()
+	end
+end
+local function dap_step_over()
+	local ok, dap = pcall(require, "dap")
+	if ok then
+		dap.step_over()
+	end
+end
+local function dap_step_into()
+	local ok, dap = pcall(require, "dap")
+	if ok then
+		dap.step_into()
+	end
+end
+local function dap_step_out()
+	local ok, dap = pcall(require, "dap")
+	if ok then
+		dap.step_out()
 	end
 end
 local function dap_terminate()
@@ -441,6 +486,12 @@ local function dap_terminate()
 		pcall(function()
 			require("dapui").close()
 		end)
+	end
+end
+local function dap_toggle_ui()
+	local ok, dapui = pcall(require, "dapui")
+	if ok then
+		dapui.toggle()
 	end
 end
 
@@ -464,44 +515,81 @@ vim.keymap.set(
 )
 vim.keymap.set(
 	{ "n", "i", "v" },
+	"<F5>",
+	dap_continue,
+	{ noremap = true, silent = true, desc = "Start/Continue Debugging" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<F10>",
+	dap_step_over,
+	{ noremap = true, silent = true, desc = "Step Over" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<F11>",
+	dap_step_into,
+	{ noremap = true, silent = true, desc = "Step Into" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
+	"<F12>",
+	dap_step_out,
+	{ noremap = true, silent = true, desc = "Step Out" }
+)
+vim.keymap.set(
+	{ "n", "i", "v" },
 	"<C-S-x>",
 	dap_terminate,
 	{ noremap = true, silent = true, desc = "Terminate Debugger" }
 )
+vim.keymap.set(
+	"n",
+	"<leader>du",
+	dap_toggle_ui,
+	{ noremap = true, silent = true, desc = "Toggle Debugger UI" }
+)
+
+-- Per-Project Launch Profiles (Ctrl + Shift + S runs the default, Ctrl + Shift + Q opens the UI)
+vim.keymap.set({ "n", "i", "v" }, "<C-S-s>", function()
+	require("plugins.krs.launch_profiles").handle_smart_launch()
+end, { noremap = true, silent = true, desc = "Run Default Launch Profile (or open wizard)" })
+
+for _, lhs in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
+		require("plugins.krs.launch_profiles").open_management_menu()
+	end, { noremap = true, silent = true, desc = "Open Launch Profiles Management UI" })
+end
 
 -- Per-Project Task Manager & Code Runner (Ctrl + Shift + T / Ctrl + Shift + A)
 vim.keymap.set({ "n", "i", "v" }, "<C-S-t>", function()
-	require("config.krs.tasks").open_task_menu()
+	require("plugins.krs.tasks").open_task_menu()
 end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
 
 vim.keymap.set({ "n", "i", "v" }, "<C-S-a>", function()
-	require("config.krs.tasks").run_default_or_menu()
+	require("plugins.krs.tasks").run_default_or_menu()
 end, { noremap = true, silent = true, desc = "Run Default Project Task" })
 
 vim.keymap.set("n", "<leader>ta", function()
-	require("config.krs.tasks").open_task_menu()
+	require("plugins.krs.tasks").open_task_menu()
 end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
 
 -- Background task output windows (up to 4 concurrent long-running tasks,
 -- e.g. `bun run dev`). Ctrl+1..4 toggles that slot's window; does nothing
 -- if the slot is empty. Ctrl+` toggles whichever slot was last run/focused.
--- NOTE: tried Ctrl+Shift+Alt+<key> (3-modifier chords eaten by
--- Windows/Neovide) and Alt+Shift+<key> (Windows' keyboard layout-switch
--- hotkey). Even Ctrl+Alt+<key> failed specifically from INSIDE the task's
--- terminal buffer (real PTY job swallows the AltGr-ish combo on entry,
--- even though it works fine outside a terminal) — single-modifier Ctrl is
--- what the rest of this config already relies on for in-terminal binds
--- (<C-;>, <A-1>..<A-9>), so stick to that here too.
 for i = 1, 4 do
 	vim.keymap.set({ "n", "i", "v", "t" }, "<C-" .. i .. ">", function()
-		require("config.krs.tasks").toggle_slot_window(i)
+		require("plugins.krs.tasks").toggle_slot_window(i)
 	end, { noremap = true, silent = true, desc = "Toggle task output slot " .. i })
 end
 
-local task_output_keys = { "<C-`>", "<leader>to" }
+local task_output_keys = { "<C-`>", "<C-S-o>", "<C-[>" }
 for _, k in ipairs(task_output_keys) do
 	vim.keymap.set({ "n", "i", "v", "t" }, k, function()
-		require("config.krs.tasks").toggle_last_slot_window()
+		if vim.fn.mode() == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
+		require("plugins.krs.tasks").toggle_last_slot_window()
 	end, { noremap = true, silent = true, desc = "Toggle last task output window" })
 end
 
@@ -522,12 +610,12 @@ end, { noremap = true, silent = true, desc = "Ctrl+Click: open URL under cursor 
 
 -- Floating Desktop File Explorer (Ctrl + Shift + F)
 vim.keymap.set({ "n", "i", "v" }, "<C-S-f>", function()
-	require("config.krs.file_explorer").open_desktop_explorer()
+	require("plugins.krs.file_explorer").open_desktop_explorer()
 end, { noremap = true, silent = true, desc = "Open Floating Desktop File Explorer" })
 
 -- Floating WSL File Explorer
 vim.keymap.set({ "n", "i", "v" }, "<leader>fw", function()
-	require("config.krs.file_explorer").open_wsl_explorer()
+	require("plugins.krs.file_explorer").open_wsl_explorer()
 end, { noremap = true, silent = true, desc = "Open Floating WSL File Explorer" })
 
 vim.keymap.set({ "n", "v" }, "<leader>ff", function()
@@ -614,7 +702,7 @@ vim.keymap.set("n", "<F2>", function()
 		if old_name == "" then
 			return
 		end
-		require("config.krs.input_modal").open({
+		require("plugins.krs.input_modal").open({
 			label = "LSP Rename",
 			default_value = old_name,
 			relative = "cursor",
@@ -636,7 +724,7 @@ vim.keymap.set("n", "<F2>", function()
 	local dir = vim.fn.fnamemodify(old_path, ":h")
 	local old_name = vim.fn.fnamemodify(old_path, ":t")
 
-	require("config.krs.input_modal").open({
+	require("plugins.krs.input_modal").open({
 		label = "Rename File",
 		default_value = old_name,
 		relative = "editor",

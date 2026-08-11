@@ -68,6 +68,14 @@ M.commands = {
 	{ name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)", cmd = "TailwindOrganizerToggle", category = "Tailwind" },
 	{ name = "✨ Organize Tailwind Classes (Current File)", cmd = "TailwindOrganize", category = "Tailwind" },
 	{ name = "ℹ️ Tailwind Organizer Status", cmd = "TailwindOrganizerStatus", category = "Tailwind" },
+
+	-- --------------------------------------------------------------------------
+	-- 🛠️ Tasks & Code Execution
+	-- --------------------------------------------------------------------------
+	{ name = "🔄 Restart Current Task (Kill & Rerun)", cmd = "TaskRestart", category = "Tasks" },
+	{ name = "🛑 Stop / Kill Current Task", cmd = "TaskKill", category = "Tasks" },
+	{ name = "⚡ Run Default Project Task", cmd = "TaskRunDefault", category = "Tasks" },
+	{ name = "🛠️ Open Project Task Menu", cmd = "TaskMenu", category = "Tasks" },
 }
 
 -- Public function to dynamically add commands from any plugin or config
@@ -157,54 +165,43 @@ function M.open_palette()
 		:find()
 end
 
+function M.setup()
+	if vim.fn.exists(":CommandPalette") == 0 then
+		vim.api.nvim_create_user_command("CommandPalette", function()
+			M.open_palette()
+		end, { desc = "Open Command Palette" })
+	end
+
+	local modes = { "n", "i", "v", "t" }
+	vim.keymap.set(modes, "<C-S-p>", function()
+		if vim.fn.mode() == "t" then
+			vim.cmd("stopinsert")
+		end
+		M.open_palette()
+	end, { noremap = true, silent = true, desc = "Open Command Palette" })
+
+	vim.keymap.set(modes, "<C-S-P>", function()
+		if vim.fn.mode() == "t" then
+			vim.cmd("stopinsert")
+		end
+		M.open_palette()
+	end, { noremap = true, silent = true, desc = "Open Command Palette" })
+end
+
+M.setup()
+
 _G.CommandPalette = M
 
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
-	name = "command_palette",
-	dir = vim.fn.stdpath("config"),
-	cmd = "CommandPalette",
-	keys = {
-		{
-			"<C-S-p>",
-			function()
-				M.open_palette()
-			end,
-			mode = { "n", "i", "v", "t" },
-			desc = "Command Palette",
-		},
-		{
-			"<C-S-P>",
-			function()
-				M.open_palette()
-			end,
-			mode = { "n", "i", "v", "t" },
-			desc = "Command Palette",
-		},
-	},
+	name = "krs_command_palette",
+	dir = require("krs.lazydir").for_module(),
+	lazy = false,
 	dependencies = {
 		"nvim-telescope/telescope.nvim",
 	},
 	config = function()
-		vim.api.nvim_create_user_command("CommandPalette", function()
-			M.open_palette()
-		end, { desc = "Open Command Palette" })
-
-		-- Global keymaps
-		local modes = { "n", "i", "v", "t" }
-		vim.keymap.set(modes, "<C-S-p>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.open_palette()
-		end, { noremap = true, silent = true, desc = "Open Command Palette" })
-
-		vim.keymap.set(modes, "<C-S-P>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.open_palette()
-		end, { noremap = true, silent = true, desc = "Open Command Palette" })
+		M.setup()
 	end,
 }
 

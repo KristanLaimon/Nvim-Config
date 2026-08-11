@@ -17,6 +17,7 @@ M.enabled = true
 M.config = {
 	auto_format_on_save = true,
 	force_multiline = false,
+	min_classes_for_multiline = 9,
 }
 
 -- Screen size breakpoint priority order
@@ -147,6 +148,38 @@ local function is_layout_position_size(token)
 	return false
 end
 
+-- Priority calculator for Row 1: Display & Position (Prio 1) > Width & Height (Prio 2) > Other Layout (Prio 3)
+local function get_layout_priority(token)
+	local base = token:match(":(.*)$") or token
+	if EXACT_LAYOUT[base] then
+		return 1
+	end
+	if
+		base:match("^w%-")
+		or base:match("^min%-w%-")
+		or base:match("^max%-w%-")
+		or base:match("^h%-")
+		or base:match("^min%-h%-")
+		or base:match("^max%-h%-")
+		or base:match("^size%-")
+	then
+		return 2
+	end
+	return 3
+end
+
+local function sort_row1_classes(row)
+	table.sort(row, function(a, b)
+		local prio_a = get_layout_priority(a)
+		local prio_b = get_layout_priority(b)
+		if prio_a ~= prio_b then
+			return prio_a < prio_b
+		else
+			return a < b
+		end
+	end)
+end
+
 -- Organizes a raw class string into multi-line/sorted rows
 function M.organize_classes(raw_class_str, row_indent, base_indent)
 	local tokens = {}
@@ -183,8 +216,10 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 		end
 	end
 
-	-- Alphabetize per row (each row restarts alphabetical order A-Z)
-	table.sort(row1)
+	-- Row 1: Priority sort (Display/Pos > Dimensions w-*/h-* > Other layout)
+	sort_row1_classes(row1)
+
+	-- Row 2 & Hover: Alphabetize per row (A-Z)
 	table.sort(row2)
 	table.sort(hover_row)
 
@@ -204,7 +239,7 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 	end)
 
 	for _, k in ipairs(screen_keys) do
-		table.sort(screen_rows[k])
+		sort_row1_classes(screen_rows[k])
 	end
 
 	-- Assemble all non-empty rows
@@ -226,9 +261,11 @@ function M.organize_classes(raw_class_str, row_indent, base_indent)
 		return ""
 	end
 
-	-- Single row format if only 1 row present and force_multiline is false
-	if #all_rows == 1 and not M.config.force_multiline then
-		return all_rows[1]
+	-- Single row format if element has fewer than min_classes_for_multiline (default 9)
+	-- or if only 1 row is present and force_multiline is false
+	local min_count = M.config.min_classes_for_multiline or 9
+	if #tokens < min_count or (#all_rows == 1 and not M.config.force_multiline) then
+		return table.concat(all_rows, " ")
 	end
 
 	-- Multi-line format with line breaks per category row
@@ -256,9 +293,27 @@ local function find_indent(text, pos)
 	return text:sub(line_start, pos):match("^(%s*)") or ""
 end
 
--- Organizes all class/className attributes in full text
-function M.organize_full_text(full_text)
+-- Organizes all class/className attributes in full text and tracks added lines before cursor & topline
+function M.organize_full_text(full_text, cursor_byte_offset, topline_byte_offset)
+	cursor_byte_offset = cursor_byte_offset or math.huge
+	topline_byte_offset = topline_byte_offset or math.huge
 	local result = full_text
+	local added_lines_before_cursor = 0
+	local added_lines_before_topline = 0
+
+	local function calc_delta(pos, old_str, new_str)
+		local _, old_nl = old_str:gsub("\n", "")
+		local _, new_nl = new_str:gsub("\n", "")
+		local diff = new_nl - old_nl
+		if diff ~= 0 then
+			if pos <= cursor_byte_offset then
+				added_lines_before_cursor = added_lines_before_cursor + diff
+			end
+			if pos <= topline_byte_offset then
+				added_lines_before_topline = added_lines_before_topline + diff
+			end
+		end
+	end
 
 	-- Match double-quoted attributes (class="...", className="...", :class="...", class:list="...")
 	result = result:gsub('()([%:%w%-]*class[%w%-]*%s*=%s*)(")([^"]-)(")', function(pos, prefix, q1, body, q2)
@@ -269,7 +324,10 @@ function M.organize_full_text(full_text)
 			return prefix .. q1 .. q2
 		end
 		local organized = M.organize_classes(cleaned, row_indent, base_indent)
-		return prefix .. q1 .. organized .. q2
+		local old_str = prefix .. q1 .. body .. q2
+		local new_str = prefix .. q1 .. organized .. q2
+		calc_delta(pos, old_str, new_str)
+		return new_str
 	end)
 
 	-- Match single-quoted attributes
@@ -281,7 +339,10 @@ function M.organize_full_text(full_text)
 			return prefix .. q1 .. q2
 		end
 		local organized = M.organize_classes(cleaned, row_indent, base_indent)
-		return prefix .. q1 .. organized .. q2
+		local old_str = prefix .. q1 .. body .. q2
+		local new_str = prefix .. q1 .. organized .. q2
+		calc_delta(pos, old_str, new_str)
+		return new_str
 	end)
 
 	-- Match JSX template literals: className={`...`} or class={`...`}
@@ -293,22 +354,48 @@ function M.organize_full_text(full_text)
 			return prefix .. suffix
 		end
 		local organized = M.organize_classes(cleaned, row_indent, base_indent)
-		return prefix .. organized .. suffix
+		local old_str = prefix .. body .. suffix
+		local new_str = prefix .. organized .. suffix
+		calc_delta(pos, old_str, new_str)
+		return new_str
 	end)
 
-	return result
+	return result, added_lines_before_cursor, added_lines_before_topline
 end
 
--- Organizes classes in current buffer
+-- Organizes classes in current buffer preserving cursor & view state with exact line shift tracking
 function M.organize_buffer(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return false
 	end
 
+	local view = nil
+	local is_current = (bufnr == vim.api.nvim_get_current_buf())
+	local cursor_byte_offset = math.huge
+	local topline_byte_offset = math.huge
+
 	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+	if is_current then
+		view = vim.fn.winsaveview()
+		topline_byte_offset = 0
+		local top_lnum = math.min(view.topline or 1, #lines)
+		for i = 1, top_lnum - 1 do
+			topline_byte_offset = topline_byte_offset + #(lines[i] or "") + 1
+		end
+
+		cursor_byte_offset = 0
+		local cur_lnum = math.min(view.lnum or 1, #lines)
+		for i = 1, cur_lnum - 1 do
+			cursor_byte_offset = cursor_byte_offset + #(lines[i] or "") + 1
+		end
+		cursor_byte_offset = cursor_byte_offset + (view.col or 0)
+	end
+
 	local full_text = table.concat(lines, "\n")
-	local organized_text = M.organize_full_text(full_text)
+	local organized_text, added_lines_before_cursor, added_lines_before_topline =
+		M.organize_full_text(full_text, cursor_byte_offset, topline_byte_offset)
 
 	if organized_text ~= full_text then
 		local new_lines = {}
@@ -320,6 +407,15 @@ function M.organize_buffer(bufnr)
 		end
 
 		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, new_lines)
+
+		if view and is_current then
+			local shifted_lnum = math.max(1, math.min(#new_lines, view.lnum + (added_lines_before_cursor or 0)))
+			local shifted_topline = math.max(1, math.min(#new_lines, view.topline + (added_lines_before_topline or 0)))
+
+			view.lnum = shifted_lnum
+			view.topline = shifted_topline
+			vim.fn.winrestview(view)
+		end
 		return true
 	end
 	return false
@@ -339,37 +435,22 @@ function M.show_status()
 	vim.notify("🎨 Tailwind Organizer Status: " .. status, vim.log.levels.INFO, { title = "Tailwind Organizer" })
 end
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "tailwind_organizer",
-	dir = vim.fn.stdpath("config"),
-	lazy = false,
-	keys = {
-		{
-			"<leader>tw",
-			function()
-				if M.organize_buffer(0) then
-					vim.notify("✨ Tailwind classes organized!", vim.log.levels.INFO, { title = "Tailwind Organizer" })
-				else
-					vim.notify("Tailwind classes already organized.", vim.log.levels.INFO, { title = "Tailwind Organizer" })
-				end
-			end,
-			desc = "Organize Tailwind Classes",
-		},
-		{
-			"<leader>tt",
-			function()
-				M.toggle()
-			end,
-			desc = "Toggle Tailwind Organizer",
-		},
-	},
-	config = function()
-		-- Create User Commands
+function M.reload()
+	package.loaded["plugins.krs.tailwind_organizer"] = nil
+	package.loaded["config.krs.tailwind_organizer"] = nil
+	local reloaded = require("plugins.krs.tailwind_organizer")
+	reloaded.setup()
+	vim.notify("🔄 Tailwind Organizer reloaded in-memory!", vim.log.levels.INFO, { title = "Tailwind Organizer" })
+end
+
+function M.setup()
+	if vim.fn.exists(":TailwindOrganizerToggle") == 0 then
 		vim.api.nvim_create_user_command("TailwindOrganizerToggle", function()
 			M.toggle()
 		end, { desc = "Toggle Tailwind Classes Organizer" })
+	end
 
+	if vim.fn.exists(":TailwindOrganize") == 0 then
 		vim.api.nvim_create_user_command("TailwindOrganize", function()
 			if M.organize_buffer(0) then
 				vim.notify("✨ Tailwind classes organized!", vim.log.levels.INFO, { title = "Tailwind Organizer" })
@@ -377,42 +458,77 @@ local plugin_spec = {
 				vim.notify("Tailwind classes already organized.", vim.log.levels.INFO, { title = "Tailwind Organizer" })
 			end
 		end, { desc = "Organize Tailwind Classes in Current Buffer" })
+	end
 
+	if vim.fn.exists(":TailwindOrganizerStatus") == 0 then
 		vim.api.nvim_create_user_command("TailwindOrganizerStatus", function()
 			M.show_status()
 		end, { desc = "Show Tailwind Organizer Status" })
+	end
 
-		-- Autocmd for Auto-format on save (:w)
-		local group = vim.api.nvim_create_augroup("TailwindOrganizerGroup", { clear = true })
-		vim.api.nvim_create_autocmd("BufWritePre", {
-			group = group,
-			pattern = "*",
-			callback = function(args)
-				if M.enabled then
-					M.organize_buffer(args.buf)
-				end
-			end,
-		})
+	if vim.fn.exists(":TailwindOrganizerReload") == 0 then
+		vim.api.nvim_create_user_command("TailwindOrganizerReload", function()
+			M.reload()
+		end, { desc = "Hot-reload Tailwind Organizer module" })
+	end
 
-		-- Dynamically register commands with CommandPalette if available
-		local ok_cp, command_palette = pcall(require, "plugins.krs.command_palette")
-		if ok_cp and command_palette.add_command then
-			command_palette.add_command({
-				name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)",
-				cmd = "TailwindOrganizerToggle",
-				category = "Tailwind",
-			})
-			command_palette.add_command({
-				name = "✨ Organize Tailwind Classes (Current File)",
-				cmd = "TailwindOrganize",
-				category = "Tailwind",
-			})
-			command_palette.add_command({
-				name = "ℹ️ Tailwind Organizer Status",
-				cmd = "TailwindOrganizerStatus",
-				category = "Tailwind",
-			})
+	vim.keymap.set("n", "<leader>tw", function()
+		if M.organize_buffer(0) then
+			vim.notify("✨ Tailwind classes organized!", vim.log.levels.INFO, { title = "Tailwind Organizer" })
+		else
+			vim.notify("Tailwind classes already organized.", vim.log.levels.INFO, { title = "Tailwind Organizer" })
 		end
+	end, { desc = "Organize Tailwind Classes" })
+
+	vim.keymap.set("n", "<leader>tt", function()
+		M.toggle()
+	end, { desc = "Toggle Tailwind Organizer" })
+
+	-- Autocmd for Auto-format on save (:w)
+	local group = vim.api.nvim_create_augroup("TailwindOrganizerGroup", { clear = true })
+	vim.api.nvim_create_autocmd("BufWritePre", {
+		group = group,
+		pattern = "*",
+		callback = function(args)
+			if M.enabled then
+				M.organize_buffer(args.buf)
+			end
+		end,
+	})
+
+	-- Dynamically register commands with CommandPalette if available
+	local ok_cp, command_palette = pcall(require, "plugins.krs.command_palette")
+	if ok_cp and command_palette.add_command then
+		command_palette.add_command({
+			name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)",
+			cmd = "TailwindOrganizerToggle",
+			category = "Tailwind",
+		})
+		command_palette.add_command({
+			name = "✨ Organize Tailwind Classes (Current File)",
+			cmd = "TailwindOrganize",
+			category = "Tailwind",
+		})
+		command_palette.add_command({
+			name = "ℹ️ Tailwind Organizer Status",
+			cmd = "TailwindOrganizerStatus",
+			category = "Tailwind",
+		})
+	end
+end
+
+-- Ensure setup runs on module load
+M.setup()
+
+_G.TailwindOrganizer = M
+
+-- Plugin specification for Lazy.nvim
+local plugin_spec = {
+	name = "krs_tailwind_organizer",
+	dir = require("krs.lazydir").for_module(),
+	lazy = false,
+	config = function()
+		M.setup()
 	end,
 }
 

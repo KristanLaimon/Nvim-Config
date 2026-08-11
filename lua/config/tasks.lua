@@ -1,2 +1,2 @@
 -- Delegation stub for backward compatibility
-return require("config.krs.tasks")
+return require("plugins.krs.tasks")

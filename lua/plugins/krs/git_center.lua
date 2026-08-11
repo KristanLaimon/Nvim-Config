@@ -9,6 +9,8 @@ M.main_win = nil
 M.preview_win = nil
 M.main_buf = nil
 M.preview_buf = nil
+M.diff_modal_win = nil
+M.diff_modal_buf = nil
 M.diff_cache = {}
 M.line_map = {}
 
@@ -39,8 +41,11 @@ function M.is_open()
 	return M.main_win ~= nil and vim.api.nvim_win_is_valid(M.main_win)
 end
 
--- Close all Git Center windows (Untoggle)
+-- Close all Git Center windows & modals
 function M.close_git_center()
+	if M.diff_modal_win and vim.api.nvim_win_is_valid(M.diff_modal_win) then
+		pcall(vim.api.nvim_win_close, M.diff_modal_win, true)
+	end
 	if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
 		pcall(vim.api.nvim_win_close, M.preview_win, true)
 	end
@@ -51,6 +56,8 @@ function M.close_git_center()
 	M.preview_win = nil
 	M.main_buf = nil
 	M.preview_buf = nil
+	M.diff_modal_win = nil
+	M.diff_modal_buf = nil
 end
 
 -- Toggle open/close
@@ -353,6 +360,181 @@ local function open_vim_editor_modal(title_label, default_text, on_save)
 	vim.cmd("startinsert!")
 end
 
+-- Abrir visor Modal flotante gigante para Diff completo (d) sin cambiar CWD ni alterar Neo-tree
+function M.open_diff_modal(target_file, target_type)
+	local orig_cwd = vim.fn.getcwd()
+	local info = M.get_git_info()
+	if not info then
+		vim.notify("Not a valid Git repository", vim.log.levels.WARN, { title = "Git Center" })
+		return
+	end
+
+	-- Reunir todos los archivos con cambios para poder rotar entre ellos
+	local all_files = {}
+	for _, f in ipairs(info.staged) do
+		table.insert(all_files, { file = f, type = "staged" })
+	end
+	for _, f in ipairs(info.unstaged) do
+		table.insert(all_files, { file = f, type = "unstaged" })
+	end
+	for _, f in ipairs(info.untracked) do
+		table.insert(all_files, { file = f, type = "untracked" })
+	end
+
+	if #all_files == 0 then
+		vim.notify("No changed files to show diff", vim.log.levels.INFO, { title = "Git Center" })
+		return
+	end
+
+	local file_idx = 1
+	if target_file then
+		for idx, item in ipairs(all_files) do
+			if item.file == target_file then
+				file_idx = idx
+				break
+			end
+		end
+	end
+
+	setup_diff_highlights()
+
+	-- Dimensiones del Modal: 94% de ancho, 90% de alto (pantalla casi completa con pequeño padding a los lados)
+	local width = math.floor(vim.o.columns * 0.94)
+	local height = math.floor(vim.o.lines * 0.90)
+	local start_row = math.floor((vim.o.lines - height) / 2)
+	local start_col = math.floor((vim.o.columns - width) / 2)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	M.diff_modal_buf = buf
+
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = start_row,
+		col = start_col,
+		style = "minimal",
+		border = "rounded",
+		title = " 🔍 Git Center Diff Modal ",
+		title_pos = "center",
+	})
+	M.diff_modal_win = win
+
+	vim.api.nvim_set_option_value("number", true, { win = win })
+	vim.api.nvim_set_option_value("wrap", false, { win = win })
+	vim.api.nvim_set_option_value("cursorline", true, { win = win })
+
+	local function render_diff_content(idx)
+		if idx < 1 then idx = #all_files end
+		if idx > #all_files then idx = 1 end
+		file_idx = idx
+
+		local cur_item = all_files[file_idx]
+		local f = cur_item.file
+		local ftype = cur_item.type
+
+		local raw_lines = {}
+		local is_untracked = false
+
+		if ftype == "staged" then
+			raw_lines = run_git({ "diff", "--cached", "--color=never", "--", f }, orig_cwd)
+		elseif ftype == "unstaged" then
+			raw_lines = run_git({ "diff", "--color=never", "--", f }, orig_cwd)
+		elseif ftype == "untracked" then
+			is_untracked = true
+			local full_path = orig_cwd .. "/" .. f
+			if vim.fn.filereadable(full_path) == 1 then
+				raw_lines = vim.fn.readfile(full_path)
+			else
+				raw_lines = { "[ Empty or New File ]" }
+			end
+		end
+
+		local formatted, line_types = format_vscode_diff(raw_lines, is_untracked)
+
+		local type_label = ftype == "staged" and "🟢 Staged" or (ftype == "unstaged" and "🔴 Unstaged" or "❓ Untracked")
+		local title_text = string.format(" 🔍 Diff (%d/%d): %s [%s] | [q/Esc]: Close | [Tab/S-Tab]: Switch File | []c/[c]: Next/Prev Hunk ", file_idx, #all_files, f, type_label)
+		pcall(vim.api.nvim_win_set_config, win, { title = title_text, title_pos = "center" })
+
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, formatted)
+		vim.api.nvim_buf_clear_namespace(buf, ns_diff, 0, -1)
+
+		for i, ltype in ipairs(line_types) do
+			local line_idx = i - 1
+			if ltype == "add" then
+				vim.api.nvim_buf_add_highlight(buf, ns_diff, "GitCenterDiffAdd", line_idx, 0, -1)
+			elseif ltype == "delete" then
+				vim.api.nvim_buf_add_highlight(buf, ns_diff, "GitCenterDiffDelete", line_idx, 0, -1)
+			elseif ltype == "header" then
+				vim.api.nvim_buf_add_highlight(buf, ns_diff, "GitCenterDiffHeader", line_idx, 0, -1)
+			elseif ltype == "context" then
+				vim.api.nvim_buf_add_highlight(buf, ns_diff, "GitCenterDiffContext", line_idx, 0, -1)
+			end
+		end
+
+		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+	end
+
+	render_diff_content(file_idx)
+
+	local function safely_close_modal()
+		if M.diff_modal_win and vim.api.nvim_win_is_valid(M.diff_modal_win) then
+			pcall(vim.api.nvim_win_close, M.diff_modal_win, true)
+		end
+		M.diff_modal_win = nil
+		M.diff_modal_buf = nil
+		-- Restaurar 100% garantizado el CWD original del proyecto
+		if orig_cwd and vim.fn.isdirectory(orig_cwd) == 1 then
+			pcall(vim.fn.chdir, orig_cwd)
+		end
+	end
+
+	vim.api.nvim_create_autocmd("WinClosed", {
+		pattern = tostring(win),
+		once = true,
+		callback = function()
+			safely_close_modal()
+		end,
+	})
+
+	local m_opts = { buffer = buf, noremap = true, silent = true, nowait = true }
+
+	local close_keys = { "q", "<Esc>", "<C-c>" }
+	for _, k in ipairs(close_keys) do
+		vim.keymap.set("n", k, safely_close_modal, m_opts)
+	end
+
+	-- Rotar entre archivos con Tab / Shift-Tab o ] / [
+	vim.keymap.set("n", "<Tab>", function() render_diff_content(file_idx + 1) end, m_opts)
+	vim.keymap.set("n", "<S-Tab>", function() render_diff_content(file_idx - 1) end, m_opts)
+	vim.keymap.set("n", "]", function() render_diff_content(file_idx + 1) end, m_opts)
+	vim.keymap.set("n", "[", function() render_diff_content(file_idx - 1) end, m_opts)
+
+	-- Navegación de Hunks (Saltar al siguiente/anterior fragmento cambiado)
+	vim.keymap.set("n", "]c", function()
+		local cur = vim.api.nvim_win_get_cursor(win)[1]
+		local total = vim.api.nvim_buf_line_count(buf)
+		for l = cur + 1, total do
+			local ltext = vim.api.nvim_buf_get_lines(buf, l - 1, l, false)[1] or ""
+			if ltext:match("─── Hunk") or ltext:match("^@@") then
+				vim.api.nvim_win_set_cursor(win, { l, 0 })
+				return
+			end
+		end
+	end, m_opts)
+
+	vim.keymap.set("n", "[c", function()
+		local cur = vim.api.nvim_win_get_cursor(win)[1]
+		for l = cur - 1, 1, -1 do
+			local ltext = vim.api.nvim_buf_get_lines(buf, l - 1, l, false)[1] or ""
+			if ltext:match("─── Hunk") or ltext:match("^@@") then
+				vim.api.nvim_win_set_cursor(win, { l, 0 })
+				return
+			end
+		end
+	end, m_opts)
+end
+
 -- Abrir o Refrescar el Centro de Git (<Ctrl+Shift+G>)
 function M.open_git_center()
 	if M.is_open() then
@@ -618,7 +800,7 @@ function M.open_git_center()
 
 	-- [c]: Editar Título del Commit
 	vim.keymap.set("n", "c", function()
-		require("config.krs.input_modal").open({
+		require("plugins.krs.input_modal").open({
 			label = "Commit Title",
 			default_value = M.commit_data.title,
 			relative = "editor",
@@ -633,7 +815,7 @@ function M.open_git_center()
 
 	-- [m]: Editar Descripción del Commit
 	vim.keymap.set("n", "m", function()
-		require("config.krs.input_modal").open({
+		require("plugins.krs.input_modal").open({
 			label = "Commit Description",
 			default_value = M.commit_data.description,
 			relative = "editor",
@@ -648,7 +830,7 @@ function M.open_git_center()
 
 	-- [t]: Editar Tag
 	vim.keymap.set("n", "t", function()
-		require("config.krs.input_modal").open({
+		require("plugins.krs.input_modal").open({
 			label = "Optional Tag (e.g. v1.0.0)",
 			default_value = M.commit_data.tag,
 			relative = "editor",
@@ -747,13 +929,14 @@ function M.open_git_center()
 		refresh()
 	end, key_opts)
 
-	-- [d]: Ver Diff completo en Diffview
+	-- [d]: Abrir Modal flotante gigante para Diff completo (sin tocar CWD ni Neo-tree)
 	vim.keymap.set("n", "d", function()
 		local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
 		local item = M.line_map[row]
 		if item and item.file then
-			M.close_git_center()
-			vim.cmd("DiffviewOpen --selected-file=" .. vim.fn.fnameescape(item.file))
+			M.open_diff_modal(item.file, item.type)
+		else
+			M.open_diff_modal(nil, nil)
 		end
 	end, key_opts)
 
@@ -847,7 +1030,7 @@ function M.open_git_center()
 
 		local remotes = run_git({ "remote" })
 		if #remotes == 0 then
-			require("config.krs.input_modal").open({
+			require("plugins.krs.input_modal").open({
 				label = "No remote found. Add remote URL (origin)",
 				default_value = "",
 				relative = "editor",
@@ -925,7 +1108,7 @@ _G.GitCenter = M
 -- lazy.nvim plugin spec
 local plugin_spec = {
 	"NeogitOrg/neogit",
-	cmd = { "GitCenter", "Neogit" },
+	cmd = { "GitCenter", "GitCenterReload", "ReloadGitCenter", "Neogit" },
 	keys = {
 		{ "<C-S-g>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
 		{ "<C-S-G>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
@@ -939,6 +1122,19 @@ local plugin_spec = {
 		vim.api.nvim_create_user_command("GitCenter", function()
 			M.toggle_git_center()
 		end, { desc = "Toggle Git Control Center" })
+
+		local function reload_git_center()
+			package.loaded["plugins.krs.git_center"] = nil
+			_G.GitCenter = nil
+			local gc = require("plugins.krs.git_center")
+			if gc and gc.config then
+				gc.config()
+			end
+			vim.notify("🐙 Git Control Center reloaded successfully!", vim.log.levels.INFO, { title = "Git Center" })
+		end
+
+		vim.api.nvim_create_user_command("GitCenterReload", reload_git_center, { desc = "Reload Git Control Center" })
+		vim.api.nvim_create_user_command("ReloadGitCenter", reload_git_center, { desc = "Reload Git Control Center" })
 
 		local modes = { "n", "i", "v", "t" }
 		for _, mode in ipairs(modes) do

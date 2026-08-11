@@ -12,8 +12,41 @@ return {
 			"nvim-tree/nvim-web-devicons",
 		},
 		opts = {
-			-- 'auto' inherits the palette and background directly from the active colorscheme
-			theme = "auto",
+			options = {
+				theme = "auto",
+				globalstatus = true,
+			},
+			sections = {
+				lualine_a = {
+					{
+						"branch",
+						icon = "🌿",
+					},
+					"diff",
+					"diagnostics",
+				},
+				lualine_b = {
+					{
+						"filename",
+						file_status = true,
+						path = 1,
+					},
+				},
+				lualine_c = {},
+				lualine_x = {
+					{
+						"mode",
+						fmt = function(str)
+							return "-- " .. str .. " --"
+						end,
+					},
+					"encoding",
+					"fileformat",
+					"filetype",
+				},
+				lualine_y = { "progress" },
+				lualine_z = { "location" },
+			},
 		},
 	},
 }

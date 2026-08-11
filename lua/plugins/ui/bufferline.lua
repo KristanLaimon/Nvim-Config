@@ -13,6 +13,21 @@ return {
 				offsets = {
 					{ filetype = "neo-tree", text = "🦊 Explorer", highlight = "Directory", text_align = "left" },
 				},
+
+				-- nvim-dap force-lists every stack-frame buffer (dap/session.lua sets
+				-- buflisted = true on jump), so a debug session fills the bufferline
+				-- with node internals, dap-src:// frames and the term:// console.
+				-- Only real files on disk are tabs.
+				custom_filter = function(bufnr)
+					if vim.bo[bufnr].buftype ~= "" then
+						return false
+					end
+					local name = vim.api.nvim_buf_get_name(bufnr)
+					if name == "" or name:match("^%a[%a%d+.-]+://") or name:match("^node:") then
+						return false
+					end
+					return not name:match("[/\\]node_modules[/\\]")
+				end,
 			},
 		})
 

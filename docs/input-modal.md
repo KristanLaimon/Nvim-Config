@@ -1,4 +1,4 @@
-# 📝 Reusable Input Modal Component (`config.krs.input_modal`)
+# 📝 Reusable Input Modal Component (`plugins.krs.input_modal`)
 
 The **Reusable Input Modal** is a custom floating UI component in KRS Neovim (`lua/config/krs/input_modal.lua`) designed to provide a clean, consistent input experience for renaming, file creation, commit message editing, and custom prompts.
 
@@ -19,7 +19,7 @@ The **Reusable Input Modal** is a custom floating UI component in KRS Neovim (`l
 ## 🛠️ Lua API & Usage Example
 
 ```lua
-local input_modal = require("config.krs.input_modal")
+local input_modal = require("plugins.krs.input_modal")
 
 input_modal.open({
     label = "Rename Symbol",         -- Title label shown in border header

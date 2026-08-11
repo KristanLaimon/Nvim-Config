@@ -1,4 +1,4 @@
-# 📁 File Explorers & Move Picker (`config.krs.file_explorer`)
+# 📁 File Explorers & Move Picker (`plugins.krs.file_explorer`)
 
 KRS Neovim includes native floating file explorers for Desktop, WSL, folder picking, and moving files.
 

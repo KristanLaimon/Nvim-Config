@@ -201,17 +201,8 @@ function M.open_manager()
 	end)
 end
 
-_G.NugetManager = M
-
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "nuget_manager",
-	dir = vim.fn.stdpath("config"),
-	cmd = "NugetManager",
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-	},
-	config = function()
+function M.setup()
+	if vim.fn.exists(":NugetManager") == 0 then
 		vim.api.nvim_create_user_command("NugetManager", function()
 			if not M.has_csharp_project() then
 				vim.notify("No C# project (.csproj) found in current workspace", vim.log.levels.WARN, { title = "Nuget" })
@@ -219,10 +210,27 @@ local plugin_spec = {
 			end
 			M.open_manager()
 		end, { desc = "Open Nuget Package Manager (C# projects only)" })
+	end
 
-		vim.keymap.set("n", "<leader>ng", function()
-			vim.cmd("NugetManager")
-		end, { desc = "Nuget Package Manager" })
+	vim.keymap.set("n", "<leader>ng", function()
+		vim.cmd("NugetManager")
+	end, { desc = "Nuget Package Manager" })
+end
+
+M.setup()
+
+_G.NugetManager = M
+
+-- Plugin specification for Lazy.nvim
+local plugin_spec = {
+	name = "krs_nuget_manager",
+	dir = require("krs.lazydir").for_module(),
+	lazy = false,
+	dependencies = {
+		"nvim-telescope/telescope.nvim",
+	},
+	config = function()
+		M.setup()
 	end,
 }
 

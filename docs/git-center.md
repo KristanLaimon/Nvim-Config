@@ -33,5 +33,5 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 | `C` | Normal | Execute Commit & Tag |
 | `<Tab>` | Normal | Toggle focus between left control panel and right live preview |
 | `<C-S-j>` / `<C-S-k>` | Normal | Scroll right live diff preview window |
-| `d` | Normal | Open selected file in full Diffview interface |
+| `d` | Normal | Open selected file diff in full-screen floating modal UI (no CWD change) |
 | `<F5>` / `<C-r>` | Normal | Refresh Git status |

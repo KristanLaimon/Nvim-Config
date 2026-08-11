@@ -55,7 +55,7 @@ return {
 		}
 
 		-- Only show the WSL folder button on Windows when WSL is actually installed
-		local ok_wsl, wsl = pcall(require, "config.krs.wsl")
+		local ok_wsl, wsl = pcall(require, "plugins.krs.wsl")
 		if ok_wsl and wsl.available() then
 			table.insert(
 				dashboard.section.buttons.val,
