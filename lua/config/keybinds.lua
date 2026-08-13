@@ -33,7 +33,6 @@ for _, key in ipairs(comment_keys) do
 	vim.keymap.set("t", key, comment_line, { noremap = true, silent = true, desc = "Comment line from terminal" })
 end
 
-
 -- Global Search Keymaps: Ctrl+/ (respect .gitignore) vs Ctrl+Shift+/ (search all files)
 local gitignore_search_keys = { "<C-/>" }
 for _, key in ipairs(gitignore_search_keys) do
@@ -57,7 +56,6 @@ for _, key in ipairs(all_files_search_keys) do
 	end, { noremap = true, silent = true, desc = "Find all files (ignoring .gitignore)" })
 end
 
-
 vim.keymap.set({ "n", "v", "i" }, "<C-s>", "<Cmd>w<CR>", { noremap = true, silent = true, desc = "Save file" })
 
 -- QOL Features & Clipboard (Ctrl+C = Copy, Ctrl+V = Paste from system)
@@ -73,18 +71,8 @@ end
 
 vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, silent = true, desc = "Copy to OS clipboard" })
 vim.keymap.set("v", "<C-S-c>", '"+y', { noremap = true, silent = true, desc = "Copy to OS clipboard" })
-vim.keymap.set(
-	{ "n", "v" },
-	"<C-v>",
-	'"+p',
-	{ noremap = true, silent = true, desc = "Paste from system clipboard" }
-)
-vim.keymap.set(
-	{ "i", "c" },
-	"<C-v>",
-	"<C-r>+",
-	{ noremap = true, silent = true, desc = "Paste from system clipboard" }
-)
+vim.keymap.set({ "n", "v" }, "<C-v>", '"+p', { noremap = true, silent = true, desc = "Paste from system clipboard" })
+vim.keymap.set({ "i", "c" }, "<C-v>", "<C-r>+", { noremap = true, silent = true, desc = "Paste from system clipboard" })
 vim.keymap.set(
 	"t",
 	"<C-v>",
@@ -394,11 +382,7 @@ local function vscode_quick_fix()
 	local get_cls = vim.lsp.get_clients or vim.lsp.get_active_clients
 	local clients = get_cls({ bufnr = 0 })
 	if not clients or #clients == 0 then
-		vim.notify(
-			"No active LSP server for this file",
-			vim.log.levels.WARN,
-			{ title = "LSP Code Actions" }
-		)
+		vim.notify("No active LSP server for this file", vim.log.levels.WARN, { title = "LSP Code Actions" })
 		return
 	end
 
@@ -406,11 +390,7 @@ local function vscode_quick_fix()
 	vim.ui.select = function(items, opts, on_choice)
 		vim.ui.select = orig_select
 		if not items or #items == 0 then
-			vim.notify(
-				"No suggestions or code actions available here",
-				vim.log.levels.INFO,
-				{ title = "LSP Code Actions" }
-			)
+			vim.notify("No suggestions or code actions available here", vim.log.levels.INFO, { title = "LSP Code Actions" })
 			return
 		end
 		cursor_ui_select(items, opts, on_choice)
@@ -544,58 +524,37 @@ vim.keymap.set(
 )
 vim.keymap.set(
 	{ "n", "i", "v" },
-	"<C-S-s>",
-	dap_continue,
-	{ noremap = true, silent = true, desc = "Start/Continue Debugging" }
-)
-vim.keymap.set(
-	{ "n", "i", "v" },
 	"<F5>",
 	dap_continue,
 	{ noremap = true, silent = true, desc = "Start/Continue Debugging" }
 )
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<F10>",
-	dap_step_over,
-	{ noremap = true, silent = true, desc = "Step Over" }
-)
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<F11>",
-	dap_step_into,
-	{ noremap = true, silent = true, desc = "Step Into" }
-)
-vim.keymap.set(
-	{ "n", "i", "v" },
-	"<F12>",
-	dap_step_out,
-	{ noremap = true, silent = true, desc = "Step Out" }
-)
+vim.keymap.set({ "n", "i", "v" }, "<F10>", dap_step_over, { noremap = true, silent = true, desc = "Step Over" })
+vim.keymap.set({ "n", "i", "v" }, "<F11>", dap_step_into, { noremap = true, silent = true, desc = "Step Into" })
+vim.keymap.set({ "n", "i", "v" }, "<F12>", dap_step_out, { noremap = true, silent = true, desc = "Step Out" })
 vim.keymap.set(
 	{ "n", "i", "v" },
 	"<C-S-x>",
 	dap_terminate,
 	{ noremap = true, silent = true, desc = "Terminate Debugger" }
 )
-vim.keymap.set(
-	"n",
-	"<leader>du",
-	dap_toggle_ui,
-	{ noremap = true, silent = true, desc = "Toggle Debugger UI" }
-)
+vim.keymap.set("n", "<leader>du", dap_toggle_ui, { noremap = true, silent = true, desc = "Toggle Debugger UI" })
 
--- Per-Project Launch Profiles (Ctrl + Shift + S runs the default, Ctrl + Shift + Q opens the UI)
--- Same key stops an already running session, so start/stop is one toggle.
--- Resuming from a breakpoint stays on <F5>.
-vim.keymap.set({ "n", "i", "v" }, "<C-S-s>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok and dap.session() then
-		dap_terminate()
-		return
+-- Git Stage All Unstaged & Untracked Changes (Ctrl + Shift + S) with Modal Window Confirmation
+-- Works everywhere (Normal, Insert, Visual, Terminal)
+local function stage_all_with_modal_handler()
+	if vim.fn.mode() == "t" then
+		pcall(vim.cmd, "stopinsert")
 	end
-	require("plugins.krs.launch_profiles").handle_smart_launch()
-end, { noremap = true, silent = true, desc = "Start/Stop Debugging (or run default launch profile)" })
+	require("plugins.krs.git_center").stage_all_with_modal()
+end
+
+for _, lhs in ipairs({ "<C-S-s>", "<C-S-S>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, stage_all_with_modal_handler, {
+		noremap = true,
+		silent = true,
+		desc = "Stage all unstaged changes in git (Modal Confirmation)",
+	})
+end
 
 for _, lhs in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
@@ -604,13 +563,30 @@ for _, lhs in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
 end
 
 -- Per-Project Task Manager & Code Runner (Ctrl + Shift + T / Ctrl + Shift + A)
-vim.keymap.set({ "n", "i", "v" }, "<C-S-t>", function()
-	require("plugins.krs.tasks").open_task_menu()
-end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+-- Ctrl + Shift + A runs default task or kills old running task & reruns it
+for _, lhs in ipairs({ "<C-S-t>", "<C-S-T>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
+		if vim.fn.mode() == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
+		require("plugins.krs.tasks").open_task_menu()
+	end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+end
 
-vim.keymap.set({ "n", "i", "v" }, "<C-S-a>", function()
+local function run_or_restart_task_handler()
+	if vim.fn.mode() == "t" then
+		pcall(vim.cmd, "stopinsert")
+	end
 	require("plugins.krs.tasks").run_default_or_menu()
-end, { noremap = true, silent = true, desc = "Run Default Project Task" })
+end
+
+for _, lhs in ipairs({ "<C-S-a>", "<C-S-A>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, run_or_restart_task_handler, {
+		noremap = true,
+		silent = true,
+		desc = "Run default task or kill & rerun running task",
+	})
+end
 
 vim.keymap.set("n", "<leader>ta", function()
 	require("plugins.krs.tasks").open_task_menu()
@@ -634,7 +610,6 @@ for _, k in ipairs(task_output_keys) do
 		require("plugins.krs.tasks").toggle_last_slot_window()
 	end, { noremap = true, silent = true, desc = "Toggle last task output window" })
 end
-
 
 -- Ctrl + Click a URL (in any buffer, e.g. task/terminal output) to open it in the browser
 vim.keymap.set({ "n", "i", "v", "t" }, "<C-LeftMouse>", function()
@@ -794,8 +769,6 @@ vim.keymap.set("n", "<F2>", function()
 		end,
 	})
 end, { noremap = true, silent = true, desc = "Rename symbol or file" })
-
-
 
 -- Alt+h / Ctrl+Shift+h flip the breakpoint under the cursor between enabled and
 -- disabled, keeping it on the line (grey paw sign). Both keys already do

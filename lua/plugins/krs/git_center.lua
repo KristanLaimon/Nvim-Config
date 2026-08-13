@@ -100,6 +100,89 @@ local function run_git_async(args, on_done, cwd)
 	end))
 end
 
+-- Modal flotante de notificación interactiva con tecla <Enter> para cerrar
+function M.show_notification_modal(opts)
+	opts = opts or {}
+	local title = opts.title or " ℹ️ Git Notification "
+	local msg = opts.message or ""
+
+	local msg_lines = vim.split(msg, "\n", { plain = true })
+	local lines = {}
+	table.insert(lines, "")
+	for _, l in ipairs(msg_lines) do
+		table.insert(lines, "  " .. l)
+	end
+	table.insert(lines, "")
+	table.insert(lines, "  ───────────── Press <Enter> or <Esc> or 'q' to close ─────────────")
+	table.insert(lines, "")
+
+	local max_len = #title + 10
+	for _, l in ipairs(lines) do
+		if #l > max_len then
+			max_len = #l
+		end
+	end
+	local width = math.min(math.max(max_len + 4, 46), math.floor((vim.o.columns or 80) * 0.85))
+	local height = #lines
+
+	local row = math.floor(((vim.o.lines or 24) - height) / 2)
+	local col = math.floor(((vim.o.columns or 80) - width) / 2)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = row,
+		col = col,
+		style = "minimal",
+		border = "rounded",
+		title = " " .. title .. " ",
+		title_pos = "center",
+	})
+
+	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
+
+	local function close_modal()
+		if vim.api.nvim_win_is_valid(win) then
+			pcall(vim.api.nvim_win_close, win, true)
+		end
+	end
+
+	local kopts = { buffer = buf, noremap = true, silent = true }
+	vim.keymap.set({ "n", "v", "i", "t" }, "<CR>", close_modal, kopts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Esc>", close_modal, kopts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "q", close_modal, kopts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Space>", close_modal, kopts)
+end
+
+-- Stage all unstaged and untracked changes with modal confirmation
+function M.stage_all_with_modal(cwd)
+	cwd = cwd or vim.fn.getcwd()
+	run_git_async({ "add", "." }, function(ok, out)
+		if ok then
+			M.show_notification_modal({
+				title = " 🟢 Git Stage Confirmation ",
+				message = "✅ All unstaged and untracked changes were successfully staged!",
+			})
+		else
+			M.show_notification_modal({
+				title = " 🔴 Git Stage Error ",
+				message = "❌ Failed to stage changes:\n" .. (out ~= "" and out or "Directory is not a valid Git repository"),
+			})
+		end
+		if M.is_open() then
+			pcall(function()
+				if M.open_git_center then
+					-- refresh if open
+				end
+			end)
+		end
+	end, cwd)
+end
+
 -- Esperar un proceso lanzado con spawn_git y parsear su salida en líneas
 local function collect_git(proc)
 	local obj = proc:wait()
@@ -1032,9 +1115,15 @@ function M.open_git_center()
 
 			run_git_async(push_args, function(ok, out)
 				if ok then
-					vim.notify("✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!", vim.log.levels.INFO, { title = "Git Center" })
+					M.show_notification_modal({
+						title = " 🚀 Git Push Confirmation ",
+						message = "✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!",
+					})
 				else
-					vim.notify("❌ Push failed:\n" .. out, vim.log.levels.ERROR, { title = "Git Center" })
+					M.show_notification_modal({
+						title = " 🚀 Git Push Status ",
+						message = "❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"),
+					})
 				end
 				refresh()
 			end)
@@ -1065,9 +1154,15 @@ function M.open_git_center()
 			vim.notify("🚀 Pushing to upstream...", vim.log.levels.INFO, { title = "Git Center" })
 			run_git_async({ "push" }, function(ok, out)
 				if ok then
-					vim.notify("✅ Push successful!", vim.log.levels.INFO, { title = "Git Center" })
+					M.show_notification_modal({
+						title = " 🚀 Git Push Confirmation ",
+						message = "✅ Push successful to remote repository!",
+					})
 				else
-					vim.notify("❌ Push failed:\n" .. out, vim.log.levels.ERROR, { title = "Git Center" })
+					M.show_notification_modal({
+						title = " 🚀 Git Push Status ",
+						message = "❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"),
+					})
 				end
 				refresh()
 			end)

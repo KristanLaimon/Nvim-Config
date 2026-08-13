@@ -645,15 +645,39 @@ function M.run_task_item(task_item, root, opts)
 		return abort("No executable steps found for this task")
 	end
 
-	local slot = get_free_slot()
+	M.sync_task_slots()
+
+	local task_name = (type(task_item) == "table" and (task_item.name or task_item.cmd)) or tostring(task_item)
+
+	-- Check if a task with the same name/definition is ALREADY running in any slot
+	local running_slot = nil
+	for i = 1, 4 do
+		local s = M.slots[i]
+		if s and s.job_id and s.job_id > 0 then
+			local s_name = s.name or ""
+			if s_name == task_name or (s.task_item and (s.task_item == task_item or (type(s.task_item) == "table" and type(task_item) == "table" and s.task_item.name == task_item.name))) then
+				running_slot = i
+				break
+			end
+		end
+	end
+
+	local slot = running_slot or get_free_slot()
 	if not slot then
 		return abort("All 4 task slots are busy. Stop one first (Ctrl+Shift+Alt+1..4 to view, q/<CR> in it once done).")
+	end
+
+	if running_slot then
+		local s = M.slots[running_slot]
+		s.is_killing_for_restart = true
+		pcall(vim.fn.jobstop, s.job_id)
+		s.job_id = nil
+		vim.notify(string.format("🔄 Killed old running task '%s' (Slot #%d). Rerunning...", task_name, slot), vim.log.levels.INFO, { title = "KRS Task Runner" })
 	end
 
 	local origin_win = vim.api.nvim_get_current_win()
 	vim.cmd("silent! write")
 
-	local task_name = (type(task_item) == "table" and (task_item.name or task_item.cmd)) or tostring(task_item)
 	run_step_sequence(1, steps, root, origin_win, task_name, slot, task_item, opts)
 end
 
