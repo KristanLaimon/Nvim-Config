@@ -30,6 +30,7 @@ vim.opt.showmode = false -- Hide native mode text (-- INSERT --) from bottom cmd
 vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle
 
 -- Performance & Clipboard Optimizations
+vim.opt.autoread = true        -- Automatically reload files modified externally
 vim.opt.clipboard = "unnamedplus" -- Use system clipboard by default
 vim.opt.updatetime = 250       -- Faster CursorHold and diagnostic updates
 vim.opt.timeoutlen = 300       -- Snappier keybindings completion

@@ -3,7 +3,6 @@ local json = require("krsnvim.json")
 local fs = require("krsnvim.fs")
 local al = require("krsnvim.cli");
 
-
 print("🦊 Hello from test.krsnvim script!")
 
 local content = json.encode({ status = "ok", runner = "krsnvimscript", fox = true })

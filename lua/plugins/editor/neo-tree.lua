@@ -121,10 +121,11 @@ return {
 		mappings = {
 		    ["r"] = "rename_with_modal",
 		    ["m"] = "move_with_picker",
-		    ["a"] = "add_with_modal",
-		    ["A"] = "add_with_modal",
-		    ["<C-n>"] = "add_with_modal",
-		    ["<C-S-n>"] = "add_with_modal",
+		    ["a"] = "add_file_with_modal",
+		    ["A"] = "add_folder_with_modal",
+		    ["<C-n>"] = "add_file_with_modal",
+		    ["<C-S-n>"] = "add_folder_with_modal",
+		    ["<C-S-N>"] = "add_folder_with_modal",
 		    ["<C-/>"] = "search_respect_gitignore",
 		    ["<C-_>"] = "search_respect_gitignore",
 		    ["<C-S-/>"] = "search_all_files",
@@ -181,7 +182,74 @@ return {
 			root_dir = vim.fn.getcwd(),
 		    })
 		end,
+		add_file_with_modal = function(state)
+		    local node = state.tree:get_node()
+		    if not node then
+			return
+		    end
+		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+
+		    require("plugins.krs.input_modal").open({
+			label = "New File",
+			default_value = "",
+			relative = "editor",
+			callback = function(ok, new_name)
+			    if not ok or not new_name or new_name == "" then
+				return
+			    end
+			    local clean_name = new_name:gsub("[/\\]+$", "")
+			    if clean_name == "" then
+				return
+			    end
+			    local target_path = parent_dir .. "/" .. clean_name
+			    local target_parent = vim.fn.fnamemodify(target_path, ":h")
+			    if vim.fn.isdirectory(target_parent) == 0 then
+				vim.fn.mkdir(target_parent, "p")
+			    end
+			    local f = io.open(target_path, "w")
+			    if f then
+				f:close()
+				vim.cmd("edit " .. vim.fn.fnameescape(target_path))
+				vim.notify("Created file: " .. clean_name, vim.log.levels.INFO, { title = "Neo-tree" })
+			    else
+				vim.notify("Failed to create file: " .. clean_name, vim.log.levels.ERROR, { title = "Neo-tree" })
+			    end
+			    pcall(function()
+				require("neo-tree.sources.manager").refresh("filesystem")
+			    end)
+			end,
+		    })
+		end,
+		add_folder_with_modal = function(state)
+		    local node = state.tree:get_node()
+		    if not node then
+			return
+		    end
+		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+
+		    require("plugins.krs.input_modal").open({
+			label = "New Folder",
+			default_value = "",
+			relative = "editor",
+			callback = function(ok, new_name)
+			    if not ok or not new_name or new_name == "" then
+				return
+			    end
+			    local clean_name = new_name:gsub("[/\\]+$", "")
+			    if clean_name == "" then
+				return
+			    end
+			    local target_path = parent_dir .. "/" .. clean_name
+			    vim.fn.mkdir(target_path, "p")
+			    vim.notify("Created folder: " .. clean_name, vim.log.levels.INFO, { title = "Neo-tree" })
+			    pcall(function()
+				require("neo-tree.sources.manager").refresh("filesystem")
+			    end)
+			end,
+		    })
+		end,
 		add_with_modal = function(state)
+		    -- Fallback alias
 		    local node = state.tree:get_node()
 		    if not node then
 			return

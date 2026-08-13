@@ -31,8 +31,8 @@ function M.show_help()
 	if context == "neotree" then
 		title = "🌳 Neo-Tree (Explorer)"
 		help_lines = {
-			"a : Create File     | A : Create Folder",
-			"r : Rename          | d : Delete",
+			"Ctrl+N / a : Create File | Ctrl+Shift+N / A : Create Folder",
+			"r : Rename               | d : Delete",
 			"c : Copy            | x : Cut | p : Paste",
 			"Ctrl + Shift + Enter : Reveal selected file/folder in System Explorer",
 			"q : Close explorer",

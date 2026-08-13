@@ -34,6 +34,25 @@ return {
 				offsets = {
 					{ filetype = "neo-tree", text = "🦊 Explorer", highlight = "Directory", text_align = "left" },
 				},
+				name_formatter = function(buf)
+					local bufnr = buf.bufnr
+					if _G.Is_File_Deleted and _G.Is_File_Deleted(bufnr) then
+						return "[D] " .. buf.name
+					end
+					local path = buf.path
+					if not path or path == "" then
+						path = vim.api.nvim_buf_get_name(bufnr)
+					end
+					if path and path ~= "" and vim.bo[bufnr].buftype == "" then
+						if not path:match("^%a[%a%d+.-]+://") and not path:match("^node:") then
+							local uv = vim.uv or vim.loop
+							if uv.fs_stat(path) == nil then
+								return "[D] " .. buf.name
+							end
+						end
+					end
+					return buf.name
+				end,
 
 				-- nvim-dap force-lists every stack-frame buffer (dap/session.lua sets
 				-- buflisted = true on jump), so a debug session fills the bufferline
