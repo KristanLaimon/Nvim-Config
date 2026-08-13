@@ -22,6 +22,8 @@ Bienvenido a la documentación interactiva de **krsnvimscript** (`krsnvim.*`).
 5. **`krsnvim.toml`**: Parser y encoder TOML nativo en Lua.
 6. **`krsnvim.cli`**: Parseo de argumentos `--help` y menús numéricos interactivos.
 7. **`krsnvim.fs`**: Helper para lectura, escritura y manipulación de archivos.
+8. **`krsnvim.fetch`**: API tipo `fetch` para peticiones HTTP/HTTPS en Lua puro (sin curl).
+9. **`krsnvim.test`**: Librería de testing tipo Vitest / Bun:test (`describe`, `test`, `expect`).
 
 ---
 

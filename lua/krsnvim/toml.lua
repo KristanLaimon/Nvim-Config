@@ -1,3 +1,12 @@
+--- @module krsnvim.toml
+--- Native Pure Lua TOML Parser, Encoder, and File I/O manager for `krsnvimscript`.
+--- Handles TOML tables `[section]`, key-value assignments `key = value`, inline arrays `[1, 2]`, booleans, and strings.
+---
+--- @example
+--- local toml = import("krsnvim.toml")
+--- local cargo = toml.load("Cargo.toml")
+--- print(cargo.package.name)
+--- toml.save("Cargo.toml", cargo)
 local M = {}
 
 local function parse_scalar(val)
@@ -21,6 +30,26 @@ local function parse_scalar(val)
 	return val
 end
 
+--- Decodes a TOML formatted string into a native Lua table.
+---
+--- @param str string|nil Raw TOML string text to parse.
+--- @return table data Parsed Lua table representation. Returns `{}` if input is `nil` or empty `""`.
+---
+--- @note Edge Cases:
+--- - Automatically strips `#` comments.
+--- - Parses `[section]` headers into sub-tables.
+--- - Handles strings, integers, floats, booleans, and inline arrays `[a, b]`.
+---
+--- @see krsnvim.toml.encode
+--- @see krsnvim.toml.load
+---
+--- @example
+--- local data = toml.decode([[
+--- title = "TOML Example"
+--- [owner]
+--- name = "Kristan"
+--- ]])
+--- print(data.title, data.owner.name)
 function M.decode(str)
 	if not str or str == "" then return {} end
 	local root = {}
@@ -48,6 +77,17 @@ function M.decode(str)
 	return root
 end
 
+--- Serializes a Lua table structure into a TOML formatted string.
+---
+--- @param obj table Data structure to encode as TOML text.
+--- @return string toml_str Formatted TOML output string.
+---
+--- @see krsnvim.toml.decode
+--- @see krsnvim.toml.save
+---
+--- @example
+--- local str = toml.encode({ app = "Nvim", server = { port = 8080 } })
+--- print(str)
 function M.encode(obj)
 	if not obj then return "" end
 	local lines = {}
@@ -71,6 +111,20 @@ function M.encode(obj)
 	return table.concat(lines, "\n")
 end
 
+--- Reads a TOML file from disk and decodes its contents into a Lua table.
+---
+--- @param filepath string File path of the TOML file.
+--- @return table data Parsed Lua table structure.
+---
+--- @note Edge Cases & Errors:
+--- - Throws a Lua error if the file cannot be opened or read.
+---
+--- @see krsnvim.toml.save
+--- @see krsnvim.toml.decode
+--- @see krsnvim.fs.read
+---
+--- @example
+--- local pyproject = toml.load("pyproject.toml")
 function M.load(filepath)
 	local f = io.open(filepath, "r")
 	if not f then
@@ -81,6 +135,22 @@ function M.load(filepath)
 	return M.decode(content)
 end
 
+--- Serializes a Lua table and writes it directly to a TOML file on disk.
+---
+--- @param filepath string Target path for the output TOML file.
+--- @param obj table Data structure to encode and save.
+--- @return boolean success Returns `true` upon successful write.
+---
+--- @note Edge Cases & Errors:
+--- - Overwrites existing target file.
+--- - Throws a Lua error if target file cannot be created or written.
+---
+--- @see krsnvim.toml.load
+--- @see krsnvim.toml.encode
+--- @see krsnvim.fs.write
+---
+--- @example
+--- toml.save("settings.toml", { theme = "dark" })
 function M.save(filepath, obj)
 	local str = M.encode(obj)
 	local f = io.open(filepath, "w")

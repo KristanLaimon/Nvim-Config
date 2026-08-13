@@ -119,7 +119,7 @@ _G.PhpToolsModal = M
 
 local plugin_spec = {
 	name = "krs_php_tools_modal",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		-- PHP Tools Modal initialized

@@ -13,7 +13,7 @@
 
 local M = {}
 
--- Call from the spec table itself: `dir = require("krs.lazydir").for_module()`.
+-- Call from the spec table itself: `dir = require("lazyscripts.lazydir").for_module()`.
 -- The directory is named after the calling file, so it is unique per module.
 function M.for_module()
 	local source = debug.getinfo(2, "S").source:sub(2)

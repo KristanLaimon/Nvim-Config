@@ -13,6 +13,8 @@ function M.run_all()
 		"cli_spec",
 		"fs_spec",
 		"import_spec",
+		"fetch_spec",
+		"test_framework_spec",
 	}
 
 	local passed = 0

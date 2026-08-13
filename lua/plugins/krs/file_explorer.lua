@@ -582,7 +582,7 @@ M.setup()
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_file_explorer",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	dependencies = {
 		"nvim-telescope/telescope.nvim",

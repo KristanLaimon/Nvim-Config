@@ -1,15 +1,17 @@
--- ============================================================================
--- 🦊 KRS PLUGIN: Per-Project Launch Profiles Manager (`launch.json`)
--- ============================================================================
--- Manages per-project entry points, runtimes, args, env, task dependencies,
--- default profile toggling, dynamic DAP debuggers (Bun, Node, Go, Python, PHP),
--- and a single-screen Floating Form Window Editor & Profile Card picker UI.
--- ============================================================================
-
+--- @module plugins.krs.launch_profiles
+--- Per-Project Launch Profiles Manager (`.krsnvim/launch.json`).
+--- Controls project entry points, runtimes, args, env, pre-launch tasks, DAP debugger integration, and card picker UI.
+---
+--- @example
+--- local lp = require("plugins.krs.launch_profiles")
+--- lp.handle_smart_launch()
+--- lp.open_management_menu()
 local M = {}
 
 local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "krsnvimscript", "custom" }
 
+--- Resolves the current project root directory.
+--- @return string root Absolute path to project root.
 function M.get_project_root()
 	local ok, tasks_mod = pcall(require, "plugins.krs.tasks")
 	if ok and tasks_mod.get_project_root then
@@ -22,6 +24,9 @@ function M.get_project_root()
 	return current
 end
 
+--- Resolves the file path for `launch.json` (`.krsnvim/launch.json`, `.krslocal/launch.json`, `.nvimkrs/launch.json`).
+--- @param root string|nil Optional root directory.
+--- @return string filepath Path to launch.json.
 function M.get_launch_filepath(root)
 	root = root or M.get_project_root()
 	local norm_root = root:gsub("\\", "/")
@@ -44,6 +49,9 @@ function M.get_launch_filepath(root)
 	return krsnvim_file
 end
 
+--- Loads all launch profiles defined for the project.
+--- @param root string|nil Optional root directory.
+--- @return table data Table containing `profiles` array.
 function M.load_profiles(root)
 	local filepath = M.get_launch_filepath(root)
 	local f = io.open(filepath, "r")
@@ -800,7 +808,7 @@ _G.LaunchProfiles = M
 
 local plugin_spec = {
 	name = "krs_launch_profiles",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		pcall(vim.api.nvim_create_user_command, "LaunchProfiles", function()

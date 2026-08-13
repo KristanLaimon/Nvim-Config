@@ -118,7 +118,7 @@ _G.LaunchCmp = M
 
 local plugin_spec = {
 	name = "krs_launch_cmp",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		-- launch.json completion provider module initialized

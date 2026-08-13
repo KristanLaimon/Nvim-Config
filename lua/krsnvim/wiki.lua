@@ -1,3 +1,10 @@
+--- @module krsnvim.wiki
+--- Floating Interactive Wiki Documentation System for `krsnvimscript`.
+--- Opens a styled floating markdown window inside Neovim with single-key navigation (1–6).
+---
+--- @example
+--- local wiki = import("krsnvim.wiki")
+--- wiki.open("fetch.md")
 local M = {}
 
 local docs_files = {
@@ -6,6 +13,8 @@ local docs_files = {
 	{ name = "3. JSON / YAML / TOML", file = "json_yaml_toml.md" },
 	{ name = "4. CLI & Numeric Menu", file = "cli.md" },
 	{ name = "5. Global import()", file = "import.md" },
+	{ name = "6. Pure Lua Fetch API", file = "fetch.md" },
+	{ name = "7. Vitest-like Testing", file = "test.md" },
 }
 
 local function get_docs_dir()
@@ -15,6 +24,19 @@ local function get_docs_dir()
 	return dir .. "/docs"
 end
 
+--- Opens an interactive floating markdown wiki viewer inside Neovim.
+---
+--- @param doc_file string|nil Name of the documentation file to open (e.g. `"index.md"`, `"fetch.md"`). Defaults to `"index.md"`.
+---
+--- @note Features:
+--- - Uses floating rounded window centered on screen.
+--- - Single key switching: Press `1` through `6` to instantly switch wiki pages.
+--- - Press `q` or `<Esc>` to close viewer.
+---
+--- @see krsnvim.wiki.open
+---
+--- @example
+--- require("krsnvim").wiki.open("index.md")
 function M.open(doc_file)
 	doc_file = doc_file or "index.md"
 	local docs_dir = get_docs_dir()
@@ -52,7 +74,7 @@ function M.open(doc_file)
 		col = col,
 		style = "minimal",
 		border = "rounded",
-		title = " 🦊 krsnvimscript Wiki Documentation [Press 1-5 to switch, q to close] ",
+		title = " 🦊 krsnvimscript Wiki Documentation [Press 1-6 to switch, q to close] ",
 		title_pos = "center",
 	})
 

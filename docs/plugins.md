@@ -34,7 +34,7 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **WSL Helpers** | `wsl.lua` | Distro detection and path translation; also decides whether the dashboard shows the WSL button. | internal |
 | **launch.json IntelliSense** | `launch_cmp.lua` | blink.cmp source for `launch.json` — tasks, runtimes, modes. | automatic |
 
-Plus two helpers outside the spec tree, in `lua/krs/`:
+Plus two helpers outside the spec tree, in `lua/lazyscripts/`:
 
 | Helper | What it does |
 |---|---|

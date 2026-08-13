@@ -270,7 +270,7 @@ misbehaviour:
 ### 3.6 Repl completion ("immediate window")
 
 The repl is a normal buffer, so blink.cmp's default sources offered string methods and words
-scraped from the file — useless while stopped at a breakpoint. `lua/krs/dap_repl_source.lua`
+scraped from the file — useless while stopped at a breakpoint. `lua/lazyscripts/dap_repl_source.lua`
 asks the **debug adapter** instead, so the menu only holds what exists in the current frame.
 
 - Enabled only while `dap.session()` is live; triggers on `.`, `[`, `"`, `'`.

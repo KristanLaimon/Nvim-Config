@@ -199,7 +199,7 @@ _G.BunDap = M
 
 local plugin_spec = {
 	name = "krs_bun_dap",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup()

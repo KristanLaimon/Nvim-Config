@@ -192,7 +192,7 @@ _G.ImageViewer = M
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "image_viewer",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup()

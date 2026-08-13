@@ -827,7 +827,7 @@ _G.Workspaces = M
 -- Plugin Specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_workspaces",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	dependencies = {
 		"nvim-lua/plenary.nvim",

@@ -1,3 +1,3 @@
 local json = require("krsnvim.json")
 
-print("hola")
+json.encode({ hole = "mundo" })

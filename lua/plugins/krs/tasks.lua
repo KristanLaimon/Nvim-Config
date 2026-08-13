@@ -1,16 +1,11 @@
--- ============================================================================
--- 🦊 KRS PLUGIN: Per-Project Task Runner & Code Executor
--- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Detects project root using vim.fs.find.
--- 2. Automatically scans build scripts in Makefile, package.json, Cargo.toml or go.mod.
--- 3. Allows saving custom tasks and sequential task chains in .krsnvim/tasks.json.
--- 4. Supports Task Chains: if a step fails, execution STOPS immediately
---    and opens an error alert floating popup in Neovim.
--- 5. Renders an interactive Telescope menu with shortcuts.
--- 6. Portable lazy plugin spec exportable across Neovim configs.
--- ============================================================================
-
+--- @module plugins.krs.tasks
+--- Per-Project Task Manager, Task Chain Executor & Terminal Output Manager.
+--- Automatically scans Makefile, package.json, Cargo.toml, go.mod, and `.krsnvim/tasks.json`.
+---
+--- @example
+--- local tasks = require("plugins.krs.tasks")
+--- tasks.open_task_menu()
+--- tasks.run_default_or_menu()
 local M = {}
 
 local legacy_store_file = vim.fn.stdpath("data") .. "/project_tasks.json"
@@ -1050,7 +1045,7 @@ M.setup()
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_tasks",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	dependencies = {
 		"nvim-telescope/telescope.nvim",

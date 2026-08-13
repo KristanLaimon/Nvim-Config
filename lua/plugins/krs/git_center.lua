@@ -1221,6 +1221,8 @@ local plugin_spec = {
 		{ "<C-S-G>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
 		{ "<C-A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 		{ "<C-A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
+		{ "<A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
+		{ "<A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
@@ -1249,7 +1251,11 @@ local plugin_spec = {
 		pcall(vim.api.nvim_create_user_command, "GitCenterReload", reload_git_center, { desc = "Reload Git Control Center" })
 		pcall(vim.api.nvim_create_user_command, "ReloadGitCenter", reload_git_center, { desc = "Reload Git Control Center" })
 
-		local stage_keys = { "<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>", "<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>" }
+		local stage_keys = {
+			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
+			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
+			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
+		}
 		local modes = { "n", "i", "v", "t" }
 		for _, mode in ipairs(modes) do
 			for _, k in ipairs({ "<C-S-g>", "<C-S-G>" }) do
@@ -1270,6 +1276,8 @@ local plugin_spec = {
 				end, { noremap = true, silent = true, desc = "Stage All Unstaged & Untracked Changes (Modal Confirmation)" })
 			end
 		end
+
+
 	end,
 }
 

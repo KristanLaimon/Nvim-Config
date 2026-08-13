@@ -210,7 +210,7 @@ M.setup()
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_buffer_cleaner",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup()

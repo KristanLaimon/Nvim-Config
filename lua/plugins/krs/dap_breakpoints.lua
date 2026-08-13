@@ -440,7 +440,7 @@ _G.DapBreakpoints = M
 
 local plugin_spec = {
 	name = "krs_dap_breakpoints",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup()

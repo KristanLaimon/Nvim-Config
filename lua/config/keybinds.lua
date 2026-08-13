@@ -539,7 +539,7 @@ vim.keymap.set(
 )
 vim.keymap.set("n", "<leader>du", dap_toggle_ui, { noremap = true, silent = true, desc = "Toggle Debugger UI" })
 
--- Git Stage All Unstaged & Untracked Changes (Ctrl + Alt + S) with Modal Window Confirmation
+-- Git Stage All Unstaged & Untracked Changes (Ctrl + Alt + S / Alt + S / <leader>ga) with Modal Window Confirmation
 -- Works everywhere (Normal, Insert, Visual, Terminal)
 local function stage_all_with_modal_handler()
 	if vim.fn.mode() == "t" then
@@ -548,13 +548,22 @@ local function stage_all_with_modal_handler()
 	require("plugins.krs.git_center").stage_all_with_modal()
 end
 
-for _, lhs in ipairs({ "<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>", "<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>" }) do
+local stage_all_keys = {
+	"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
+	"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
+	"<A-s>", "<A-S>", "<M-s>", "<M-S>",
+}
+
+for _, lhs in ipairs(stage_all_keys) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, stage_all_with_modal_handler, {
 		noremap = true,
 		silent = true,
 		desc = "Stage all unstaged changes in git (Modal Confirmation)",
 	})
 end
+
+
+
 
 for _, lhs in ipairs({ "<C-S-s>", "<C-S-S>" }) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()

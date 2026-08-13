@@ -200,7 +200,7 @@ M.setup_ui_input_override()
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_input_modal",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup_ui_input_override()

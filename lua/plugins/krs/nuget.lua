@@ -224,7 +224,7 @@ _G.NugetManager = M
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_nuget_manager",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	dependencies = {
 		"nvim-telescope/telescope.nvim",

@@ -525,7 +525,7 @@ _G.TailwindOrganizer = M
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_tailwind_organizer",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		M.setup()

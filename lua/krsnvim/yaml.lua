@@ -1,3 +1,12 @@
+--- @module krsnvim.yaml
+--- Native Pure Lua YAML Parser, Encoder, and File I/O manager for `krsnvimscript`.
+--- Handles basic YAML mappings, sequences, numbers, booleans, nulls, and comments.
+---
+--- @example
+--- local yaml = import("krsnvim.yaml")
+--- local config = yaml.load("config.yaml")
+--- config.build_env = "production"
+--- yaml.save("config.yaml", config)
 local M = {}
 
 local function parse_scalar(val)
@@ -14,6 +23,28 @@ local function parse_scalar(val)
 	return val
 end
 
+--- Decodes a YAML formatted string into a native Lua table.
+---
+--- @param str string|nil Raw YAML string to parse.
+--- @return table data Parsed Lua table representation. Returns `{}` if input is `nil` or empty `""`.
+---
+--- @note Edge Cases:
+--- - Ignores `#` comment lines automatically.
+--- - Parses basic scalars (booleans `true`/`false`, numbers, `null`, strings).
+--- - Handles nested indented blocks and `-` list items.
+---
+--- @see krsnvim.yaml.encode
+--- @see krsnvim.yaml.load
+---
+--- @example
+--- local data = yaml.decode([[
+--- name: MyApp
+--- version: 1.0.0
+--- features:
+---   - fast
+---   - native
+--- ]])
+--- print(data.name, data.features[1])
 function M.decode(str)
 	if not str or str == "" then return {} end
 	local lines = {}
@@ -99,11 +130,36 @@ local function dump_val(val, indent)
 	end
 end
 
+--- Serializes a Lua table into a YAML formatted string.
+---
+--- @param obj table|any Data structure to convert to YAML text.
+--- @return string yaml_str Formatted YAML output string.
+---
+--- @see krsnvim.yaml.decode
+--- @see krsnvim.yaml.save
+---
+--- @example
+--- local text = yaml.encode({ app = "KrsNvim", ports = { 8080, 3000 } })
+--- print(text)
 function M.encode(obj)
 	if not obj then return "" end
 	return dump_val(obj, 0)
 end
 
+--- Reads a YAML file from disk and parses its contents into a Lua table.
+---
+--- @param filepath string Path to the YAML file.
+--- @return table data Parsed Lua table representation.
+---
+--- @note Edge Cases & Errors:
+--- - Throws a Lua error if the file cannot be opened or read.
+---
+--- @see krsnvim.yaml.save
+--- @see krsnvim.yaml.decode
+--- @see krsnvim.fs.read
+---
+--- @example
+--- local data = yaml.load("docker-compose.yml")
 function M.load(filepath)
 	local f = io.open(filepath, "r")
 	if not f then
@@ -114,6 +170,21 @@ function M.load(filepath)
 	return M.decode(content)
 end
 
+--- Serializes a Lua table and writes it directly to a YAML file on disk.
+---
+--- @param filepath string Target path for the output YAML file.
+--- @param obj table Data structure to encode and save.
+--- @return boolean success Returns `true` upon successful save.
+---
+--- @note Edge Cases & Errors:
+--- - Throws a Lua error if file writing fails.
+---
+--- @see krsnvim.yaml.load
+--- @see krsnvim.yaml.encode
+--- @see krsnvim.fs.write
+---
+--- @example
+--- yaml.save("config.yaml", { env = "production" })
 function M.save(filepath, obj)
 	local str = M.encode(obj)
 	local f = io.open(filepath, "w")

@@ -12,7 +12,7 @@ lua/
 │   ├── keybinds.lua   -- every global mapping
 │   ├── options.lua
 │   └── lazy.lua
-├── krs/               -- plain Lua helpers (NOT plugin specs)
+├── lazyscripts/         -- plain Lua helpers (NOT plugin specs)
 │   ├── lazydir.lua
 │   └── dap_repl_source.lua
 └── plugins/
@@ -34,7 +34,7 @@ A custom module is a normal Lua module (`local M = {} … return M`) that ends b
 ```lua
 local plugin_spec = {
   name = "krs_dap_breakpoints",
-  dir = require("krs.lazydir").for_module(),
+  dir = require("lazyscripts.lazydir").for_module(),
   lazy = false,
   config = function()
     M.setup()
@@ -56,7 +56,7 @@ lazy.nvim indexes **local** specs by their `dir` (`lua/lazy/core/meta.lua`, `sel
 
 Every module in `lua/plugins/krs/` used to declare the same `dir`, so all but one were silently dropped — no error, no warning, just `setup()` never running. The visible symptom was breakpoints being neither saved nor restored; the cause had nothing to do with breakpoints.
 
-`lua/krs/lazydir.lua` hands each spec its own real, empty directory, named after the calling file:
+`lua/lazyscripts/lazydir.lua` hands each spec its own real, empty directory, named after the calling file:
 
 ```lua
 function M.for_module()
@@ -69,7 +69,7 @@ function M.for_module()
 end
 ```
 
-It must be called **from the spec table itself** (`dir = require("krs.lazydir").for_module()`), because it derives the name from the file at stack level 2 — its caller.
+It must be called **from the spec table itself** (`dir = require("lazyscripts.lazydir").for_module()`), because it derives the name from the file at stack level 2 — its caller.
 
 Directories live in `stdpath("data")/krs-specs/<module>/` and are empty by design; lazy only needs them to exist and be distinct.
 
@@ -81,7 +81,7 @@ Directories live in `stdpath("data")/krs-specs/<module>/` and are empty by desig
 
 lazy's directory import only walks subdirectories that contain an `init.lua` (`lua/lazy/core/util.lua`). That's why `lua/plugins/krs/debuggers/` can hold plain modules that are *not* specs: `lua/plugins/editor/dap.lua` requires each one by name and calls it with the `dap` module.
 
-Same idea, different reason, for `lua/krs/`: it sits outside `lua/plugins/` entirely, so it's never imported as specs — it's for helpers (`lazydir`, `dap_repl_source`) that other code requires directly.
+Same idea, different reason, for `lua/lazyscripts/`: it sits outside `lua/plugins/` entirely, so it's never imported as specs — it's for helpers (`lazydir`, `dap_repl_source`) that other code requires directly.
 
 ---
 

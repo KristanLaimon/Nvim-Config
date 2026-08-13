@@ -181,7 +181,7 @@ _G.DevServer = M
 
 local plugin_spec = {
 	name = "krs_dev_server",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		-- Dev server bridge module initialized

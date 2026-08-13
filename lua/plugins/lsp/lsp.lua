@@ -394,7 +394,7 @@ return {
 				-- Debug repl completes from the stopped frame only, never lsp/buffer words.
 				per_filetype = { ["dap-repl"] = { "dap" } },
 				providers = {
-					dap = { name = "DAP", module = "krs.dap_repl_source", async = true },
+					dap = { name = "DAP", module = "lazyscripts.dap_repl_source", async = true },
 				},
 			},
 			fuzzy = {

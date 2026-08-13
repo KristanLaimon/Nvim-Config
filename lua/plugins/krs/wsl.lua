@@ -166,7 +166,7 @@ _G.Wsl = M
 -- Plugin specification for Lazy.nvim
 local plugin_spec = {
 	name = "krs_wsl",
-	dir = require("krs.lazydir").for_module(),
+	dir = require("lazyscripts.lazydir").for_module(),
 	lazy = false,
 	config = function()
 		-- WSL Helper module initialized
