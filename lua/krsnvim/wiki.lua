@@ -1,0 +1,72 @@
+local M = {}
+
+local docs_files = {
+	{ name = "1. Index & Overview", file = "index.md" },
+	{ name = "2. Terminal ($)", file = "terminal.md" },
+	{ name = "3. JSON / YAML / TOML", file = "json_yaml_toml.md" },
+	{ name = "4. CLI & Numeric Menu", file = "cli.md" },
+	{ name = "5. Global import()", file = "import.md" },
+}
+
+local function get_docs_dir()
+	local info = debug.getinfo(1, "S")
+	local source = info.source:sub(2)
+	local dir = vim.fn.fnamemodify(source, ":h")
+	return dir .. "/docs"
+end
+
+function M.open(doc_file)
+	doc_file = doc_file or "index.md"
+	local docs_dir = get_docs_dir()
+	local filepath = docs_dir .. "/" .. doc_file
+
+	local f = io.open(filepath, "r")
+	if not f then
+		vim.notify("krsnvimscript wiki: File not found: " .. filepath, vim.log.levels.ERROR)
+		return
+	end
+	local content = f:read("*a")
+	f:close()
+
+	local lines = {}
+	for line in content:gmatch("[^\r\n]+") do
+		table.insert(lines, line)
+	end
+
+	-- Window calculations
+	local width = math.floor(vim.o.columns * 0.8)
+	local height = math.floor(vim.o.lines * 0.8)
+	local row = math.floor((vim.o.lines - height) / 2)
+	local col = math.floor((vim.o.columns - width) / 2)
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.api.nvim_buf_set_option(buf, "filetype", "markdown")
+	vim.api.nvim_buf_set_option(buf, "modifiable", false)
+
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = row,
+		col = col,
+		style = "minimal",
+		border = "rounded",
+		title = " 🦊 krsnvimscript Wiki Documentation [Press 1-5 to switch, q to close] ",
+		title_pos = "center",
+	})
+
+	-- Keybindings inside wiki window
+	local opts = { noremap = true, silent = true, buffer = buf }
+	vim.keymap.set("n", "q", "<cmd>close<CR>", opts)
+	vim.keymap.set("n", "<Esc>", "<cmd>close<CR>", opts)
+
+	for idx, doc in ipairs(docs_files) do
+		vim.keymap.set("n", tostring(idx), function()
+			vim.api.nvim_win_close(win, true)
+			M.open(doc.file)
+		end, opts)
+	end
+end
+
+return M

@@ -60,6 +60,7 @@ return {
 				"php",
 				"go",
 				"bash",
+				"krsnvimscript",
 			}) do
 				local ok, err = pcall(function()
 					require("plugins.krs.debuggers." .. language)(dap)

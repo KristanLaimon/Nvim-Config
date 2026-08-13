@@ -161,13 +161,15 @@ end
 -- Stage all unstaged and untracked changes with modal confirmation
 function M.stage_all_with_modal(cwd)
 	cwd = cwd or vim.fn.getcwd()
-	run_git_async({ "add", "." }, function(ok, out)
+	run_git_async({ "add", "-A" }, function(ok, out)
 		if ok then
+			vim.notify("✅ All unstaged and untracked changes were successfully staged!", vim.log.levels.INFO, { title = "Git Control Center" })
 			M.show_notification_modal({
 				title = " 🟢 Git Stage Confirmation ",
 				message = "✅ All unstaged and untracked changes were successfully staged!",
 			})
 		else
+			vim.notify("❌ Failed to stage changes:\n" .. (out ~= "" and out or "Directory is not a valid Git repository"), vim.log.levels.ERROR, { title = "Git Control Center" })
 			M.show_notification_modal({
 				title = " 🔴 Git Stage Error ",
 				message = "❌ Failed to stage changes:\n" .. (out ~= "" and out or "Directory is not a valid Git repository"),
@@ -175,9 +177,7 @@ function M.stage_all_with_modal(cwd)
 		end
 		if M.is_open() then
 			pcall(function()
-				if M.open_git_center then
-					-- refresh if open
-				end
+				M.open_git_center()
 			end)
 		end
 	end, cwd)
@@ -1215,10 +1215,12 @@ _G.GitCenter = M
 -- lazy.nvim plugin spec
 local plugin_spec = {
 	"NeogitOrg/neogit",
-	cmd = { "GitCenter", "GitCenterReload", "ReloadGitCenter", "Neogit" },
+	cmd = { "GitCenter", "GitStageAll", "GitCenterReload", "ReloadGitCenter", "Neogit" },
 	keys = {
 		{ "<C-S-g>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
 		{ "<C-S-G>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
+		{ "<C-A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
+		{ "<C-A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
@@ -1226,9 +1228,13 @@ local plugin_spec = {
 		"nvim-telescope/telescope.nvim",
 	},
 	config = function()
-		vim.api.nvim_create_user_command("GitCenter", function()
+		pcall(vim.api.nvim_create_user_command, "GitCenter", function()
 			M.toggle_git_center()
 		end, { desc = "Toggle Git Control Center" })
+
+		pcall(vim.api.nvim_create_user_command, "GitStageAll", function()
+			M.stage_all_with_modal()
+		end, { desc = "Stage All Unstaged & Untracked Changes with Modal Confirmation" })
 
 		local function reload_git_center()
 			package.loaded["plugins.krs.git_center"] = nil
@@ -1240,24 +1246,29 @@ local plugin_spec = {
 			vim.notify("🐙 Git Control Center reloaded successfully!", vim.log.levels.INFO, { title = "Git Center" })
 		end
 
-		vim.api.nvim_create_user_command("GitCenterReload", reload_git_center, { desc = "Reload Git Control Center" })
-		vim.api.nvim_create_user_command("ReloadGitCenter", reload_git_center, { desc = "Reload Git Control Center" })
+		pcall(vim.api.nvim_create_user_command, "GitCenterReload", reload_git_center, { desc = "Reload Git Control Center" })
+		pcall(vim.api.nvim_create_user_command, "ReloadGitCenter", reload_git_center, { desc = "Reload Git Control Center" })
 
+		local stage_keys = { "<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>", "<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>" }
 		local modes = { "n", "i", "v", "t" }
 		for _, mode in ipairs(modes) do
-			vim.keymap.set(mode, "<C-S-g>", function()
-				if vim.fn.mode() == "t" then
-					vim.cmd("stopinsert")
-				end
-				M.toggle_git_center()
-			end, { noremap = true, silent = true, desc = "Toggle Git Control Center" })
+			for _, k in ipairs({ "<C-S-g>", "<C-S-G>" }) do
+				vim.keymap.set(mode, k, function()
+					if vim.fn.mode() == "t" then
+						pcall(vim.cmd, "stopinsert")
+					end
+					M.toggle_git_center()
+				end, { noremap = true, silent = true, desc = "Toggle Git Control Center" })
+			end
 
-			vim.keymap.set(mode, "<C-S-G>", function()
-				if vim.fn.mode() == "t" then
-					vim.cmd("stopinsert")
-				end
-				M.toggle_git_center()
-			end, { noremap = true, silent = true, desc = "Toggle Git Control Center" })
+			for _, k in ipairs(stage_keys) do
+				vim.keymap.set(mode, k, function()
+					if vim.fn.mode() == "t" then
+						pcall(vim.cmd, "stopinsert")
+					end
+					M.stage_all_with_modal()
+				end, { noremap = true, silent = true, desc = "Stage All Unstaged & Untracked Changes (Modal Confirmation)" })
+			end
 		end
 	end,
 }

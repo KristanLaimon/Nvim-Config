@@ -556,11 +556,24 @@ for _, lhs in ipairs({ "<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>", "<A-C-s>", "<
 	})
 end
 
+for _, lhs in ipairs({ "<C-S-s>", "<C-S-S>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
+		if vim.fn.mode() == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
+		require("plugins.krs.launch_profiles").handle_smart_launch()
+	end, { noremap = true, silent = true, desc = "Smart Launch / Profile Debug UI" })
+end
+
 for _, lhs in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
+		if vim.fn.mode() == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
 		require("plugins.krs.launch_profiles").open_management_menu()
 	end, { noremap = true, silent = true, desc = "Open Launch Profiles Management UI" })
 end
+
 
 -- Per-Project Task Manager & Code Runner (Ctrl + Shift + T / Ctrl + Shift + A)
 -- Ctrl + Shift + A runs default task or kills old running task & reruns it
@@ -804,3 +817,43 @@ vim.api.nvim_create_autocmd("VimEnter", {
 		end
 	end,
 })
+
+-- ============================================================================
+-- 🦊 KRSNVIMSCRIPT KEYMAPS: Ctrl+, (Run Script) & Ctrl+Shift+, (Wiki Docs)
+-- ============================================================================
+local function run_krsnvimscript_handler()
+	if vim.fn.mode() == "t" then
+		pcall(vim.cmd, "stopinsert")
+	end
+	local buf_name = vim.api.nvim_buf_get_name(0)
+	if buf_name:match("%.lua$") then
+		vim.cmd("w")
+		require("krsnvim")
+		vim.notify("🚀 Running krsnvimscript: " .. vim.fn.fnamemodify(buf_name, ":t"), vim.log.levels.INFO)
+		dofile(buf_name)
+	else
+		require("plugins.krs.launch_profiles").open_management_menu()
+	end
+end
+
+for _, lhs in ipairs({ "<C-,>", "<C-comma>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, run_krsnvimscript_handler, {
+		noremap = true,
+		silent = true,
+		desc = "Run current Lua file with krsnvimscript",
+	})
+end
+
+for _, lhs in ipairs({ "<C-S-,>", "<C-S-comma>", "<C-?>" }) do
+	vim.keymap.set({ "n", "i", "v", "t" }, lhs, function()
+		if vim.fn.mode() == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
+		require("krsnvim").wiki.open()
+	end, {
+		noremap = true,
+		silent = true,
+		desc = "Open krsnvimscript Floating Wiki Documentation",
+	})
+end
+

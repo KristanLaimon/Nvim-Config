@@ -8,7 +8,7 @@
 
 local M = {}
 
-local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "custom" }
+local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "krsnvimscript", "custom" }
 
 function M.get_project_root()
 	local ok, tasks_mod = pcall(require, "plugins.krs.tasks")
@@ -184,7 +184,15 @@ function M.build_dap_config(profile, root)
 	local full_entry = (root .. "/" .. entry):gsub("\\", "/")
 	local is_ts = entry:match("%.[cm]?tsx?$") ~= nil
 
-	if runtime == "go" then
+	if runtime == "krsnvimscript" then
+		return {
+			type = "krsnvimscript",
+			request = "launch",
+			name = profile.name,
+			program = full_entry,
+			cwd = root,
+		}
+	elseif runtime == "go" then
 		return {
 			type = "go",
 			request = "launch",
@@ -756,6 +764,13 @@ function M.open_management_menu(root)
 end
 
 function M.handle_smart_launch()
+	local has_dap, dap = pcall(require, "dap")
+	if has_dap and dap.session() then
+		dap.terminate()
+		vim.notify("⏹️ Debug session terminated", vim.log.levels.INFO, { title = "Launch Profiles" })
+		return
+	end
+
 	local root = M.get_project_root()
 	local data = M.load_profiles(root)
 
@@ -788,10 +803,38 @@ local plugin_spec = {
 	dir = require("krs.lazydir").for_module(),
 	lazy = false,
 	config = function()
-		-- Launch profiles manager initialized
+		pcall(vim.api.nvim_create_user_command, "LaunchProfiles", function()
+			M.open_management_menu()
+		end, { desc = "Open Launch Profiles Management UI" })
+
+		pcall(vim.api.nvim_create_user_command, "LaunchProfilesSmart", function()
+			M.handle_smart_launch()
+		end, { desc = "Run Default Launch Profile or Open Management UI" })
+
+		local modes = { "n", "i", "v", "t" }
+		for _, mode in ipairs(modes) do
+			for _, key in ipairs({ "<C-S-s>", "<C-S-S>" }) do
+				vim.keymap.set(mode, key, function()
+					if vim.fn.mode() == "t" then
+						pcall(vim.cmd, "stopinsert")
+					end
+					M.handle_smart_launch()
+				end, { noremap = true, silent = true, desc = "Smart Launch / Profile Debug UI" })
+			end
+
+			for _, key in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
+				vim.keymap.set(mode, key, function()
+					if vim.fn.mode() == "t" then
+						pcall(vim.cmd, "stopinsert")
+					end
+					M.open_management_menu()
+				end, { noremap = true, silent = true, desc = "Open Launch Profiles Management UI" })
+			end
+		end
 	end,
 }
 
 return setmetatable(plugin_spec, {
 	__index = M,
 })
+
