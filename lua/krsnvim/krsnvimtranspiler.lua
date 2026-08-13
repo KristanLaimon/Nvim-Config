@@ -11,6 +11,73 @@ local M = {}
 
 local fs = require("krsnvim.fs")
 
+--- Splits a comma-separated argument list on top-level commas only, ignoring
+--- commas nested inside `{}` or `()` (e.g. a table-literal or call argument).
+--- @param args string
+--- @return string[]
+local function split_args(args)
+	local parts, depth, current = {}, 0, ""
+	for i = 1, #args do
+		local c = args:sub(i, i)
+		if c == "{" or c == "(" then depth = depth + 1
+		elseif c == "}" or c == ")" then depth = depth - 1 end
+		if c == "," and depth == 0 then
+			table.insert(parts, current)
+			current = ""
+		else
+			current = current .. c
+		end
+	end
+	if current:match("%S") then table.insert(parts, current) end
+	return parts
+end
+
+--- Joins source lines whose parens haven't balanced yet (e.g. a function call
+--- whose table-literal argument spans multiple lines) into one logical line,
+--- so the per-line transpilers below can pattern-match the whole call at once.
+--- @param code string
+--- @return string
+local function join_multiline_calls(code)
+	local out_lines = {}
+	local pending, depth = nil, 0
+	for line in code:gmatch("[^\r\n]+") do
+		local _, opens = line:gsub("%(", "")
+		local _, closes = line:gsub("%)", "")
+		if pending then
+			pending = pending .. " " .. line:match("^%s*(.-)%s*$")
+		else
+			pending = line
+		end
+		depth = depth + opens - closes
+		if depth <= 0 then
+			table.insert(out_lines, pending)
+			pending, depth = nil, 0
+		end
+	end
+	if pending then
+		table.insert(out_lines, pending)
+	end
+	return table.concat(out_lines, "\n")
+end
+
+--- Converts a Lua expression fragment into PowerShell: `obj:method(` -> `obj.method(`,
+--- and bare `word.word`/`word` identifiers -> `$word.word`/`$word` (skips string literals,
+--- numbers, already-`$`-prefixed vars, and `true`/`false`/`nil`).
+--- @param expr string
+--- @return string
+local function ps1_expr(expr)
+	if not expr then return expr end
+	expr = expr:gsub("([%w_]+):([%w_]+)%(", "%1.%2(")
+	expr = expr:gsub("[%w_]+%.?[%w_]*", function(word)
+		if word:match("^%d") or word == "true" or word == "false" or word == "nil" then
+			return word
+		end
+		return "$" .. word
+	end)
+	expr = expr:gsub('"[^"]*"', function(s) return s end)
+	return expr
+end
+
 --- Helper to convert Lua table literal to PowerShell Hashtable syntax (@{...}).
 --- @param lua_tbl_str string
 --- @return string
@@ -68,7 +135,7 @@ function M.to_sh(code)
 
 	local block_stack = {}
 
-	for line in code:gmatch("[^\r\n]+") do
+	for line in join_multiline_calls(code):gmatch("[^\r\n]+") do
 		local trimmed = line:match("^%s*(.-)%s*$")
 		local indent = line:match("^(%s*)") or ""
 
@@ -123,6 +190,24 @@ function M.to_sh(code)
 					table.insert(echoed, arg:sub(2, -2))
 				elseif arg:sub(1, 1) == "'" and arg:sub(-1) == "'" then
 					table.insert(echoed, arg:sub(2, -2))
+				else
+					table.insert(echoed, "${" .. arg .. "}")
+				end
+			end
+			table.insert(lines, indent .. 'echo "' .. table.concat(echoed, " ") .. '"')
+
+		-- console.log(...) / console.info(...) -> echo ...
+		elseif trimmed:match("^console%.[%w_]+%((.*)%)%s*$") then
+			local args = trimmed:match("^console%.[%w_]+%((.*)%)%s*$")
+			local echoed = {}
+			for _, raw in ipairs(split_args(args)) do
+				local arg = raw:match("^%s*(.-)%s*$")
+				if arg:sub(1, 1) == '"' and arg:sub(-1) == '"' then
+					table.insert(echoed, arg:sub(2, -2))
+				elseif arg:sub(1, 1) == "'" and arg:sub(-1) == "'" then
+					table.insert(echoed, arg:sub(2, -2))
+				elseif arg:sub(1, 1) == "{" then
+					table.insert(echoed, lua_tbl_to_json(arg))
 				else
 					table.insert(echoed, "${" .. arg .. "}")
 				end
@@ -292,7 +377,7 @@ function M.to_sh(code)
 
 		else
 			-- Fallback: pass line as is with -- turned to #
-			table.insert(lines, line:gsub("^%s*%-%-", indent .. "#"))
+			table.insert(lines, (line:gsub("^%s*%-%-", indent .. "#")))
 		end
 	end
 
@@ -311,7 +396,7 @@ function M.to_ps1(code)
 	table.insert(lines, "$ErrorActionPreference = 'Stop'")
 	table.insert(lines, "")
 
-	for line in code:gmatch("[^\r\n]+") do
+	for line in join_multiline_calls(code):gmatch("[^\r\n]+") do
 		local trimmed = line:match("^%s*(.-)%s*$")
 		local indent = line:match("^(%s*)") or ""
 
@@ -356,6 +441,22 @@ function M.to_ps1(code)
 					else
 						table.insert(parts, part)
 					end
+				end
+			end
+			table.insert(lines, indent .. "Write-Host " .. table.concat(parts, " "))
+
+		-- console.log(...) / console.info(...) -> Write-Host ...
+		elseif trimmed:match("^console%.[%w_]+%((.*)%)%s*$") then
+			local args = trimmed:match("^console%.[%w_]+%((.*)%)%s*$")
+			local parts = {}
+			for _, raw in ipairs(split_args(args)) do
+				local part = raw:match("^%s*(.-)%s*$")
+				if part:sub(1, 1) == '"' or part:sub(1, 1) == "'" then
+					table.insert(parts, part)
+				elseif part:sub(1, 1) == "{" then
+					table.insert(parts, lua_tbl_to_ps1(part))
+				else
+					table.insert(parts, ps1_expr(part))
 				end
 			end
 			table.insert(lines, indent .. "Write-Host " .. table.concat(parts, " "))
@@ -478,7 +579,7 @@ function M.to_ps1(code)
 				local p = cond:match("fs%.exists%((.*)%)")
 				table.insert(lines, indent .. "if (Test-Path " .. p .. ") {")
 			else
-				table.insert(lines, indent .. "if (" .. cond .. ") {")
+				table.insert(lines, indent .. "if (" .. ps1_expr(cond) .. ") {")
 			end
 
 		-- Control Flow: elseif ... then
@@ -488,7 +589,7 @@ function M.to_ps1(code)
 				local p = cond:match("fs%.exists%((.*)%)")
 				table.insert(lines, indent .. "} elseif (Test-Path " .. p .. ") {")
 			else
-				table.insert(lines, indent .. "} elseif (" .. cond .. ") {")
+				table.insert(lines, indent .. "} elseif (" .. ps1_expr(cond) .. ") {")
 			end
 
 		-- Control Flow: else

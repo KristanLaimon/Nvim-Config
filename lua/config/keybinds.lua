@@ -649,8 +649,10 @@ for i = 1, 4 do
 	end, { noremap = true, silent = true, desc = "Toggle task output slot " .. i })
 end
 
-local task_output_keys = { "<C-`>", "<C-S-o>", "<C-[>" }
-for _, k in ipairs(task_output_keys) do
+-- NOTE: <C-i> is the same keycode as <Tab> in Vim, so it's excluded from
+-- terminal mode to avoid swallowing Tab-completion inside :terminal jobs.
+local task_output_keys_all_modes = { "<C-`>", "<C-[>" }
+for _, k in ipairs(task_output_keys_all_modes) do
 	vim.keymap.set({ "n", "i", "v", "t" }, k, function()
 		if vim.fn.mode() == "t" then
 			pcall(vim.cmd, "stopinsert")
@@ -658,6 +660,10 @@ for _, k in ipairs(task_output_keys) do
 		require("plugins.krs.tasks").toggle_last_slot_window()
 	end, { noremap = true, silent = true, desc = "Toggle last task output window" })
 end
+
+vim.keymap.set({ "n", "i", "v" }, "<C-i>", function()
+	require("plugins.krs.tasks").toggle_last_slot_window()
+end, { noremap = true, silent = true, desc = "Toggle last task output window" })
 
 -- Ctrl + Click a URL (in any buffer, e.g. task/terminal output) to open it in the browser
 vim.keymap.set({ "n", "i", "v", "t" }, "<C-LeftMouse>", function()
@@ -894,26 +900,49 @@ for _, lhs in ipairs({ "<C-S-,>", "<C-S-comma>", "<C-?>" }) do
 end
 
 -- Commands to programmatically export .krsnvim scripts to .sh (bash) and .ps1 (windows)
+-- Uses the last active *file* buffer (not the current window), since these commands
+-- may run from the command palette after focus has passed through neo-tree/telescope.
+local function krsnvim_source_buf_name()
+	local buf_name = vim.api.nvim_buf_get_name(0)
+	if not (buf_name:match("%.krsnvim$") and vim.fn.filereadable(buf_name) == 1) then
+		for _, buf in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+			if buf.name:match("%.krsnvim$") and vim.fn.filereadable(buf.name) == 1 then
+				buf_name = buf.name
+				break
+			end
+		end
+	end
+	return buf_name
+end
+
+local function krsnvim_export(fn, ...)
+	local buf_name = krsnvim_source_buf_name()
+	if not (buf_name:match("%.krsnvim$") and vim.fn.filereadable(buf_name) == 1) then
+		vim.notify("KrsExport: no .krsnvim file found to transpile", vim.log.levels.ERROR, { title = "krsnvimtranspiler" })
+		return
+	end
+	fn(buf_name, ...)
+end
+
 vim.api.nvim_create_user_command("KrsExport", function(opts)
 	local transpiler = require("krsnvim").krsnvimtranspiler
-	local buf_name = vim.api.nvim_buf_get_name(0)
 	local args = opts.fargs
 	local target = args[1] or "both"
 	if target == "sh" then
-		transpiler.export_sh(buf_name, args[2])
+		krsnvim_export(transpiler.export_sh, args[2])
 	elseif target == "ps1" then
-		transpiler.export_ps1(buf_name, args[2])
+		krsnvim_export(transpiler.export_ps1, args[2])
 	else
-		transpiler.export_both(buf_name)
+		krsnvim_export(transpiler.export_both)
 	end
 end, { nargs = "*", desc = "Export current .krsnvim script to .sh and .ps1 equivalents" })
 
 vim.api.nvim_create_user_command("KrsExportSh", function(opts)
-	require("krsnvim").krsnvimtranspiler.export_sh(vim.api.nvim_buf_get_name(0), opts.args ~= "" and opts.args or nil)
+	krsnvim_export(require("krsnvim").krsnvimtranspiler.export_sh, opts.args ~= "" and opts.args or nil)
 end, { nargs = "?", desc = "Export current .krsnvim script to .sh (Bash)" })
 
 vim.api.nvim_create_user_command("KrsExportPs1", function(opts)
-	require("krsnvim").krsnvimtranspiler.export_ps1(vim.api.nvim_buf_get_name(0), opts.args ~= "" and opts.args or nil)
+	krsnvim_export(require("krsnvim").krsnvimtranspiler.export_ps1, opts.args ~= "" and opts.args or nil)
 end, { nargs = "?", desc = "Export current .krsnvim script to .ps1 (PowerShell)" })
 
 

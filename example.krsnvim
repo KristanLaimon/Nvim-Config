@@ -12,5 +12,5 @@ console.log("Global console object demo:", {
 
 local res = fetch.get("https://jsonplaceholder.typicode.com/todos/1")
 if res.ok then
-	console.info("Fetch response:", res:json())
+	console.info("Fetch response:", res:text())
 end
