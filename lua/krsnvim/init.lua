@@ -28,6 +28,8 @@ M.fs = require("krsnvim.fs")
 M.fetch = require("krsnvim.fetch")
 M.wiki = require("krsnvim.wiki")
 M.tests = require("krsnvim.tests")
+M.krsnvimtranspiler = require("krsnvim.krsnvimtranspiler")
+M.exporter = M.krsnvimtranspiler
 
 --- Global smart import function for `krsnvimscript`.
 --- Automatically detects file extensions (`.json`, `.yaml`, `.yml`, `.toml`) or module aliases (`"fetch"`, `"json"`, `"fs"`, etc.).
@@ -67,8 +69,10 @@ _G.import = function(target)
 		return M.fs
 	elseif target == "krsnvim.fetch" or target == "fetch" then
 		return M.fetch
-	elseif target == "krsnvim.test" or target == "test" then
-		return M.test
+	elseif target == "krsnvim.test" or target == "test" or target == "tests" then
+		return M.tests
+	elseif target == "krsnvim.krsnvimtranspiler" or target == "krsnvimtranspiler" or target == "krsnvim.exporter" or target == "exporter" then
+		return M.krsnvimtranspiler
 	end
 
 	if target:match("%.json$") then

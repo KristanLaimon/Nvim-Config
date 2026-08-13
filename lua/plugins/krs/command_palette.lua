@@ -84,6 +84,14 @@ M.commands = {
 	{ name = "🛑 Stop / Kill Current Task", cmd = "TaskKill", category = "Tasks" },
 	{ name = "⚡ Run Default Project Task", cmd = "TaskRunDefault", category = "Tasks" },
 	{ name = "🛠️ Open Project Task Menu", cmd = "TaskMenu", category = "Tasks" },
+
+	-- --------------------------------------------------------------------------
+	-- 🦊 krsnvimtranspiler (Script Transpiler)
+	-- --------------------------------------------------------------------------
+	{ name = "🦊 Transpile .krsnvim Script (Both .sh & .ps1)", cmd = "KrsExport", category = "Transpiler" },
+	{ name = "🐧 Transpile .krsnvim Script to Bash (.sh)", cmd = "KrsExportSh", category = "Transpiler" },
+	{ name = "🪟 Transpile .krsnvim Script to PowerShell (.ps1)", cmd = "KrsExportPs1", category = "Transpiler" },
+	{ name = "🚀 Open Launch Profiles Manager (<C-S-q>)", cmd = "LaunchProfiles", category = "Transpiler" },
 }
 
 -- Public function to dynamically add commands from any plugin or config

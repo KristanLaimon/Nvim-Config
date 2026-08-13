@@ -95,9 +95,34 @@ vim.keymap.set("n", "<C-S-z>", "<C-r>", { noremap = true, silent = true, desc = 
 vim.keymap.set("i", "<C-y>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Redo" })
 vim.keymap.set("i", "<C-S-z>", "<C-o><C-r>", { noremap = true, silent = true, desc = "Redo" })
 
--- Movements across panels & split windows
-vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
-vim.keymap.set("n", "<C-l>", "<C-w>l", { desc = "Move to right window" })
+-- Movements across panels & split windows (direct wincmd execution)
+vim.keymap.set("n", "<C-h>", "<Cmd>wincmd h<CR>", { noremap = true, silent = true, desc = "Move to left window" })
+vim.keymap.set("n", "<C-j>", "<Cmd>wincmd j<CR>", { noremap = true, silent = true, desc = "Move to down window" })
+vim.keymap.set("n", "<C-k>", "<Cmd>wincmd k<CR>", { noremap = true, silent = true, desc = "Move to up window" })
+vim.keymap.set("n", "<C-l>", "<Cmd>wincmd l<CR>", { noremap = true, silent = true, desc = "Move to right window" })
+
+-- ============================================================================
+-- 🦊 CTRL+W: Close current tab / buffer immediately (Zero composed key delay)
+-- ============================================================================
+local function close_current_tab_handler()
+	if vim.fn.mode() == "t" then
+		pcall(vim.cmd, "stopinsert")
+	end
+	if _G.Neotree_Smart_Quit then
+		_G.Neotree_Smart_Quit()
+	else
+		pcall(vim.cmd, "bdelete")
+	end
+end
+
+for _, mode in ipairs({ "n", "i", "v", "t" }) do
+	vim.keymap.set(mode, "<C-w>", close_current_tab_handler, {
+		noremap = true,
+		silent = true,
+		nowait = true,
+		desc = "Close Current Tab / Buffer Immediately",
+	})
+end
 
 -- Open file picker in directional splits with Ctrl + Shift + H/J/K/L
 local function open_find_files_split(direction)
@@ -866,4 +891,28 @@ for _, lhs in ipairs({ "<C-S-,>", "<C-S-comma>", "<C-?>" }) do
 		desc = "Open krsnvimscript Floating Wiki Documentation",
 	})
 end
+
+-- Commands to programmatically export .krsnvim scripts to .sh (bash) and .ps1 (windows)
+vim.api.nvim_create_user_command("KrsExport", function(opts)
+	local transpiler = require("krsnvim").krsnvimtranspiler
+	local buf_name = vim.api.nvim_buf_get_name(0)
+	local args = opts.fargs
+	local target = args[1] or "both"
+	if target == "sh" then
+		transpiler.export_sh(buf_name, args[2])
+	elseif target == "ps1" then
+		transpiler.export_ps1(buf_name, args[2])
+	else
+		transpiler.export_both(buf_name)
+	end
+end, { nargs = "*", desc = "Export current .krsnvim script to .sh and .ps1 equivalents" })
+
+vim.api.nvim_create_user_command("KrsExportSh", function(opts)
+	require("krsnvim").krsnvimtranspiler.export_sh(vim.api.nvim_buf_get_name(0), opts.args ~= "" and opts.args or nil)
+end, { nargs = "?", desc = "Export current .krsnvim script to .sh (Bash)" })
+
+vim.api.nvim_create_user_command("KrsExportPs1", function(opts)
+	require("krsnvim").krsnvimtranspiler.export_ps1(vim.api.nvim_buf_get_name(0), opts.args ~= "" and opts.args or nil)
+end, { nargs = "?", desc = "Export current .krsnvim script to .ps1 (PowerShell)" })
+
 

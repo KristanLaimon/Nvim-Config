@@ -628,6 +628,15 @@ function M.select_workspace()
 						end,
 					}),
 					attach_mappings = function(prompt_bufnr, map)
+						-- Pressing <Esc> in Insert mode switches to Normal mode (does NOT exit Telescope)
+						map("i", "<Esc>", function()
+							pcall(vim.cmd, "stopinsert")
+						end)
+
+						-- Pressing <Esc> or 'q' in Normal mode closes Telescope cleanly
+						map("n", "<Esc>", actions.close)
+						map("n", "q", actions.close)
+
 						actions.select_default:replace(function()
 							local selection = action_state.get_selected_entry()
 							actions.close(prompt_bufnr)
@@ -649,6 +658,7 @@ function M.select_workspace()
 						end
 						map("i", "<C-d>", delete_action)
 						map("n", "d", delete_action)
+						map("n", "D", delete_action)
 						map("i", "<Del>", delete_action)
 
 						local rename_action = function()
@@ -664,6 +674,7 @@ function M.select_workspace()
 						end
 						map("i", "<C-r>", rename_action)
 						map("n", "r", rename_action)
+						map("n", "R", rename_action)
 						map("n", "<F2>", rename_action)
 
 						local add_action = function()
@@ -674,6 +685,7 @@ function M.select_workspace()
 						end
 						map("i", "<C-a>", add_action)
 						map("n", "a", add_action)
+						map("n", "A", add_action)
 
 						local save_overwrite_action = function()
 							local selection = action_state.get_selected_entry()
@@ -685,7 +697,9 @@ function M.select_workspace()
 							end
 						end
 						map("i", "<C-s>", save_overwrite_action)
+						map("i", "<C-S-s>", save_overwrite_action)
 						map("n", "s", save_overwrite_action)
+						map("n", "S", save_overwrite_action)
 
 						local toggle_all_action = function()
 							show_all = not show_all
@@ -696,6 +710,7 @@ function M.select_workspace()
 						end
 						map("i", "<C-g>", toggle_all_action)
 						map("n", "g", toggle_all_action)
+						map("n", "G", toggle_all_action)
 
 						for n = 1, 9 do
 							map("n", tostring(n), function()

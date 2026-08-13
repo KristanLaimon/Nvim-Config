@@ -381,7 +381,14 @@ function M.setup()
 		end, { noremap = true, silent = true, desc = "Toggle Selected Terminal" })
 	end
 
-	vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], { noremap = true, silent = true })
+	vim.keymap.set("t", "<C-w>", function()
+		pcall(vim.cmd, "stopinsert")
+		if _G.Neotree_Smart_Quit then
+			_G.Neotree_Smart_Quit()
+		else
+			pcall(vim.cmd, "close")
+		end
+	end, { noremap = true, silent = true, nowait = true, desc = "Close Terminal Window" })
 
 	local function paste_clipboard()
 		local clip = vim.fn.getreg("+")

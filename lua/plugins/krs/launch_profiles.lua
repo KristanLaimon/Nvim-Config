@@ -8,7 +8,7 @@
 --- lp.open_management_menu()
 local M = {}
 
-local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "krsnvimscript", "custom" }
+local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "krsnvimscript", "krsnvimtranspiler", "custom" }
 
 --- Resolves the current project root directory.
 --- @return string root Absolute path to project root.
@@ -360,6 +360,18 @@ function M.run_profile(profile)
 			cmd = "dotnet run --project " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "krsnvimscript" then
 			cmd = "nvim -l " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
+		elseif runtime == "krsnvimtranspiler" then
+			local transpiler = require("krsnvim").krsnvimtranspiler
+			local root = M.get_project_root()
+			local full_path = (root .. "/" .. entry):gsub("\\", "/")
+			if args_str == "sh" then
+				transpiler.export_sh(full_path)
+			elseif args_str == "ps1" then
+				transpiler.export_ps1(full_path)
+			else
+				transpiler.export_both(full_path)
+			end
+			return
 		else
 			cmd = entry .. (args_str ~= "" and (" " .. args_str) or "")
 		end
@@ -455,7 +467,7 @@ function M.open_form_editor(root, existing_profile, on_saved)
 			" ────────────── Launch Profile Specifications (Form View) ──────────────",
 			"",
 			string.format("  %s [1] Profile Name:     %s", selected_field == 1 and "👉" or "  ", p.name),
-			string.format("  %s [2] Runtime:          %s", selected_field == 2 and "👉" or "  ", p.runtime:upper() .. "  (bun | node | deno | python | go | php | dotnet)"),
+			string.format("  %s [2] Runtime:          %s", selected_field == 2 and "👉" or "  ", p.runtime:upper() .. "  (" .. table.concat(RUNTIMES, " | ") .. ")"),
 			string.format("  %s [3] Entry Point File: %s", selected_field == 3 and "👉" or "  ", p.entry_point),
 			string.format("  %s [4] Command Args:     %s", selected_field == 4 and "👉" or "  ", args_str),
 			string.format("  %s [5] Pre-launch Tasks: %s", selected_field == 5 and "👉" or "  ", pre_str),

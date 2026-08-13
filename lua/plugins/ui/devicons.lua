@@ -27,6 +27,9 @@ return {
           name = "KrsNvim",
         },
       })
+      devicons.set_icon_by_filetype({
+        krsnvim = "krsnvim",
+      })
     end,
   },
 }
