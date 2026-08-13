@@ -77,18 +77,18 @@ return {
 			if is_git then
 				local ok = pcall(builtin.git_files, { show_untracked = true })
 				if not ok then
-					builtin.find_files({ no_ignore = false, hidden = false })
+					builtin.find_files({ no_ignore = false, hidden = true })
 				end
 			elseif vim.fn.executable("rg") == 1 then
 				builtin.find_files({
-					find_command = { "rg", "--files", "--color=never", "--glob", "!.git/*" },
+					find_command = { "rg", "--files", "--color=never", "--hidden", "--glob", "!.git/*" },
 				})
 			elseif vim.fn.executable("fd") == 1 then
 				builtin.find_files({
-					find_command = { "fd", "--type", "f", "--exclude", ".git" },
+					find_command = { "fd", "--type", "f", "--hidden", "--exclude", ".git" },
 				})
 			else
-				builtin.find_files({ no_ignore = false, hidden = false })
+				builtin.find_files({ no_ignore = false, hidden = true })
 			end
 		end
 

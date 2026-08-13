@@ -19,6 +19,11 @@ return {
 				dockerfile = { "dockerfmt" },
 				php = { "pint", "php_cs_fixer", stop_after_first = true },
 				blade = { "blade-formatter", "pint", stop_after_first = true },
+				sh = { "beautysh" },
+				bash = { "beautysh" },
+				zsh = { "beautysh" },
+				csh = { "beautysh" },
+				ksh = { "beautysh" },
 			},
 			formatters = {
 				pint = {

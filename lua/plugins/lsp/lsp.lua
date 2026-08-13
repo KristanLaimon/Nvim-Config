@@ -172,6 +172,9 @@ return {
 				lemminx = {},
 				dockerls = {},
 				gopls = {},
+				bashls = {
+					filetypes = { "sh", "bash", "zsh", "csh", "ksh" },
+				},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -232,6 +235,7 @@ return {
 					"lemminx",
 					"dockerls",
 					"gopls",
+					"bashls",
 				},
 				handlers = {
 					function(server_name)

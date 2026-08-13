@@ -28,9 +28,58 @@ function _G.AddOpenedFolder(dir_path)
 	end
 end
 
--- Smart Buffer & Tab Manager Quit Function
+-- Smart Buffer Close Function (target buffer by bufnr or current)
+function _G.Smart_Close_Buffer(target_buf, force)
+	local cur_buf = vim.api.nvim_get_current_buf()
+	target_buf = target_buf or cur_buf
+
+	if not vim.api.nvim_buf_is_valid(target_buf) then
+		return
+	end
+
+	local ft = vim.bo[target_buf].filetype
+	if ft == "alpha" then
+		vim.cmd(force and "qa!" or "qa")
+		return
+	end
+
+	if ft == "neo-tree" then
+		pcall(vim.cmd, "Neotree close")
+		return
+	end
+
+	-- Count how many real file buffers are open in total
+	local bufs = vim.api.nvim_list_bufs()
+	local real_bufs = {}
+	for _, b in ipairs(bufs) do
+		if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
+			local bft = vim.bo[b].filetype
+			if bft ~= "alpha" and bft ~= "neo-tree" then
+				table.insert(real_bufs, b)
+			end
+		end
+	end
+
+	-- If closing the last real file buffer:
+	if #real_bufs <= 1 then
+		if target_buf == cur_buf then
+			local ok_alpha = pcall(vim.cmd, "Alpha")
+			if not ok_alpha then
+				pcall(vim.cmd, "enew")
+			end
+		end
+		pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
+	else
+		-- Multiple file buffers open:
+		if target_buf == cur_buf then
+			pcall(vim.cmd, "BufferLineCyclePrev")
+		end
+		pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
+	end
+end
+
+-- Smart Buffer & Tab Manager Quit Function (for window splits & :q)
 function _G.Neotree_Smart_Quit(force)
-	local cur_win = vim.api.nvim_get_current_win()
 	local cur_buf = vim.api.nvim_get_current_buf()
 	local ft = vim.bo[cur_buf].filetype
 	local bt = vim.bo[cur_buf].buftype
@@ -65,37 +114,13 @@ function _G.Neotree_Smart_Quit(force)
 		end
 	end
 
-	-- If multiple window splits exist, close only the current split
+	-- If multiple window splits exist, close only the current split window
 	if code_wins > 1 then
 		pcall(vim.cmd, force and "close!" or "close")
 		return
 	end
 
-	-- Count how many real file buffers are open in total
-	local bufs = vim.api.nvim_list_bufs()
-	local real_bufs = {}
-	for _, b in ipairs(bufs) do
-		if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-			local bname = vim.api.nvim_buf_get_name(b)
-			local bft = vim.bo[b].filetype
-			if bft ~= "alpha" and bft ~= "neo-tree" then
-				table.insert(real_bufs, b)
-			end
-		end
-	end
-
-	-- If more than 1 file buffer open in bufferline:
-	if #real_bufs > 1 then
-		pcall(vim.cmd, "BufferLineCyclePrev")
-		pcall(vim.api.nvim_buf_delete, cur_buf, { force = force })
-	else
-		-- Last file buffer -> Show Alpha Dashboard FIRST, then delete buffer
-		local ok_alpha = pcall(vim.cmd, "Alpha")
-		if not ok_alpha then
-			pcall(vim.cmd, "enew")
-		end
-		pcall(vim.api.nvim_buf_delete, cur_buf, { force = force })
-	end
+	_G.Smart_Close_Buffer(cur_buf, force)
 end
 
 function M.clean_buffers()

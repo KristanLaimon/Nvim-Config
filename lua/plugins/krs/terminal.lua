@@ -374,7 +374,7 @@ function M.setup()
 		end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
 	end
 
-	local term_toggle_keys = { "<C-;>", "<C-S-;>", "<C-:>", "<C-S-:>", "<A-;>", "<C-A-;>" }
+	local term_toggle_keys = { "<C-;>", "<A-;>" }
 	for _, k in ipairs(term_toggle_keys) do
 		vim.keymap.set({ "n", "i", "t" }, k, function()
 			M.toggle_selected_terminal()

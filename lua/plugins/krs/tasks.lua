@@ -367,7 +367,7 @@ local function bind_task_buffer_keys(buf, slot)
 	if not buf or not vim.api.nvim_buf_is_valid(buf) then
 		return
 	end
-	local task_toggle_keys = { "<C-`>", "<C-~>", "<C-S-o>", "<C-A-S-j>", "<C-S-t>", "<C-S-T>", "<C-[>" }
+	local task_toggle_keys = { "<C-o>", "<C-O>", "<C-`>", "<C-~>", "<C-S-o>", "<C-S-O>", "<C-S-t>", "<C-S-T>", "<C-A-S-j>", "<C-[>" }
 	for _, tk in ipairs(task_toggle_keys) do
 		vim.keymap.set({ "n", "t", "i", "v" }, tk, function()
 			if vim.fn.mode() == "t" then
@@ -1032,7 +1032,7 @@ function M.setup()
 		pcall(vim.keymap.del, m, "<C-{>")
 	end
 
-	local toggle_last_keys = { "<C-`>", "<C-S-o>", "<C-A-S-j>" }
+	local toggle_last_keys = { "<C-o>", "<C-O>", "<C-`>", "<C-S-o>", "<C-S-O>", "<C-S-t>", "<C-S-T>", "<C-A-S-j>" }
 	for _, k in ipairs(toggle_last_keys) do
 		vim.keymap.set({ "n", "i", "v", "t" }, k, function()
 			if vim.fn.mode() == "t" then

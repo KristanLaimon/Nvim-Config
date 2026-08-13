@@ -10,6 +10,27 @@ return {
 				always_show_bufferline = true,
 				show_buffer_close_icons = true,
 				show_close_icon = false,
+				close_command = function(bufnr)
+					if _G.Smart_Close_Buffer then
+						_G.Smart_Close_Buffer(bufnr, true)
+					else
+						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+					end
+				end,
+				right_mouse_command = function(bufnr)
+					if _G.Smart_Close_Buffer then
+						_G.Smart_Close_Buffer(bufnr, true)
+					else
+						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+					end
+				end,
+				middle_mouse_command = function(bufnr)
+					if _G.Smart_Close_Buffer then
+						_G.Smart_Close_Buffer(bufnr, true)
+					else
+						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+					end
+				end,
 				offsets = {
 					{ filetype = "neo-tree", text = "🦊 Explorer", highlight = "Directory", text_align = "left" },
 				},

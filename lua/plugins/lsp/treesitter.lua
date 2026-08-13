@@ -17,6 +17,7 @@ local parsers = {
 	"css",
 
 	-- Backend / Data
+	"bash",
 	"go",
 	"gomod",
 	"gowork",

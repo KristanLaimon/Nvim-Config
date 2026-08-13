@@ -32,6 +32,7 @@ return {
 						"python",
 						"php",
 						"coreclr",
+						"bash",
 					},
 					automatic_installation = true,
 					handlers = {
@@ -58,6 +59,7 @@ return {
 				"csharp",
 				"php",
 				"go",
+				"bash",
 			}) do
 				local ok, err = pcall(function()
 					require("plugins.krs.debuggers." .. language)(dap)
@@ -89,6 +91,8 @@ return {
 				python = { "python" },
 				php = { "php" },
 				go = { "go" },
+				bashdb = { "sh", "bash", "zsh", "csh", "ksh" },
+				bash = { "sh", "bash", "zsh", "csh", "ksh" },
 			}
 
 			dapui.setup({
