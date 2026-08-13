@@ -862,10 +862,16 @@ local function run_krsnvimscript_handler()
 	end
 	local buf_name = vim.api.nvim_buf_get_name(0)
 	if buf_name:match("%.krsnvim$") or vim.bo.filetype == "krsnvim" then
-		vim.cmd("w")
-		require("krsnvim")
-		vim.notify("🦊 Running krsnvimscript: " .. vim.fn.fnamemodify(buf_name, ":t"), vim.log.levels.INFO)
-		dofile(buf_name)
+		vim.cmd("silent! write")
+		local krs = require("krsnvim")
+		_G.krsnvim = krs
+		_G.console = krs.console
+		_G.fetch = krs.fetch
+		_G.import = krs.import
+
+		local relative_path = vim.fn.fnamemodify(buf_name, ":.")
+		local cmd = 'nvim --headless -c "lua require(\'krsnvim\')" -l ' .. vim.fn.shellescape(relative_path)
+		require("plugins.krs.tasks").run_custom_command(cmd)
 	else
 		require("plugins.krs.launch_profiles").open_management_menu()
 	end

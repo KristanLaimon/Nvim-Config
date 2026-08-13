@@ -31,13 +31,14 @@ That is why `<C-S-s>` is both start and stop, and why resuming from a breakpoint
 
 A Telescope card picker: default profile pinned first (⭐), each row showing mode, name, `runtime:entry_point`, args and pre-launch tasks, with a full preview pane.
 
-| Key | Action |
-| :--- | :--- |
-| `<Enter>` | Run the profile |
-| `<C-d>` | Toggle "primary default" (the one `<C-S-s>` runs) |
-| `<C-e>` | Edit in the form editor |
-| `<C-n>` | Create a new profile |
-| `<C-x>` | Delete the profile |
+| Key | Mode | Action |
+| :--- | :--- | :--- |
+| `<Enter>` | n, i | Run the profile |
+| `d` / `<C-x>` | n | Delete the profile |
+| `r` | n | Rename profile via input modal |
+| `e` / `<C-e>` | n | Edit in the form editor |
+| `f` / `<C-d>` | n | Toggle favorite ⭐ ("primary default") |
+| `a` / `<C-n>` | n | Create a new profile |
 
 ### The form editor
 

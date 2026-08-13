@@ -545,22 +545,22 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 						end
 
 						local function close_task_window()
-							if vim.api.nvim_win_is_valid(win) then
-								pcall(vim.api.nvim_win_close, win, true)
-							end
-							if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 							if origin_win and vim.api.nvim_win_is_valid(origin_win) then
 								pcall(vim.api.nvim_set_current_win, origin_win)
 							else
 								pcall(vim.cmd, "wincmd p")
 							end
+							if vim.api.nvim_win_is_valid(win) then
+								pcall(vim.api.nvim_win_close, win, true)
+							end
+							if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 						end
 
-						local map_opts = { noremap = true, silent = true, buffer = buf }
-						vim.keymap.set({ "n", "t" }, "<CR>", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t" }, "<Esc>", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t" }, "q", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t" }, "<Space>", close_task_window, map_opts)
+						local map_opts = { noremap = true, silent = true, nowait = true, buffer = buf }
+						vim.keymap.set({ "n", "t", "i", "v" }, "<CR>", close_task_window, map_opts)
+						vim.keymap.set({ "n", "t", "i", "v" }, "<Esc>", close_task_window, map_opts)
+						vim.keymap.set({ "n", "t", "i", "v" }, "q", close_task_window, map_opts)
+						vim.keymap.set({ "n", "t", "i", "v" }, "<Space>", close_task_window, map_opts)
 
 						vim.notify(
 							string.format("✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.", task_name or "Chain", total, total),
@@ -580,22 +580,22 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 					end
 
 					local function close_task_window()
-						if vim.api.nvim_win_is_valid(win) then
-							pcall(vim.api.nvim_win_close, win, true)
-						end
-						if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 						if origin_win and vim.api.nvim_win_is_valid(origin_win) then
 							pcall(vim.api.nvim_set_current_win, origin_win)
 						else
 							pcall(vim.cmd, "wincmd p")
 						end
+						if vim.api.nvim_win_is_valid(win) then
+							pcall(vim.api.nvim_win_close, win, true)
+						end
+						if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
 					end
 
-					local map_opts = { noremap = true, silent = true, buffer = buf }
-					vim.keymap.set({ "n", "t" }, "<CR>", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t" }, "<Esc>", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t" }, "q", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t" }, "<Space>", close_task_window, map_opts)
+					local map_opts = { noremap = true, silent = true, nowait = true, buffer = buf }
+					vim.keymap.set({ "n", "t", "i", "v" }, "<CR>", close_task_window, map_opts)
+					vim.keymap.set({ "n", "t", "i", "v" }, "<Esc>", close_task_window, map_opts)
+					vim.keymap.set({ "n", "t", "i", "v" }, "q", close_task_window, map_opts)
+					vim.keymap.set({ "n", "t", "i", "v" }, "<Space>", close_task_window, map_opts)
 
 					local remaining = total - step_idx
 					show_failure_alert(step_idx, total, current_cmd, exit_code, remaining)
@@ -608,19 +608,34 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 		end,
 	}
 
-	if opts.env and type(opts.env) == "table" and not vim.tbl_isempty(opts.env) then
-		local sanitized_env = {}
+	local sanitized_env = {}
+	if opts.env and type(opts.env) == "table" then
 		for k, v in pairs(opts.env) do
 			if v ~= nil then
 				sanitized_env[tostring(k)] = tostring(v)
 			end
 		end
-		if not vim.tbl_isempty(sanitized_env) then
-			term_opts.env = sanitized_env
+	end
+
+	-- Enforce UTF-8 encoding across process environments (Python, Node, Go, Rust, System)
+	sanitized_env["PYTHONIOENCODING"] = sanitized_env["PYTHONIOENCODING"] or "utf-8"
+	sanitized_env["NODE_IO_ENCODING"] = sanitized_env["NODE_IO_ENCODING"] or "utf-8"
+	sanitized_env["LANG"] = sanitized_env["LANG"] or "en_US.UTF-8"
+	sanitized_env["LC_ALL"] = sanitized_env["LC_ALL"] or "en_US.UTF-8"
+	term_opts.env = sanitized_env
+
+	local exec_target = current_cmd
+	if type(current_cmd) == "string" and current_cmd ~= "" and not current_cmd:find("[|&><;]") then
+		local argv = {}
+		for q, word in current_cmd:gmatch([=[["'](.-)["']|(%S+)]=]) do
+			table.insert(argv, q or word)
+		end
+		if #argv > 0 then
+			exec_target = argv
 		end
 	end
 
-	local job_id = vim.fn.termopen(current_cmd, term_opts)
+	local job_id = vim.fn.termopen(exec_target, term_opts)
 
 	if job_id <= 0 then
 		vim.notify("Error starting command: " .. current_cmd, vim.log.levels.ERROR, { title = "KRS Task Runner" })

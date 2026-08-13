@@ -105,6 +105,25 @@ function M.toggle_default(profile_id, root)
 	vim.notify("⭐ Primary default profile set: " .. updated_name, vim.log.levels.INFO, { title = "Launch Profiles" })
 end
 
+function M.rename_profile(profile_id, new_name, root)
+	root = root or M.get_project_root()
+	local data = M.load_profiles(root)
+	local old_name = ""
+	local updated = false
+	for _, p in ipairs(data.profiles) do
+		if p.id == profile_id then
+			old_name = p.name
+			p.name = new_name
+			updated = true
+			break
+		end
+	end
+	if updated then
+		M.save_profiles(root, data)
+		vim.notify("✏️ Profile renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, { title = "Launch Profiles" })
+	end
+end
+
 function M.run_pre_launch_tasks(tasks_list, callback)
 	if not tasks_list or #tasks_list == 0 then
 		callback(true)
@@ -359,7 +378,7 @@ function M.run_profile(profile)
 		elseif runtime == "dotnet" then
 			cmd = "dotnet run --project " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "krsnvimscript" then
-			cmd = "nvim -l " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
+			cmd = 'nvim --headless -c "lua require(\'krsnvim\')" -l ' .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "krsnvimtranspiler" then
 			local transpiler = require("krsnvim").krsnvimtranspiler
 			local root = M.get_project_root()
@@ -406,7 +425,7 @@ function M.run_profile(profile)
 			vim.notify("🐞 Launching DAP Debugger for " .. profile_name .. " (" .. runtime .. ")", vim.log.levels.INFO, { title = "Launch Profiles Debugger" })
 			dap.run(dap_config)
 		else
-			vim.notify("🚀 Launching profile: " .. profile_name .. "\n  Command: " .. cmd, vim.log.levels.INFO, { title = "Launch Profiles" })
+			vim.notify("🚀 Launching profile: " .. profile_name .. " (" .. cmd .. ")", vim.log.levels.INFO, { title = "Launch Profiles" })
 			local tasks_mod = require("plugins.krs.tasks")
 			tasks_mod.run_custom_command(cmd, env)
 		end
@@ -718,7 +737,7 @@ function M.open_management_menu(root)
 	end
 
 	pickers.new({}, {
-		prompt_title = " 🚀 Launch Profiles | <Enter>: Run | <Ctrl+D>: Default | <Ctrl+E>: Edit Form | <Ctrl+N>: New | <Ctrl+X>: Delete ",
+		prompt_title = " 🚀 Launch Profiles | <Enter>: Run | [d] Delete | [r] Rename | [e] Edit | [f] Favorite | [a] New ",
 		layout_strategy = "horizontal",
 		layout_config = {
 			horizontal = {
@@ -749,39 +768,7 @@ function M.open_management_menu(root)
 				end
 			end)
 
-			-- Ctrl+D: Toggle Default
-			map({ "n", "i" }, "<C-d>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				if selection and selection.value then
-					M.toggle_default(selection.value.id, root)
-					M.open_management_menu(root)
-				end
-			end)
-
-			-- Ctrl+E: Edit Profile Form
-			map({ "n", "i" }, "<C-e>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				if selection and selection.value then
-					M.open_form_editor(root, selection.value, function()
-						M.open_management_menu(root)
-					end)
-				end
-			end)
-
-			-- Ctrl+N: Create New Profile Form
-			map({ "n", "i" }, "<C-n>", function()
-				actions.close(prompt_bufnr)
-				M.open_creation_wizard(root, function()
-					M.open_management_menu(root)
-				end)
-			end)
-
-			-- Ctrl+X: Delete Profile
-			map({ "n", "i" }, "<C-x>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
+			local function action_delete(selection)
 				if selection and selection.value then
 					local profile_id = selection.value.id
 					local cur_data = M.load_profiles(root)
@@ -796,6 +783,97 @@ function M.open_management_menu(root)
 					vim.notify("🗑️ Deleted launch profile: " .. selection.value.name, vim.log.levels.INFO, { title = "Launch Profiles" })
 					M.open_management_menu(root)
 				end
+			end
+
+			local function action_rename(selection)
+				if selection and selection.value then
+					local input = require("plugins.krs.input_modal")
+					input.open({
+						label = "Rename Launch Profile",
+						default_value = selection.value.name,
+						callback = function(ok, new_name)
+							if ok and new_name ~= "" and new_name ~= selection.value.name then
+								M.rename_profile(selection.value.id, new_name, root)
+							end
+							M.open_management_menu(root)
+						end,
+					})
+				end
+			end
+
+			local function action_edit(selection)
+				if selection and selection.value then
+					M.open_form_editor(root, selection.value, function()
+						M.open_management_menu(root)
+					end)
+				end
+			end
+
+			local function action_toggle_favorite(selection)
+				if selection and selection.value then
+					M.toggle_default(selection.value.id, root)
+					M.open_management_menu(root)
+				end
+			end
+
+			local function action_create_new()
+				M.open_creation_wizard(root, function()
+					M.open_management_menu(root)
+				end)
+			end
+
+			-- Normal mode keymaps: d = delete, r = rename, e = edit form, f = favorite, a = add new
+			map("n", "d", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_delete(selection)
+			end)
+
+			map("n", "r", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_rename(selection)
+			end)
+
+			map("n", "e", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_edit(selection)
+			end)
+
+			map("n", "f", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_toggle_favorite(selection)
+			end)
+
+			map("n", "a", function()
+				actions.close(prompt_bufnr)
+				action_create_new()
+			end)
+
+			-- Shortcuts for insert/normal backwards compatibility (<C-d>, <C-e>, <C-n>, <C-x>)
+			map({ "n", "i" }, "<C-d>", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_toggle_favorite(selection)
+			end)
+
+			map({ "n", "i" }, "<C-e>", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_edit(selection)
+			end)
+
+			map({ "n", "i" }, "<C-n>", function()
+				actions.close(prompt_bufnr)
+				action_create_new()
+			end)
+
+			map({ "n", "i" }, "<C-x>", function()
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				action_delete(selection)
 			end)
 
 			return true

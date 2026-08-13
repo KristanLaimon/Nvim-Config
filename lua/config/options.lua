@@ -29,6 +29,10 @@ vim.opt.softtabstop = 2
 vim.opt.showmode = false -- Hide native mode text (-- INSERT --) from bottom cmdline
 vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle
 
+-- Unicode & UTF-8 Encoding
+vim.opt.encoding = "utf-8"
+vim.opt.fileencoding = "utf-8"
+
 -- Performance & Clipboard Optimizations
 vim.opt.autoread = true        -- Automatically reload files modified externally
 vim.opt.clipboard = "unnamedplus" -- Use system clipboard by default

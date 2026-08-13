@@ -1,0 +1,17 @@
+-- 🦊 test.krsnvim - krsnvimscript example
+-- Global variables `fetch`, `console`, `import`, and `krsnvim` are available out of the box!
+-- Optional usage: local fetch = require("krsnvim.fetch") or local console = import("console")
+
+print("🦊 Hello from test.krsnvim script!")
+
+console.log("Global console object demo:", {
+	status = "ok",
+	runner = "krsnvimscript",
+	fox = true,
+	global_globals = { "fetch", "console", "import", "krsnvim" }
+})
+
+local res = fetch.get("https://jsonplaceholder.typicode.com/todos/1")
+if res.ok then
+	console.info("Fetch response:", res:json())
+end

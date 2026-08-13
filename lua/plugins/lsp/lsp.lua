@@ -263,6 +263,25 @@ return {
 				severity_sort = true,
 			})
 
+			vim.api.nvim_create_autocmd("LspAttach", {
+				callback = function(args)
+					local client = vim.lsp.get_client_by_id(args.data.client_id)
+					if client and client.name == "lua_ls" then
+						local bufnr = args.buf
+						local fname = vim.api.nvim_buf_get_name(bufnr)
+						local ft = vim.bo[bufnr].filetype
+						local is_krs = (ft == "krsnvim" or fname:match("%.krsnvim$") ~= nil)
+
+						if is_krs then
+							client.config.settings.Lua = client.config.settings.Lua or {}
+							client.config.settings.Lua.diagnostics = client.config.settings.Lua.diagnostics or {}
+							client.config.settings.Lua.diagnostics.globals = { "vim", "fetch", "console", "import", "krsnvim" }
+							pcall(client.notify, "workspace/didChangeConfiguration", { settings = client.config.settings })
+						end
+					end
+				end,
+			})
+
 			-- tsgo advertises `diagnosticProvider`, so nvim pulls and refreshes diagnostics
 			-- natively. A hand-rolled fetch into a private namespace only froze whatever
 			-- the server happened to know a few hundred ms after attach -- typically
