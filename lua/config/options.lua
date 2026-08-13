@@ -1,6 +1,24 @@
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- Filetype registration for krsnvim scripts (*.krsnvim)
+vim.filetype.add({
+  extension = {
+    krsnvim = "krsnvim",
+  },
+})
+
+-- Under the hood, krsnvim scripts use Lua syntax & Treesitter parser
+pcall(function()
+  vim.treesitter.language.register("lua", "krsnvim")
+end)
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "krsnvim",
+  callback = function()
+    vim.bo.syntax = "lua"
+  end,
+})
+
 vim.opt.number = true
 vim.opt.cursorline = true
 vim.opt.relativenumber = true

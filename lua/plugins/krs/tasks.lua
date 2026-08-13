@@ -508,9 +508,8 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 		{ title = "KRS Task Runner" }
 	)
 
-	local job_id = vim.fn.termopen(current_cmd, {
+	local term_opts = {
 		cwd = root,
-		env = opts.env,
 		on_exit = function(_, exit_code, _)
 			vim.schedule(function()
 				if not vim.api.nvim_buf_is_valid(buf) then
@@ -607,7 +606,21 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 				end
 			end)
 		end,
-	})
+	}
+
+	if opts.env and type(opts.env) == "table" and not vim.tbl_isempty(opts.env) then
+		local sanitized_env = {}
+		for k, v in pairs(opts.env) do
+			if v ~= nil then
+				sanitized_env[tostring(k)] = tostring(v)
+			end
+		end
+		if not vim.tbl_isempty(sanitized_env) then
+			term_opts.env = sanitized_env
+		end
+	end
+
+	local job_id = vim.fn.termopen(current_cmd, term_opts)
 
 	if job_id <= 0 then
 		vim.notify("Error starting command: " .. current_cmd, vim.log.levels.ERROR, { title = "KRS Task Runner" })

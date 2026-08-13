@@ -299,6 +299,24 @@ function M.run_profile(profile)
 		return
 	end
 
+	if type(profile) == "string" then
+		local root = M.get_project_root()
+		local data = M.load_profiles(root)
+		local found = nil
+		for _, p in ipairs(data.profiles or {}) do
+			if p.id == profile then
+				found = p
+				break
+			end
+		end
+		if not found then
+			vim.notify("❌ Profile not found: " .. profile, vim.log.levels.ERROR, { title = "Launch Profiles" })
+			return
+		end
+		profile = found
+	end
+
+	local profile_name = profile.name or profile.id or "Unnamed Profile"
 	local pre_tasks = vim.deepcopy(profile.pre_launch_tasks or {})
 
 	-- auto_build: reuse the pre-launch task runner instead of a second build pipeline.
@@ -340,6 +358,8 @@ function M.run_profile(profile)
 			cmd = "php " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "dotnet" then
 			cmd = "dotnet run --project " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
+		elseif runtime == "krsnvimscript" then
+			cmd = "nvim -l " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		else
 			cmd = entry .. (args_str ~= "" and (" " .. args_str) or "")
 		end
@@ -371,10 +391,10 @@ function M.run_profile(profile)
 				return
 			end
 
-			vim.notify("🐞 Launching DAP Debugger for " .. profile.name .. " (" .. runtime .. ")", vim.log.levels.INFO, { title = "Launch Profiles Debugger" })
+			vim.notify("🐞 Launching DAP Debugger for " .. profile_name .. " (" .. runtime .. ")", vim.log.levels.INFO, { title = "Launch Profiles Debugger" })
 			dap.run(dap_config)
 		else
-			vim.notify("🚀 Launching profile: " .. profile.name .. "\n  Command: " .. cmd, vim.log.levels.INFO, { title = "Launch Profiles" })
+			vim.notify("🚀 Launching profile: " .. profile_name .. "\n  Command: " .. cmd, vim.log.levels.INFO, { title = "Launch Profiles" })
 			local tasks_mod = require("plugins.krs.tasks")
 			tasks_mod.run_custom_command(cmd, env)
 		end

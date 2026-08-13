@@ -158,29 +158,87 @@ function M.show_notification_modal(opts)
 	vim.keymap.set({ "n", "v", "i", "t" }, "<Space>", close_modal, kopts)
 end
 
+-- Helper function to check and clean stale index.lock if present
+local function clean_stale_index_lock(cwd)
+	cwd = cwd or vim.fn.getcwd()
+	local git_dir = cwd .. "/.git"
+	if vim.fn.isdirectory(git_dir) == 0 then
+		local res = vim.system({ "git", "-C", cwd, "rev-parse", "--git-dir" }, { text = true }):wait()
+		if res.code == 0 and res.stdout then
+			git_dir = vim.trim(res.stdout)
+			if not git_dir:match("^/") and not git_dir:match("^%a:") then
+				git_dir = cwd .. "/" .. git_dir
+			end
+		end
+	end
+
+	local lock_file = git_dir .. "/index.lock"
+	local stat = (vim.uv or vim.loop).fs_stat(lock_file)
+	if stat then
+		pcall((vim.uv or vim.loop).fs_unlink, lock_file)
+		return true
+	end
+	return false
+end
+
 -- Stage all unstaged and untracked changes with modal confirmation
 function M.stage_all_with_modal(cwd)
 	cwd = cwd or vim.fn.getcwd()
-	run_git_async({ "add", "-A" }, function(ok, out)
-		if ok then
-			vim.notify("✅ All unstaged and untracked changes were successfully staged!", vim.log.levels.INFO, { title = "Git Control Center" })
-			M.show_notification_modal({
-				title = " 🟢 Git Stage Confirmation ",
-				message = "✅ All unstaged and untracked changes were successfully staged!",
-			})
-		else
-			vim.notify("❌ Failed to stage changes:\n" .. (out ~= "" and out or "Directory is not a valid Git repository"), vim.log.levels.ERROR, { title = "Git Control Center" })
-			M.show_notification_modal({
-				title = " 🔴 Git Stage Error ",
-				message = "❌ Failed to stage changes:\n" .. (out ~= "" and out or "Directory is not a valid Git repository"),
-			})
-		end
-		if M.is_open() then
-			pcall(function()
-				M.open_git_center()
-			end)
-		end
-	end, cwd)
+	
+	-- Clean any leftover stale index.lock file before inspecting git info
+	clean_stale_index_lock(cwd)
+
+	local info = M.get_git_info()
+	if not info then
+		vim.notify("❌ Not inside a valid Git repository.", vim.log.levels.ERROR, { title = "Git Control Center" })
+		M.show_notification_modal({
+			title = " 🔴 Git Stage Error ",
+			message = "❌ Directory is not a valid Git repository.",
+		})
+		return
+	end
+
+	local unstaged_count = #info.unstaged + #info.untracked
+	if unstaged_count == 0 then
+		vim.notify("ℹ️ Nothing to stage: no unstaged or untracked changes found.", vim.log.levels.WARN, { title = "Git Control Center" })
+		M.show_notification_modal({
+			title = " ℹ️ Git Stage Notice ",
+			message = "ℹ️ Nothing to stage — no unstaged or untracked changes were found in the working tree.",
+		})
+		return
+	end
+
+	local function execute_stage(is_retry)
+		run_git_async({ "add", "-A" }, function(ok, out)
+			if ok then
+				local msg = string.format("✅ Successfully staged %d file%s!", unstaged_count, unstaged_count == 1 and "" or "s")
+				vim.notify(msg, vim.log.levels.INFO, { title = "Git Control Center" })
+				M.show_notification_modal({
+					title = " 🟢 Git Stage Confirmation ",
+					message = msg,
+				})
+			elseif out:match("index%.lock") and not is_retry then
+				-- Clean stale lock and auto-retry once
+				if clean_stale_index_lock(cwd) then
+					execute_stage(true)
+					return
+				end
+			else
+				vim.notify("❌ Failed to stage changes:\n" .. (out ~= "" and out or "Error executing git add"), vim.log.levels.ERROR, { title = "Git Control Center" })
+				M.show_notification_modal({
+					title = " 🔴 Git Stage Error ",
+					message = "❌ Failed to stage changes:\n" .. (out ~= "" and out or "Error executing git add"),
+				})
+			end
+			if M.is_open() then
+				pcall(function()
+					M.open_git_center()
+				end)
+			end
+		end, cwd)
+	end
+
+	execute_stage(false)
 end
 
 -- Esperar un proceso lanzado con spawn_git y parsear su salida en líneas
@@ -959,9 +1017,14 @@ function M.open_git_center()
 
 	-- [S] (Shift + s): Stage All Files
 	vim.keymap.set({ "n", "v" }, "S", function()
-		run_git({ "add", "." })
-		refresh()
-		vim.notify("🟢 Staged all files", vim.log.levels.INFO, { title = "Git Center" })
+		local cur_info = M.get_git_info()
+		if cur_info and (#cur_info.unstaged > 0 or #cur_info.untracked > 0) then
+			run_git({ "add", "-A" })
+			refresh()
+			vim.notify("🟢 Staged all files", vim.log.levels.INFO, { title = "Git Center" })
+		else
+			vim.notify("ℹ️ Nothing to stage: working tree is clean.", vim.log.levels.WARN, { title = "Git Center" })
+		end
 	end, key_opts)
 
 	-- [u] en Normal: Unstage archivo seleccionado (CORREGIDO)
@@ -1219,6 +1282,8 @@ local plugin_spec = {
 	keys = {
 		{ "<C-S-g>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
 		{ "<C-S-G>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
+		{ "<C-S-x>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
+		{ "<C-S-X>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 		{ "<C-A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 		{ "<C-A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
 		{ "<A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
@@ -1252,6 +1317,7 @@ local plugin_spec = {
 		pcall(vim.api.nvim_create_user_command, "ReloadGitCenter", reload_git_center, { desc = "Reload Git Control Center" })
 
 		local stage_keys = {
+			"<C-S-x>", "<C-S-X>",
 			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
 			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 			"<A-s>", "<A-S>", "<M-s>", "<M-S>",

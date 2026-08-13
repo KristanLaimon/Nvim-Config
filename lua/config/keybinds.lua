@@ -533,13 +533,13 @@ vim.keymap.set({ "n", "i", "v" }, "<F11>", dap_step_into, { noremap = true, sile
 vim.keymap.set({ "n", "i", "v" }, "<F12>", dap_step_out, { noremap = true, silent = true, desc = "Step Out" })
 vim.keymap.set(
 	{ "n", "i", "v" },
-	"<C-S-x>",
+	"<S-F5>",
 	dap_terminate,
 	{ noremap = true, silent = true, desc = "Terminate Debugger" }
 )
 vim.keymap.set("n", "<leader>du", dap_toggle_ui, { noremap = true, silent = true, desc = "Toggle Debugger UI" })
 
--- Git Stage All Unstaged & Untracked Changes (Ctrl + Alt + S / Alt + S / <leader>ga) with Modal Window Confirmation
+-- Git Stage All Unstaged & Untracked Changes (Ctrl + Shift + X / Ctrl + Alt + S / Alt + S) with Modal Window Confirmation
 -- Works everywhere (Normal, Insert, Visual, Terminal)
 local function stage_all_with_modal_handler()
 	if vim.fn.mode() == "t" then
@@ -549,6 +549,7 @@ local function stage_all_with_modal_handler()
 end
 
 local stage_all_keys = {
+	"<C-S-x>", "<C-S-X>",
 	"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
 	"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 	"<A-s>", "<A-S>", "<M-s>", "<M-S>",
@@ -835,10 +836,10 @@ local function run_krsnvimscript_handler()
 		pcall(vim.cmd, "stopinsert")
 	end
 	local buf_name = vim.api.nvim_buf_get_name(0)
-	if buf_name:match("%.lua$") then
+	if buf_name:match("%.krsnvim$") or vim.bo.filetype == "krsnvim" then
 		vim.cmd("w")
 		require("krsnvim")
-		vim.notify("🚀 Running krsnvimscript: " .. vim.fn.fnamemodify(buf_name, ":t"), vim.log.levels.INFO)
+		vim.notify("🦊 Running krsnvimscript: " .. vim.fn.fnamemodify(buf_name, ":t"), vim.log.levels.INFO)
 		dofile(buf_name)
 	else
 		require("plugins.krs.launch_profiles").open_management_menu()
@@ -849,7 +850,7 @@ for _, lhs in ipairs({ "<C-,>", "<C-comma>" }) do
 	vim.keymap.set({ "n", "i", "v", "t" }, lhs, run_krsnvimscript_handler, {
 		noremap = true,
 		silent = true,
-		desc = "Run current Lua file with krsnvimscript",
+		desc = "Run current .krsnvim file with krsnvimscript",
 	})
 end
 

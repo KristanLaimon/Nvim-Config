@@ -176,6 +176,7 @@ return {
 					filetypes = { "sh", "bash", "zsh", "csh", "ksh" },
 				},
 				lua_ls = {
+					filetypes = { "lua", "krsnvim" },
 					settings = {
 						Lua = {
 							runtime = {

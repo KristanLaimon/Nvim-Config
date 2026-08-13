@@ -1,0 +1,8 @@
+-- 🦊 test.krsnvim - krsnvimscript example
+local json = require("krsnvim.json")
+local fs = require("krsnvim.fs")
+
+print("🦊 Hello from test.krsnvim script!")
+
+local content = json.encode({ status = "ok", runner = "krsnvimscript", fox = true })
+print("JSON encoded output:", content)
