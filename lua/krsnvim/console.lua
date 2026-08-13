@@ -163,7 +163,7 @@ end
 --- @param ... any Arguments to log.
 --- @return string log_output The formatted log string.
 function M.info(...)
-	local out = "ℹ️ [INFO] " .. M.format_args(...)
+	local out = "[INFO] " .. M.format_args(...)
 	print(out)
 	return out
 end
@@ -173,7 +173,7 @@ end
 --- @param ... any Arguments to log.
 --- @return string log_output The formatted log string.
 function M.warn(...)
-	local out = "⚠️ [WARN] " .. M.format_args(...)
+	local out = "[WARN] " .. M.format_args(...)
 	print(out)
 	return out
 end
@@ -183,7 +183,7 @@ end
 --- @param ... any Arguments to log.
 --- @return string log_output The formatted log string.
 function M.error(...)
-	local out = "❌ [ERROR] " .. M.format_args(...)
+	local out = "[ERROR] " .. M.format_args(...)
 	print(out)
 	return out
 end
@@ -193,7 +193,7 @@ end
 --- @param ... any Arguments to log.
 --- @return string log_output The formatted log string.
 function M.debug(...)
-	local out = "🐛 [DEBUG] " .. M.format_args(...)
+	local out = "[DEBUG] " .. M.format_args(...)
 	print(out)
 	return out
 end

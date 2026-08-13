@@ -33,9 +33,13 @@ M.debug = require("krsnvim.debug")
 M.krsnvimtranspiler = require("krsnvim.krsnvimtranspiler")
 M.exporter = M.krsnvimtranspiler
 
-_G.krsnvim = M
-_G.console = M.console
-_G.fetch = M.fetch
+--- Sets up global krsnvim references (krsnvim, console, fetch, import) for child script execution processes.
+function M.setup_globals()
+	_G.krsnvim = M
+	_G.console = M.console
+	_G.fetch = M.fetch
+	_G.import = M.import
+end
 
 --- Global smart import function for `krsnvimscript`.
 --- Automatically detects file extensions (`.json`, `.yaml`, `.yml`, `.toml`) or module aliases (`"fetch"`, `"json"`, `"fs"`, etc.).
@@ -52,11 +56,11 @@ _G.fetch = M.fetch
 --- @see krsnvim.toml.load
 ---
 --- @example
---- local fs = import("fs")
---- local fetch = import("fetch")
---- local console = import("console")
+--- local fs = M.import("fs")
+--- local fetch = M.import("fetch")
+--- local console = M.import("console")
 --- console.log("Data:", { a = 1 })
-_G.import = function(target)
+function M.import(target)
 	if not target or type(target) ~= "string" then
 		error("import(): Target must be a non-empty string")
 	end

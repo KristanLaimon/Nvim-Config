@@ -503,7 +503,7 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 	local buf = s.buf
 
 	vim.notify(
-		string.format("🚀 Running Step %d/%d: %s", step_idx, total, current_cmd),
+		string.format("🚀 Running Step %d/%d: %s", step_idx, total, task_name or "Task"),
 		vim.log.levels.INFO,
 		{ title = "KRS Task Runner" }
 	)
@@ -711,8 +711,13 @@ end
 -- Run one shell command in a task slot, with an environment and a completion
 -- callback. This is what launch_profiles calls for pre-launch tasks and for run-mode
 -- profiles; before it existed both paths errored on a nil value.
-function M.run_custom_command(cmd, env, on_exit)
-	M.run_task_item(cmd, nil, { env = env, on_done = on_exit })
+function M.run_custom_command(cmd, env, on_exit, task_name)
+	local name = task_name
+	if not name and type(cmd) == "string" then
+		name = cmd:match("(%S+%.krsnvim)") or cmd:match("(%S+%.%w+)$") or vim.fn.fnamemodify(cmd, ":t")
+	end
+	local item = { name = name or "Custom Task", cmd = cmd }
+	M.run_task_item(item, nil, { env = env, on_done = on_exit })
 end
 
 function M.get_active_or_last_slot()

@@ -27,7 +27,23 @@ vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
 vim.opt.showmode = false -- Hide native mode text (-- INSERT --) from bottom cmdline
-vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle
+vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle (height = 0)
+vim.opt.laststatus = 3 -- Ensure single global statusline at the bottom
+
+-- Enforce cmdheight = 0 on VimEnter to prevent third-party plugins from restoring default cmdheight=1
+vim.api.nvim_create_autocmd({ "VimEnter", "UIEnter" }, {
+  callback = function()
+    vim.opt.cmdheight = 0
+  end,
+})
+
+-- Neovide / GUI window padding settings (removes 15px blank padding below status bar and window edges)
+if vim.g.neovide then
+  vim.g.neovide_padding_top = 0
+  vim.g.neovide_padding_bottom = 0
+  vim.g.neovide_padding_right = 0
+  vim.g.neovide_padding_left = 0
+end
 
 -- Unicode & UTF-8 Encoding
 vim.opt.encoding = "utf-8"

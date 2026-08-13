@@ -378,7 +378,7 @@ function M.run_profile(profile)
 		elseif runtime == "dotnet" then
 			cmd = "dotnet run --project " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "krsnvimscript" then
-			cmd = 'nvim --headless -c "lua require(\'krsnvim\')" -l ' .. entry .. (args_str ~= "" and (" " .. args_str) or "")
+			cmd = 'nvim --headless -c "lua require[[krsnvim]].setup_globals()" -l ' .. entry .. (args_str ~= "" and (" " .. args_str) or "")
 		elseif runtime == "krsnvimtranspiler" then
 			local transpiler = require("krsnvim").krsnvimtranspiler
 			local root = M.get_project_root()

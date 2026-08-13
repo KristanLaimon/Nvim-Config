@@ -1,7 +1,6 @@
 -- 🦊 test.krsnvim - krsnvimscript example
 -- Global variables `fetch`, `console`, `import`, and `krsnvim` are available out of the box!
 -- Optional usage: local fetch = require("krsnvim.fetch") or local console = import("console")
-
 print("🦊 Hello from test.krsnvim script!")
 
 console.log("Global console object demo:", {

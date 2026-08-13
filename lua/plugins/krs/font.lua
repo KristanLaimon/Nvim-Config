@@ -61,6 +61,10 @@ function M.apply_font_size(size)
 	if vim.g.neovide then
 		pcall(function()
 			vim.g.neovide_scale_factor = size / 14.0
+			vim.g.neovide_padding_top = 0
+			vim.g.neovide_padding_bottom = 0
+			vim.g.neovide_padding_right = 0
+			vim.g.neovide_padding_left = 0
 		end)
 	end
 

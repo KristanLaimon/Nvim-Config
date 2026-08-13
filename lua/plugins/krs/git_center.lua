@@ -100,63 +100,6 @@ local function run_git_async(args, on_done, cwd)
 	end))
 end
 
--- Modal flotante de notificación interactiva con tecla <Enter> para cerrar
-function M.show_notification_modal(opts)
-	opts = opts or {}
-	local title = opts.title or " ℹ️ Git Notification "
-	local msg = opts.message or ""
-
-	local msg_lines = vim.split(msg, "\n", { plain = true })
-	local lines = {}
-	table.insert(lines, "")
-	for _, l in ipairs(msg_lines) do
-		table.insert(lines, "  " .. l)
-	end
-	table.insert(lines, "")
-	table.insert(lines, "  ───────────── Press <Enter> or <Esc> or 'q' to close ─────────────")
-	table.insert(lines, "")
-
-	local max_len = #title + 10
-	for _, l in ipairs(lines) do
-		if #l > max_len then
-			max_len = #l
-		end
-	end
-	local width = math.min(math.max(max_len + 4, 46), math.floor((vim.o.columns or 80) * 0.85))
-	local height = #lines
-
-	local row = math.floor(((vim.o.lines or 24) - height) / 2)
-	local col = math.floor(((vim.o.columns or 80) - width) / 2)
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = row,
-		col = col,
-		style = "minimal",
-		border = "rounded",
-		title = " " .. title .. " ",
-		title_pos = "center",
-	})
-
-	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
-
-	local function close_modal()
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
-		end
-	end
-
-	local kopts = { buffer = buf, noremap = true, silent = true }
-	vim.keymap.set({ "n", "v", "i", "t" }, "<CR>", close_modal, kopts)
-	vim.keymap.set({ "n", "v", "i", "t" }, "<Esc>", close_modal, kopts)
-	vim.keymap.set({ "n", "v", "i", "t" }, "q", close_modal, kopts)
-	vim.keymap.set({ "n", "v", "i", "t" }, "<Space>", close_modal, kopts)
-end
 
 -- Helper function to check and clean stale index.lock if present
 local function clean_stale_index_lock(cwd)
@@ -191,20 +134,12 @@ function M.stage_all_with_modal(cwd)
 	local info = M.get_git_info()
 	if not info then
 		vim.notify("❌ Not inside a valid Git repository.", vim.log.levels.ERROR, { title = "Git Control Center" })
-		M.show_notification_modal({
-			title = " 🔴 Git Stage Error ",
-			message = "❌ Directory is not a valid Git repository.",
-		})
 		return
 	end
 
 	local unstaged_count = #info.unstaged + #info.untracked
 	if unstaged_count == 0 then
 		vim.notify("ℹ️ Nothing to stage: no unstaged or untracked changes found.", vim.log.levels.WARN, { title = "Git Control Center" })
-		M.show_notification_modal({
-			title = " ℹ️ Git Stage Notice ",
-			message = "ℹ️ Nothing to stage — no unstaged or untracked changes were found in the working tree.",
-		})
 		return
 	end
 
@@ -213,10 +148,6 @@ function M.stage_all_with_modal(cwd)
 			if ok then
 				local msg = string.format("✅ Successfully staged %d file%s!", unstaged_count, unstaged_count == 1 and "" or "s")
 				vim.notify(msg, vim.log.levels.INFO, { title = "Git Control Center" })
-				M.show_notification_modal({
-					title = " 🟢 Git Stage Confirmation ",
-					message = msg,
-				})
 			elseif out:match("index%.lock") and not is_retry then
 				-- Clean stale lock and auto-retry once
 				if clean_stale_index_lock(cwd) then
@@ -225,10 +156,6 @@ function M.stage_all_with_modal(cwd)
 				end
 			else
 				vim.notify("❌ Failed to stage changes:\n" .. (out ~= "" and out or "Error executing git add"), vim.log.levels.ERROR, { title = "Git Control Center" })
-				M.show_notification_modal({
-					title = " 🔴 Git Stage Error ",
-					message = "❌ Failed to stage changes:\n" .. (out ~= "" and out or "Error executing git add"),
-				})
 			end
 			if M.is_open() then
 				pcall(function()
@@ -1178,15 +1105,9 @@ function M.open_git_center()
 
 			run_git_async(push_args, function(ok, out)
 				if ok then
-					M.show_notification_modal({
-						title = " 🚀 Git Push Confirmation ",
-						message = "✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!",
-					})
+					vim.notify("✅ Push successful to " .. remote_name .. "/" .. target_branch .. "!", vim.log.levels.INFO, { title = "Git Control Center" })
 				else
-					M.show_notification_modal({
-						title = " 🚀 Git Push Status ",
-						message = "❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"),
-					})
+					vim.notify("❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"), vim.log.levels.ERROR, { title = "Git Control Center" })
 				end
 				refresh()
 			end)
@@ -1217,15 +1138,9 @@ function M.open_git_center()
 			vim.notify("🚀 Pushing to upstream...", vim.log.levels.INFO, { title = "Git Center" })
 			run_git_async({ "push" }, function(ok, out)
 				if ok then
-					M.show_notification_modal({
-						title = " 🚀 Git Push Confirmation ",
-						message = "✅ Push successful to remote repository!",
-					})
+					vim.notify("✅ Push successful to remote repository!", vim.log.levels.INFO, { title = "Git Control Center" })
 				else
-					M.show_notification_modal({
-						title = " 🚀 Git Push Status ",
-						message = "❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"),
-					})
+					vim.notify("❌ Push failed:\n" .. (out ~= "" and out or "Unknown error"), vim.log.levels.ERROR, { title = "Git Control Center" })
 				end
 				refresh()
 			end)
