@@ -1,0 +1,17 @@
+{
+	"profiles": [
+		{
+			"auto_build": false,
+			"args": [],
+			"pre_launch_tasks": [],
+			"entry_point": "example.krsnvim",
+			"id": "profile-1786632968",
+			"mode": "run",
+			"runtime": "krsnvimscript",
+			"env": [],
+			"name": "Example KrsNvim",
+			"is_default": true
+		}
+	]
+}
+
