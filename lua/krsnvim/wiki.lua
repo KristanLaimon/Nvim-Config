@@ -1,4 +1,4 @@
---- @module krsnvim.wiki
+--- @module "krsnvim.wiki"
 --- Floating Interactive Wiki Documentation System for `krsnvimscript`.
 --- Opens a styled floating markdown window inside Neovim with single-key navigation (1–6).
 ---

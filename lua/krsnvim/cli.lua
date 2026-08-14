@@ -1,4 +1,4 @@
---- @module krsnvim.cli
+--- @module "krsnvim.cli"
 --- CLI Argument Parsing, `--help` Generator, and Interactive Selection Menu Helper for `krsnvimscript`.
 ---
 --- @example

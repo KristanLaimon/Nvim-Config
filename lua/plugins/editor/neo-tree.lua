@@ -1,355 +1,376 @@
-local width_file = vim.fn.stdpath("state") .. "/neotree_width"
+-- ============================================================================
+-- PLUGIN: neo-tree -- the file sidebar (<C-S-Space> / <leader>e).
+-- ============================================================================
+-- WHAT THIS FILE ADDS
+--   1. A REMEMBERED width that survives restarts, and stays put when other
+--      windows open and close (see "width pinning" below).
+--   2. Create/rename/move through the shared KRS input modal, so the sidebar
+--      matches the rest of the editor instead of neo-tree's own prompts.
+--   3. `<C-S-CR>` opens the selected entry with the OS default application.
+--   4. Search keys that reuse the project's own file finders.
+--
+-- WIDTH PINNING -- why there is so much code for one number
+--   neo-tree does not set `winfixwidth`, so any `wincmd =` (dap-ui opening its
+--   panels, a plain split) steals the sidebar's width. `winfixwidth` alone is not
+--   enough either: it only blocks SHRINKING, so when a neighbour closes, nvim
+--   hands the freed columns to the sidebar and it swallows the screen. Hence the
+--   width is re-asserted on WinClosed as well.
+--
+-- SIDEBAR KEYS
+--   a / <C-n> new file    A / <C-S-n> new folder    r rename    m move
+--   <C-/> find files (gitignore)   <C-S-/> find all files
+-- ============================================================================
 
-local function load_saved_width()
-  local f = io.open(width_file, "r")
-  if f then
-    local content = f:read("*a")
-    f:close()
-    local w = tonumber(content)
-    if w and w >= 18 and w <= 60 then
-      return w
-    end
-  end
-  return 30
+local store = require("krs.core.store")
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local settings = {
+	--- Where the sidebar width is remembered.
+	width_file = vim.fn.stdpath("state") .. "/neotree_width",
+
+	--- Width used before anything is saved, and the range that may be saved.
+	default_width = 30,
+	min_width = 18,
+	max_width = 60,
+
+	--- The sidebar may never take more than this fraction of the editor.
+	max_width_ratio = 0.45,
+
+	--- Sidebar mappings, mapped to the commands defined further down.
+	mappings = {
+		["r"] = "rename_with_modal",
+		["m"] = "move_with_picker",
+		["a"] = "add_file_with_modal",
+		["A"] = "add_folder_with_modal",
+		["<C-n>"] = "add_file_with_modal",
+		["<C-S-n>"] = "add_folder_with_modal",
+		["<C-S-N>"] = "add_folder_with_modal",
+		["<C-/>"] = "search_respect_gitignore",
+		["<C-_>"] = "search_respect_gitignore",
+		["<C-S-/>"] = "search_all_files",
+		["<C-?>"] = "search_all_files",
+		["<C-S-CR>"] = "open_with_system_app",
+		["<C-S-Enter>"] = "open_with_system_app",
+	},
+
+	--- Keys that toggle the sidebar.
+	toggle_keys = { "<C-S-Space>", "<leader>e" },
+}
+
+-- ============================================================================
+-- WIDTH PERSISTENCE
+-- ============================================================================
+
+--- Width currently in force.
+local saved_width = tonumber(store.read_file(settings.width_file) or "") or settings.default_width
+if saved_width < settings.min_width or saved_width > settings.max_width then
+	saved_width = settings.default_width
 end
 
-local saved_width = load_saved_width()
+--- Remembers a new width, when it is in range and actually changed.
+--- @param width integer
+local function save_width(width)
+	local max_allowed = math.min(settings.max_width, math.floor((vim.o.columns or 80) * settings.max_width_ratio))
+	if type(width) ~= "number" or width < settings.min_width or width > max_allowed or width == saved_width then
+		return
+	end
 
-local function save_width(w)
-  local max_allowed = math.min(60, math.floor((vim.o.columns or 80) * 0.45))
-  if type(w) == "number" and w >= 18 and w <= max_allowed and w ~= saved_width then
-    saved_width = w
-    local f = io.open(width_file, "w")
-    if f then
-      f:write(tostring(w))
-      f:close()
-    end
-  end
+	saved_width = width
+	store.write_file(settings.width_file, tostring(width))
 end
 
--- Pin the sidebar width. neo-tree does not set 'winfixwidth' itself, so any
--- `wincmd =` (dap-ui opening its panels, plain splits) steals its width.
--- winfixwidth only blocks *shrinking* though: when a neighbour closes, nvim
--- hands the freed columns to the sidebar and it swallows the screen. So the
--- width is also re-asserted whenever a window closes.
+--- Forces every neo-tree window back to the remembered width.
+local function pin_width()
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		local buf = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win)
+		if buf and vim.bo[buf].filetype == "neo-tree" then
+			vim.wo[win].winfixwidth = true
+			if vim.api.nvim_win_get_width(win) ~= saved_width then
+				pcall(vim.api.nvim_win_set_width, win, saved_width)
+			end
+		end
+	end
+end
+
 local fix_group = vim.api.nvim_create_augroup("NeoTreeFixWidth", { clear = true })
 
-local function pin_width()
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local buf = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win)
-    if buf and vim.bo[buf].filetype == "neo-tree" then
-      vim.wo[win].winfixwidth = true
-      if vim.api.nvim_win_get_width(win) ~= saved_width then
-        pcall(vim.api.nvim_win_set_width, win, saved_width)
-      end
-    end
-  end
-end
-
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = "neo-tree",
-  group = fix_group,
-  callback = pin_width,
+	pattern = "neo-tree",
+	group = fix_group,
+	callback = pin_width,
 })
 
 vim.api.nvim_create_autocmd("WinClosed", {
-  group = fix_group,
-  callback = function()
-    vim.schedule(pin_width)
-  end,
+	group = fix_group,
+	callback = function()
+		vim.schedule(pin_width)
+	end,
 })
 
--- Force other splits back to equal width when neo-tree opens/closes. `equalalways`
--- should already do this, but neo-tree's own resize event doesn't always fire it.
+-- `equalalways` should already balance the other splits, but neo-tree's own
+-- resize event does not always trigger it.
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
-  group = vim.api.nvim_create_augroup("NeoTreeEqualize", { clear = true }),
-  callback = function(args)
-    if vim.bo[args.buf].filetype == "neo-tree" then
-      vim.schedule(function()
-        pcall(vim.cmd, "wincmd =")
-      end)
-    end
-  end,
+	group = vim.api.nvim_create_augroup("NeoTreeEqualize", { clear = true }),
+	callback = function(args)
+		if vim.bo[args.buf].filetype == "neo-tree" then
+			vim.schedule(function()
+				pcall(vim.cmd, "wincmd =")
+			end)
+		end
+	end,
 })
 
-local group = vim.api.nvim_create_augroup("NeoTreeWidthSaver", { clear = true })
 vim.api.nvim_create_autocmd("WinResized", {
-  group = group,
-  callback = function()
-    local wins = vim.api.nvim_tabpage_list_wins(0)
-    -- Only save sidebar width if there are multiple windows in the tabpage
-    if #wins <= 1 then
-      return
-    end
-    for _, winid in ipairs(wins) do
-      if vim.api.nvim_win_is_valid(winid) then
-        local bufnr = vim.api.nvim_win_get_buf(winid)
-        if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].filetype == "neo-tree" then
-          local w = vim.api.nvim_win_get_width(winid)
-          save_width(w)
-        end
-      end
-    end
-  end,
+	group = vim.api.nvim_create_augroup("NeoTreeWidthSaver", { clear = true }),
+	callback = function()
+		local wins = vim.api.nvim_tabpage_list_wins(0)
+		-- A single window means the sidebar is full-screen; that is not a width
+		-- worth remembering.
+		if #wins <= 1 then
+			return
+		end
+
+		for _, win in ipairs(wins) do
+			if vim.api.nvim_win_is_valid(win) then
+				local buf = vim.api.nvim_win_get_buf(win)
+				if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "neo-tree" then
+					save_width(vim.api.nvim_win_get_width(win))
+				end
+			end
+		end
+	end,
 })
+
+-- ============================================================================
+-- SIDEBAR COMMAND HELPERS
+-- ============================================================================
+
+--- Redraws the tree after a filesystem change.
+local function refresh_tree()
+	pcall(function()
+		require("neo-tree.sources.manager").refresh("filesystem")
+	end)
+end
+
+--- Directory a new entry should be created in: the selected directory, or the
+--- parent of the selected file.
+--- @param node table neo-tree node.
+--- @return string dir
+local function target_dir(node)
+	return node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+end
+
+--- Prompts for a name and creates a file or a folder in `parent_dir`.
+--- @param parent_dir string Directory to create in.
+--- @param kind "file"|"folder"
+local function create_entry(parent_dir, kind)
+	require("plugins.krs.input_modal").open({
+		label = kind == "folder" and "New Folder" or "New File",
+		default_value = "",
+		relative = "editor",
+		callback = function(ok, name)
+			if not ok or not name or name == "" then
+				return
+			end
+
+			-- A trailing slash is how you ask for a folder elsewhere in this
+			-- config; here the key already decided, so strip it.
+			local clean = name:gsub("[/\\]+$", "")
+			if clean == "" then
+				return
+			end
+
+			local target = parent_dir .. "/" .. clean
+
+			if kind == "folder" then
+				vim.fn.mkdir(target, "p")
+				vim.notify("Created folder: " .. clean, vim.log.levels.INFO, { title = "Neo-tree" })
+			else
+				-- Support "sub/dir/file.lua" by creating the missing directories.
+				local target_parent = vim.fn.fnamemodify(target, ":h")
+				if vim.fn.isdirectory(target_parent) == 0 then
+					vim.fn.mkdir(target_parent, "p")
+				end
+
+				local file = io.open(target, "w")
+				if file then
+					file:close()
+					vim.cmd("edit " .. vim.fn.fnameescape(target))
+					vim.notify("Created file: " .. clean, vim.log.levels.INFO, { title = "Neo-tree" })
+				else
+					vim.notify("Failed to create file: " .. clean, vim.log.levels.ERROR, { title = "Neo-tree" })
+				end
+			end
+
+			refresh_tree()
+		end,
+	})
+end
+
+--- Wraps a command so it only runs with a usable node selected.
+--- @param fn fun(node: table, state: table)
+--- @param needs_path boolean|nil Require the node to have a path.
+--- @return fun(state: table)
+local function with_node(fn, needs_path)
+	return function(state)
+		local node = state.tree:get_node()
+		if not node or (needs_path and not node.path) then
+			return
+		end
+		fn(node, state)
+	end
+end
+
+-- ============================================================================
+-- PLUGIN SPECS
+-- ============================================================================
 
 return {
-  {
-    "nvim-neo-tree/neo-tree.nvim",
-    branch = "v3.x",
-    cmd = "Neotree",
-    keys = {
-      { "<C-S-Space>", ":Neotree toggle<CR>", desc = "Toggle Explorer" },
-      { "<leader>e", ":Neotree toggle<CR>", desc = "Toggle Explorer" },
-    },
-    dependencies = {
-      "nvim-lua/plenary.nvim",
-      "MunifTanjim/nui.nvim",
-      "nvim-tree/nvim-web-devicons",
-      "antosha417/nvim-lsp-file-operations",
-      "folke/snacks.nvim"
-    },
-    config = function ()
-	vim.keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { noremap = true, silent = true, desc = "Toggle Explorer" })
-	require("neo-tree").setup {
-	    -- Was true: while dap-ui tears its panels down neo-tree can momentarily be
-	    -- the last window, close itself, and take the whole nvim session with it.
-	    -- Smart-Quit (<C-q>) still handles quitting explicitly.
-	    close_if_last_window = false,
-	    window = {
-		width = saved_width,
-		mappings = {
-		    ["r"] = "rename_with_modal",
-		    ["m"] = "move_with_picker",
-		    ["a"] = "add_file_with_modal",
-		    ["A"] = "add_folder_with_modal",
-		    ["<C-n>"] = "add_file_with_modal",
-		    ["<C-S-n>"] = "add_folder_with_modal",
-		    ["<C-S-N>"] = "add_folder_with_modal",
-		    ["<C-/>"] = "search_respect_gitignore",
-		    ["<C-_>"] = "search_respect_gitignore",
-		    ["<C-S-/>"] = "search_all_files",
-		    ["<C-?>"] = "search_all_files",
-		    ["<C-S-CR>"] = "open_with_system_app",
-		    ["<C-S-Enter>"] = "open_with_system_app",
+	{
+		"nvim-neo-tree/neo-tree.nvim",
+		branch = "v3.x",
+		cmd = "Neotree",
+		keys = {
+			{ settings.toggle_keys[1], ":Neotree toggle<CR>", desc = "Toggle Explorer" },
+			{ settings.toggle_keys[2], ":Neotree toggle<CR>", desc = "Toggle Explorer" },
 		},
-	    },
-	    commands = {
-		open_with_system_app = function(state)
-		    local node = state.tree:get_node()
-		    if node and node.path then
-			require("plugins.krs.image_viewer").open_with_system_app(node.path)
-		    end
-		end,
-		rename_with_modal = function(state)
-		    local node = state.tree:get_node()
-		    if not node or not node.path then
-			return
-		    end
-		    local old_path = node.path
-		    local old_name = node.name
-
-		    require("plugins.krs.input_modal").open({
-			label = "Rename (" .. old_name .. ")",
-			default_value = old_name,
-			relative = "editor",
-			callback = function(ok, new_name)
-			    if not ok or not new_name or new_name == "" or new_name == old_name then
-				return
-			    end
-			    local parent_dir = vim.fn.fnamemodify(old_path, ":h")
-			    local new_path = parent_dir .. "/" .. new_name
-
-			    local success, err = os.rename(old_path, new_path)
-			    if success then
-				vim.notify("Renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
-				pcall(function()
-				    require("neo-tree.sources.manager").refresh("filesystem")
-				end)
-			    else
-				vim.notify("Error renaming: " .. tostring(err), vim.log.levels.ERROR, { title = "Neo-tree" })
-			    end
-			end,
-		    })
-		end,
-		move_with_picker = function(state)
-		    local node = state.tree:get_node()
-		    if not node or not node.path then
-			return
-		    end
-		    require("plugins.krs.file_explorer").open_move_picker({
-			source_path = node.path,
-			root_dir = vim.fn.getcwd(),
-		    })
-		end,
-		add_file_with_modal = function(state)
-		    local node = state.tree:get_node()
-		    if not node then
-			return
-		    end
-		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
-
-		    require("plugins.krs.input_modal").open({
-			label = "New File",
-			default_value = "",
-			relative = "editor",
-			callback = function(ok, new_name)
-			    if not ok or not new_name or new_name == "" then
-				return
-			    end
-			    local clean_name = new_name:gsub("[/\\]+$", "")
-			    if clean_name == "" then
-				return
-			    end
-			    local target_path = parent_dir .. "/" .. clean_name
-			    local target_parent = vim.fn.fnamemodify(target_path, ":h")
-			    if vim.fn.isdirectory(target_parent) == 0 then
-				vim.fn.mkdir(target_parent, "p")
-			    end
-			    local f = io.open(target_path, "w")
-			    if f then
-				f:close()
-				vim.cmd("edit " .. vim.fn.fnameescape(target_path))
-				vim.notify("Created file: " .. clean_name, vim.log.levels.INFO, { title = "Neo-tree" })
-			    else
-				vim.notify("Failed to create file: " .. clean_name, vim.log.levels.ERROR, { title = "Neo-tree" })
-			    end
-			    pcall(function()
-				require("neo-tree.sources.manager").refresh("filesystem")
-			    end)
-			end,
-		    })
-		end,
-		add_folder_with_modal = function(state)
-		    local node = state.tree:get_node()
-		    if not node then
-			return
-		    end
-		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
-
-		    require("plugins.krs.input_modal").open({
-			label = "New Folder",
-			default_value = "",
-			relative = "editor",
-			callback = function(ok, new_name)
-			    if not ok or not new_name or new_name == "" then
-				return
-			    end
-			    local clean_name = new_name:gsub("[/\\]+$", "")
-			    if clean_name == "" then
-				return
-			    end
-			    local target_path = parent_dir .. "/" .. clean_name
-			    vim.fn.mkdir(target_path, "p")
-			    vim.notify("Created folder: " .. clean_name, vim.log.levels.INFO, { title = "Neo-tree" })
-			    pcall(function()
-				require("neo-tree.sources.manager").refresh("filesystem")
-			    end)
-			end,
-		    })
-		end,
-		add_with_modal = function(state)
-		    -- Fallback alias
-		    local node = state.tree:get_node()
-		    if not node then
-			return
-		    end
-		    local parent_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
-
-		    require("plugins.krs.input_modal").open({
-			label = "New File / Folder",
-			default_value = "",
-			relative = "editor",
-			callback = function(ok, new_name)
-			    if not ok or not new_name or new_name == "" then
-				return
-			    end
-			    local target_path = parent_dir .. "/" .. new_name
-			    local is_dir = new_name:sub(-1) == "/" or new_name:sub(-1) == "\\"
-
-			    if is_dir then
-				vim.fn.mkdir(target_path, "p")
-				vim.notify("Created folder: " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
-			    else
-				local target_parent = vim.fn.fnamemodify(target_path, ":h")
-				if vim.fn.isdirectory(target_parent) == 0 then
-				    vim.fn.mkdir(target_parent, "p")
-				end
-				local f = io.open(target_path, "w")
-				if f then
-				    f:close()
-				    vim.cmd("edit " .. vim.fn.fnameescape(target_path))
-				    vim.notify("Created file: " .. new_name, vim.log.levels.INFO, { title = "Neo-tree" })
-				end
-			    end
-			    pcall(function()
-				require("neo-tree.sources.manager").refresh("filesystem")
-			    end)
-			end,
-		    })
-		end,
-		search_respect_gitignore = function()
-		    if _G.FindFilesGitignore then
-			_G.FindFilesGitignore()
-		    else
-			require("telescope.builtin").find_files({ no_ignore = false })
-		    end
-		end,
-		search_all_files = function()
-		    if _G.FindFilesNoIgnore then
-			_G.FindFilesNoIgnore()
-		    else
-			require("telescope.builtin").find_files({ no_ignore = true, hidden = true })
-		    end
-		end,
-
-	    },
-
-	    filesystem = {
-		bind_to_cwd = true,
-		follow_current_file = {
-		    enabled = true,
-		    leave_dirs_open = false,
+		dependencies = {
+			"nvim-lua/plenary.nvim",
+			"MunifTanjim/nui.nvim",
+			"nvim-tree/nvim-web-devicons",
+			"antosha417/nvim-lsp-file-operations",
+			"folke/snacks.nvim",
 		},
-		use_libuv_file_watcher = true,
-		filtered_items = {
-		    visible = true,
-		    hide_dotfiles = false,
-		    hide_gitignored = false,
-		},
-	    },
-	}
-    end
-  },
+		config = function()
+			vim.keymap.set("n", settings.toggle_keys[2], ":Neotree toggle<CR>", {
+				noremap = true,
+				silent = true,
+				desc = "Toggle Explorer",
+			})
 
+			require("neo-tree").setup({
+				-- Was true: while dap-ui tears its panels down, neo-tree can briefly
+				-- be the last window, close itself, and take the whole session with
+				-- it. Smart quit (<C-q>) still handles quitting explicitly.
+				close_if_last_window = false,
+				window = {
+					width = saved_width,
+					mappings = settings.mappings,
+				},
+				commands = {
+					open_with_system_app = with_node(function(node)
+						require("plugins.krs.image_viewer").open_with_system_app(node.path)
+					end, true),
 
+					rename_with_modal = with_node(function(node)
+						local old_path, old_name = node.path, node.name
 
-  {
-    "Crysthamus/nvim-file-operations",
-    event = { "BufReadPre", "BufNewFile" },
-    dependencies = {
-      "nvim-neo-tree/neo-tree.nvim",
-    },
-    config = function()
-      require("nvim-file-operations").setup()
-    end,
-  },
-  {
-    "s1n7ax/nvim-window-picker",
-    version = "2.*",
-    lazy = true,
-    config = function()
-      require("window-picker").setup({
-        filter_rules = {
-          include_current_win = false,
-          autoselect_one = true,
-          bo = {
-            filetype = { "neo-tree", "neo-tree-popup", "notify" },
-            buftype = { "terminal", "quickfix" },
-          },
-        },
-      })
-    end,
-  },
+						require("plugins.krs.input_modal").open({
+							label = "Rename (" .. old_name .. ")",
+							default_value = old_name,
+							relative = "editor",
+							callback = function(ok, new_name)
+								if not ok or not new_name or new_name == "" or new_name == old_name then
+									return
+								end
+
+								local new_path = vim.fn.fnamemodify(old_path, ":h") .. "/" .. new_name
+								local renamed, err = os.rename(old_path, new_path)
+
+								if renamed then
+									vim.notify("Renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, {
+										title = "Neo-tree",
+									})
+									refresh_tree()
+								else
+									vim.notify("Error renaming: " .. tostring(err), vim.log.levels.ERROR, {
+										title = "Neo-tree",
+									})
+								end
+							end,
+						})
+					end, true),
+
+					move_with_picker = with_node(function(node)
+						require("plugins.krs.file_explorer").open_move_picker({
+							source_path = node.path,
+							root_dir = vim.fn.getcwd(),
+						})
+					end, true),
+
+					add_file_with_modal = with_node(function(node)
+						create_entry(target_dir(node), "file")
+					end),
+
+					add_folder_with_modal = with_node(function(node)
+						create_entry(target_dir(node), "folder")
+					end),
+
+					search_respect_gitignore = function()
+						if _G.FindFilesGitignore then
+							_G.FindFilesGitignore()
+						else
+							require("telescope.builtin").find_files({ no_ignore = false })
+						end
+					end,
+
+					search_all_files = function()
+						if _G.FindFilesNoIgnore then
+							_G.FindFilesNoIgnore()
+						else
+							require("telescope.builtin").find_files({ no_ignore = true, hidden = true })
+						end
+					end,
+				},
+				filesystem = {
+					bind_to_cwd = true,
+					follow_current_file = {
+						enabled = true,
+						leave_dirs_open = false,
+					},
+					use_libuv_file_watcher = true,
+					-- Nothing is hidden: this config edits dotfiles and ignored
+					-- build output often enough that hiding them costs more.
+					filtered_items = {
+						visible = true,
+						hide_dotfiles = false,
+						hide_gitignored = false,
+					},
+				},
+			})
+		end,
+	},
+
+	-- Keeps LSP-aware file operations (imports follow a rename) working with the
+	-- tree's own create/rename/move commands.
+	{
+		"Crysthamus/nvim-file-operations",
+		event = { "BufReadPre", "BufNewFile" },
+		dependencies = { "nvim-neo-tree/neo-tree.nvim" },
+		config = function()
+			require("nvim-file-operations").setup()
+		end,
+	},
+
+	-- Used by neo-tree when a file has to be opened "in that window over there".
+	{
+		"s1n7ax/nvim-window-picker",
+		version = "2.*",
+		lazy = true,
+		config = function()
+			require("window-picker").setup({
+				filter_rules = {
+					include_current_win = false,
+					autoselect_one = true,
+					bo = {
+						filetype = { "neo-tree", "neo-tree-popup", "notify" },
+						buftype = { "terminal", "quickfix" },
+					},
+				},
+			})
+		end,
+	},
 }
-

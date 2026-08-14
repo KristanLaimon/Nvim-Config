@@ -1,4 +1,4 @@
---- @module krsnvim.fetch
+--- @module "krsnvim.fetch"
 --- Pure Lua Fetch-like HTTP and HTTPS client for `krsnvimscript`.
 --- Provides a zero-dependency, lightweight, web-standard `fetch` interface with automatic JSON encoding/decoding,
 --- case-insensitive headers, URL parameter formatting, and cross-platform network execution.

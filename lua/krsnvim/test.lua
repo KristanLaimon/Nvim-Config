@@ -1,4 +1,4 @@
---- @module krsnvim.test
+--- @module "krsnvim.test"
 --- Vitest / Bun:test inspired Testing Framework for `krsnvimscript`.
 --- Provides `describe`, `test`/`it`, `expect`, and lifecycle hooks (`beforeEach`, `afterEach`, `beforeAll`, `afterAll`).
 --- Explicitly imported via `local t = import("test"); local describe, test, expect = t.describe, t.test, t.expect`.
@@ -76,6 +76,8 @@ end
 --- @field toBeLessThanOrEqual function(num: number) Asserts `actual <= num`.
 --- @field toThrow function(expected_err: string|nil) Asserts function throws an error when invoked.
 --- @field ["not"] ExpectMatchers Inverted assertions builder.
+--- @field not_ ExpectMatchers Alias of `not`, usable with dot access (`not` is a keyword).
+--- @field isNot ExpectMatchers Alias of `not`.
 
 local function create_expect(actual, is_not)
 	local matchers = {}

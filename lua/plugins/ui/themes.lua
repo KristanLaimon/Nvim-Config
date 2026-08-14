@@ -1,7 +1,18 @@
+-- ============================================================================
+-- PLUGINS: Theme and statusline.
+-- ============================================================================
+-- doki-theme-vim ships the upstream palettes; the active colorscheme is the local
+-- `nagatoro-krs` in colors/, which is where every highlight is actually defined.
+--
+-- lualine renders the single global statusline (`laststatus = 3`): branch, diff
+-- and diagnostics on the left, file name next, mode and position on the right.
+-- ============================================================================
+
 return {
 	{
 		"doki-theme/doki-theme-vim",
-		lazy = false, -- Ensures the theme loads immediately on startup
+		-- Eager: a lazily loaded theme means a flash of the default colours.
+		lazy = false,
 		config = function()
 			pcall(vim.cmd.colorscheme, "nagatoro-krs")
 		end,

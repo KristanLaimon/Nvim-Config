@@ -1,3 +1,31 @@
+-- ============================================================================
+-- PLUGIN: bufferline -- the tab bar across the top.
+-- ============================================================================
+-- WHAT IS CUSTOMISED
+--   * Closing a tab (icon, middle click, right click) routes through the smart
+--     buffer closer, so the editor lands on the dashboard instead of quitting.
+--   * A deleted file is prefixed with `[D]`, using the cached state from
+--     plugins/krs/smart_check.lua -- no disk access while drawing the bar.
+--   * Only real files on disk become tabs. nvim-dap force-lists every stack frame
+--     buffer, which would otherwise fill the bar with node internals,
+--     `dap-src://` frames and the terminal console.
+--
+-- KEYS
+--   gt / gT           next / previous buffer
+--   <leader>bh / bl   move the current tab left / right (many alt aliases too)
+-- ============================================================================
+
+--- Closes a tab the same way <C-q> does: the smart closer keeps the editor in a
+--- usable state, and falls back to a plain delete before it has loaded.
+--- @param bufnr integer Buffer behind the tab.
+local function close_buffer(bufnr)
+	if _G.Smart_Close_Buffer then
+		_G.Smart_Close_Buffer(bufnr, true)
+	else
+		pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+	end
+end
+
 return {
 	"akinsho/bufferline.nvim",
 	version = "*",
@@ -10,27 +38,9 @@ return {
 				always_show_bufferline = true,
 				show_buffer_close_icons = true,
 				show_close_icon = false,
-				close_command = function(bufnr)
-					if _G.Smart_Close_Buffer then
-						_G.Smart_Close_Buffer(bufnr, true)
-					else
-						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-					end
-				end,
-				right_mouse_command = function(bufnr)
-					if _G.Smart_Close_Buffer then
-						_G.Smart_Close_Buffer(bufnr, true)
-					else
-						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-					end
-				end,
-				middle_mouse_command = function(bufnr)
-					if _G.Smart_Close_Buffer then
-						_G.Smart_Close_Buffer(bufnr, true)
-					else
-						pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-					end
-				end,
+				close_command = close_buffer,
+				right_mouse_command = close_buffer,
+				middle_mouse_command = close_buffer,
 				offsets = {
 					{ filetype = "neo-tree", text = "🦊 Explorer", highlight = "Directory", text_align = "left" },
 				},

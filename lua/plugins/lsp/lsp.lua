@@ -1,5 +1,34 @@
--- MSBuild project/props files are XML; register them so lemminx (below)
--- attaches and gives IntelliSense in .csproj etc.
+-- ============================================================================
+-- PLUGINS: LSP -- mason, nvim-lspconfig and blink.cmp.
+-- ============================================================================
+-- HOW A SERVER GETS ENABLED
+--   1. `opts.servers` below holds one entry per server: its settings, filetypes
+--      and root resolution. ADD A LANGUAGE SERVER THERE.
+--   2. `mason-lspconfig.ensure_installed` lists what mason installs for you.
+--   3. `config()` merges blink.cmp capabilities into each entry and enables it.
+--
+-- TYPESCRIPT
+--   Only `tsgo` runs. vtsls/ts_ls/tsserver are skipped when mason offers them,
+--   and stopped on attach if something else starts them anyway -- two TypeScript
+--   servers means duplicated diagnostics and doubled memory.
+--
+-- LUA
+--   `lua_ls` also serves `.krsnvim` scripts: the workspace library comes from the
+--   type injector, and script globals (fetch, console, import, krsnvim) are added
+--   on attach so they do not show up as undefined.
+--
+-- JSON / TOML SCHEMAS
+--   Bundled schemas in `schemas/` are preferred over the online SchemaStore
+--   copies, so validation works offline and cannot change under you.
+--
+-- COMPLETION
+--   blink.cmp config lives at the bottom of this file. Extra sources are declared
+--   in blink_sources.lua and editorconfig.lua.
+-- ============================================================================
+
+-- MSBuild project/props files are XML; registering them makes lemminx attach and
+-- give IntelliSense inside .csproj and friends. `.blade.php` needs a pattern
+-- rather than an extension, because the filetype depends on the double suffix.
 vim.filetype.add({
 	extension = {
 		csproj = "xml",
@@ -414,7 +443,7 @@ return {
 				-- Debug repl completes from the stopped frame only, never lsp/buffer words.
 				per_filetype = { ["dap-repl"] = { "dap" } },
 				providers = {
-					dap = { name = "DAP", module = "lazyscripts.dap_repl_source", async = true },
+					dap = { name = "DAP", module = "krs.lsp.dap_repl_source", async = true },
 				},
 			},
 			fuzzy = {

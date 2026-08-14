@@ -1,4 +1,4 @@
---- @module krsnvim.terminal
+--- @module "krsnvim.terminal"
 --- Cross-platform Terminal Command Execution Suite for `krsnvimscript`.
 --- Invokable as `$ "command"` or `terminal.exec("command")`.
 ---

@@ -1,3 +1,16 @@
+-- ============================================================================
+-- PLUGINS: PHP & Laravel support.
+-- ============================================================================
+-- 1. vim-blade      Syntax highlighting for `.blade.php` templates.
+-- 2. blade-nav      Jump to and complete Blade components and routes.
+-- 3. krs_php_tools  Registers `:PHPCheckTools`, which reports whether PHP and
+--                   Composer are actually installed (on Windows or in WSL) and
+--                   how to install what is missing.
+--
+-- The heavy lifting -- intelephense, pint formatting, the blade filetype pattern
+-- -- lives in lsp.lua and formatting.lua.
+-- ============================================================================
+
 return {
 	-- Blade filetype syntax highlighting
 	{

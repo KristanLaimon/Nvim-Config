@@ -46,3 +46,23 @@ Everything else — install, keybinds, debugging, launch profiles, custom module
 **➡️ [docs/index.md](docs/index.md)**
 
 Open it inside the editor with `w` on the dashboard, or `:NvimWiki`.
+
+Start here if you are reading the code:
+
+| Page | What it answers |
+|---|---|
+| 🏛️ [Architecture](docs/architecture.md) | The layers, what may depend on what, startup order, where new code goes |
+| 🧩 [Module Architecture](docs/module-architecture.md) | How a file in `lua/plugins/krs/` is both a module and a lazy.nvim spec |
+| 🧪 [Testing](docs/testing.md) | Running the suite and writing a spec |
+
+---
+
+## 🧪 Tests
+
+```sh
+nvim -l tests/syntax_check.lua                 # every Lua file still parses
+nvim -l tests/run.lua                          # unit specs (fast, no plugins)
+nvim --headless -S tests/integration/run.lua   # with the real editor loaded
+```
+
+Inside the editor: `:KrsTest` (optionally `:KrsTest git` to filter by spec name).

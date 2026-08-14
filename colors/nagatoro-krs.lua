@@ -1,8 +1,16 @@
 -- ============================================================================
--- 🦊 NAGATORO-KRS: Official Doki Theme Hayase Nagatoro Dark (Ported for Neovim)
+-- COLORSCHEME: nagatoro-krs -- Doki Theme "Hayase Nagatoro Dark", ported.
 -- ============================================================================
--- Extracted directly from official Doki Theme extension (VSCode)
--- Usage: :colorscheme nagatoro-krs
+-- Ported from the official Doki Theme VSCode extension, so colours match that
+-- editor exactly.
+--
+-- USAGE
+--   :colorscheme nagatoro-krs   (applied at startup in lua/plugins/ui/themes.lua)
+--
+-- HOW TO RETHEME
+--   Every colour comes from the `p` palette table below; the highlight groups
+--   only reference those names. Change a palette entry and the whole editor,
+--   including the plugin-specific groups further down, follows.
 -- ============================================================================
 
 vim.cmd("highlight clear")

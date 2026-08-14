@@ -1,66 +1,91 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Font Manager & GUI Scale
+-- KRS PLUGIN: Font Manager -- GUI font size, persisted between sessions.
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Reads/Saves font configuration in a JSON file in stdpath("config").
--- 2. Dynamically modifies 'vim.o.guifont' and Neovide scale factor (if using Neovide).
--- 3. Registers user commands (:FontSizeIncrease, :FontSizeDecrease, :FontSizeReset).
--- 4. Registers global keymaps (Ctrl + +, Ctrl + -, Ctrl + 0, Ctrl + Mouse Wheel).
--- 5. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   Zooms the GUI font (`guifont`, and Neovide's scale factor) and remembers the
+--   chosen size in `font_config.json` next to this config.
+--
+-- KEYS -- every one bound in normal, insert, visual and terminal mode
+--   Ctrl +=/+/Numpad+/ScrollUp    Zoom in
+--   Ctrl +-/_/Numpad-/ScrollDown  Zoom out
+--   Ctrl +0/Numpad0               Reset
+--
+-- COMMANDS
+--   :FontSizeIncrease  :FontSizeDecrease  :FontSizeReset
+--
+-- NOTE
+--   This only affects GUI clients (Neovide, nvim-qt, ...). In a terminal the
+--   font belongs to the terminal emulator and nvim cannot change it.
 -- ============================================================================
+
+local store = require("krs.core.store")
 
 local M = {}
 
--- Default configuration
-local font_name = "JetBrainsMono Nerd Font"
-local default_size = 14
-local min_size = 6
-local max_size = 40
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
 
-local config_path = vim.fn.stdpath("config") .. "/font_config.json"
+M.settings = {
+	--- Font used for the GUI. Must be installed on the system.
+	font_name = "JetBrainsMono Nerd Font",
 
-local function read_config()
-	local f = io.open(config_path, "r")
-	if not f then
-		return { font_size = default_size, font_name = font_name }
-	end
-	local content = f:read("*a")
-	f:close()
-	local ok, data = pcall(vim.json.decode, content)
-	if ok and type(data) == "table" and data.font_size then
-		return data
-	end
-	return { font_size = default_size, font_name = font_name }
-end
+	--- Starting size, and the size `:FontSizeReset` returns to.
+	default_size = 14,
 
-local function write_config(data)
-	local ok, encoded = pcall(vim.json.encode, data)
-	if ok then
-		local f = io.open(config_path, "w")
-		if f then
-			f:write(encoded)
-			f:close()
-		end
-	end
-end
+	--- Zoom limits, in points.
+	min_size = 6,
+	max_size = 40,
 
-local current_data = read_config()
-M.current_size = current_data.font_size or default_size
-M.font_name = current_data.font_name or font_name
+	--- Size change per keypress.
+	step = 1,
 
--- Apply font size and update GUI variables (Neovim GUI / Neovide)
+	--- Where the chosen size is remembered.
+	config_file = vim.fn.stdpath("config") .. "/font_config.json",
+
+	--- Neovide's scale factor is a ratio; this size maps to 1.0.
+	neovide_base_size = 14.0,
+
+	--- Title on the zoom notifications.
+	notify_title = "Font Manager (KRS)",
+
+	keys = {
+		increase = { "<C-=>", "<C-+>", "<C-S-=>", "<C-S-+>", "<C-kPlus>", "<C-KPPlus>", "<C-ScrollWheelUp>" },
+		decrease = { "<C-->", "<C-_>", "<C-S-->", "<C-S-_>", "<C-kMinus>", "<C-KPMinus>", "<C-ScrollWheelDown>" },
+		reset = { "<C-0>", "<C-k0>", "<C-KP0>" },
+	},
+}
+
+-- ============================================================================
+-- STATE -- loaded from disk at require time
+-- ============================================================================
+
+local saved = store.load(M.settings.config_file, {})
+
+--- Font size currently applied.
+M.current_size = saved.font_size or M.settings.default_size
+
+--- Font family currently applied.
+M.font_name = saved.font_name or M.settings.font_name
+
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Applies a font size, clamped to the configured limits, and persists it.
+--- @param size integer Desired size in points.
 function M.apply_font_size(size)
-	size = math.max(min_size, math.min(max_size, size))
+	size = math.max(M.settings.min_size, math.min(M.settings.max_size, size))
 	M.current_size = size
 
-	local font_str = M.font_name .. ":h" .. tostring(size)
 	pcall(function()
-		vim.o.guifont = font_str
+		vim.o.guifont = M.font_name .. ":h" .. tostring(size)
 	end)
 
 	if vim.g.neovide then
 		pcall(function()
-			vim.g.neovide_scale_factor = size / 14.0
+			vim.g.neovide_scale_factor = size / M.settings.neovide_base_size
+			-- Padding is reset with the scale, or Neovide keeps the old gaps.
 			vim.g.neovide_padding_top = 0
 			vim.g.neovide_padding_bottom = 0
 			vim.g.neovide_padding_right = 0
@@ -68,82 +93,81 @@ function M.apply_font_size(size)
 		end)
 	end
 
-	write_config({
-		font_size = size,
-		font_name = M.font_name,
+	store.save(M.settings.config_file, { font_size = size, font_name = M.font_name })
+end
+
+--- Applies `size` and notifies with `label`.
+--- @param size integer
+--- @param label string Text before the size in the notification.
+local function apply_and_notify(size, label)
+	M.apply_font_size(size)
+	vim.notify("🔍 " .. label .. ": " .. M.current_size .. "pt", vim.log.levels.INFO, {
+		title = M.settings.notify_title,
 	})
 end
 
+--- Zooms in one step.
 function M.increase()
-	M.apply_font_size(M.current_size + 1)
-	vim.notify("🔍 Font Size: " .. M.current_size .. "pt", vim.log.levels.INFO, { title = "Font Manager (KRS)" })
+	apply_and_notify(M.current_size + M.settings.step, "Font Size")
 end
 
+--- Zooms out one step.
 function M.decrease()
-	M.apply_font_size(M.current_size - 1)
-	vim.notify("🔍 Font Size: " .. M.current_size .. "pt", vim.log.levels.INFO, { title = "Font Manager (KRS)" })
+	apply_and_notify(M.current_size - M.settings.step, "Font Size")
 end
 
+--- Returns to the default size.
 function M.reset()
-	M.apply_font_size(default_size)
-	vim.notify("🔍 Font Reset: " .. M.current_size .. "pt", vim.log.levels.INFO, { title = "Font Manager (KRS)" })
+	apply_and_notify(M.settings.default_size, "Font Reset")
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Applies the saved size and binds the commands and keys.
 function M.setup()
 	M.apply_font_size(M.current_size)
 
-	if vim.fn.exists(":FontSizeIncrease") == 0 then
-		vim.api.nvim_create_user_command("FontSizeIncrease", M.increase, { desc = "Increase font size" })
+	local commands = {
+		FontSizeIncrease = { M.increase, "Increase font size" },
+		FontSizeDecrease = { M.decrease, "Decrease font size" },
+		FontSizeReset = { M.reset, "Reset font size" },
+	}
+	for name, spec in pairs(commands) do
+		if vim.fn.exists(":" .. name) == 0 then
+			vim.api.nvim_create_user_command(name, spec[1], { desc = spec[2] })
+		end
 	end
-	if vim.fn.exists(":FontSizeDecrease") == 0 then
-		vim.api.nvim_create_user_command("FontSizeDecrease", M.decrease, { desc = "Decrease font size" })
+
+	local actions = {
+		{ keys = M.settings.keys.increase, fn = M.increase, desc = "Increase font size" },
+		{ keys = M.settings.keys.decrease, fn = M.decrease, desc = "Decrease font size" },
+		{ keys = M.settings.keys.reset, fn = M.reset, desc = "Reset font size" },
+	}
+	for _, action in ipairs(actions) do
+		for _, key in ipairs(action.keys) do
+			vim.keymap.set({ "n", "i", "v", "t" }, key, action.fn, {
+				noremap = true,
+				silent = true,
+				desc = action.desc,
+			})
+		end
 	end
-	if vim.fn.exists(":FontSizeReset") == 0 then
-		vim.api.nvim_create_user_command("FontSizeReset", M.reset, { desc = "Reset font size" })
-	end
-
-	local modes = { "n", "i", "v", "t" }
-	local opts = { noremap = true, silent = true }
-
-	-- Zoom In (Ctrl + =, Ctrl + +, Ctrl + Shift + =, Ctrl + Shift + +, Numpad +, ScrollWheelUp)
-	vim.keymap.set(modes, "<C-=>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-+>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-S-=>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-S-+>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-kPlus>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-KPPlus>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-	vim.keymap.set(modes, "<C-ScrollWheelUp>", M.increase, vim.tbl_extend("force", opts, { desc = "Increase font size" }))
-
-	-- Zoom Out (Ctrl + -, Ctrl + _, Ctrl + Shift + -, Ctrl + Shift + _, Numpad -, ScrollWheelDown)
-	vim.keymap.set(modes, "<C-->", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-_>", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-S-->", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-S-_>", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-kMinus>", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-KPMinus>", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-	vim.keymap.set(modes, "<C-ScrollWheelDown>", M.decrease, vim.tbl_extend("force", opts, { desc = "Decrease font size" }))
-
-	-- Zoom Reset (Ctrl + 0, Numpad 0)
-	vim.keymap.set(modes, "<C-0>", M.reset, vim.tbl_extend("force", opts, { desc = "Reset font size" }))
-	vim.keymap.set(modes, "<C-k0>", M.reset, vim.tbl_extend("force", opts, { desc = "Reset font size" }))
-	vim.keymap.set(modes, "<C-KP0>", M.reset, vim.tbl_extend("force", opts, { desc = "Reset font size" }))
 end
 
--- Ensure setup runs on module load
 M.setup()
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.FontManager = M
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_font",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_font",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

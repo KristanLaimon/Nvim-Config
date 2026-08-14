@@ -1,28 +1,51 @@
--- blink.cmp source for the DAP repl ("immediate window").
+-- ============================================================================
+-- KRS: blink.cmp source for the DAP repl (the "immediate window").
+-- ============================================================================
+-- WHY IT EXISTS
+--   The repl is an ordinary buffer, so blink's default sources (lsp/buffer/
+--   snippets) offered string methods and words scraped from the file -- useless
+--   while stopped at a breakpoint. This source asks the DEBUG ADAPTER instead, so
+--   the menu only holds what actually exists in the current frame.
 --
--- The repl is a normal buffer, so blink's default sources (lsp/buffer/snippets)
--- offered string methods and words scraped from the file — useless while stopped
--- at a breakpoint. This source asks the debug adapter instead, so the menu only
--- holds what actually exists in the current frame.
+-- TWO STRATEGIES
+--   1. Adapters advertising `supportsCompletionsRequest` answer directly.
+--   2. Everything else: list the variables of the frame's scopes, which is the
+--      best approximation available.
+--
+-- WIRING
+--   Registered as a blink.cmp source in lua/plugins/lsp/lsp.lua.
+-- ============================================================================
+
 local M = {}
 
+--- Constructs a source instance. Required by blink.cmp.
+--- @return table source
 function M.new()
 	return setmetatable({}, { __index = M })
 end
 
+--- The live debug session, or nil.
+--- @return table|nil session
 local function session()
 	local ok, dap = pcall(require, "dap")
 	return ok and dap.session() or nil
 end
 
+--- blink.cmp only queries this source while a session is live.
+--- @return boolean
 function M:enabled()
 	return session() ~= nil
 end
 
+--- Characters that open the menu without typing a word first.
+--- @return string[]
 function M:get_trigger_characters()
 	return { ".", "[", '"', "'" }
 end
 
+--- Asks the adapter what is in scope at the cursor.
+--- @param ctx table blink.cmp context.
+--- @param callback fun(result: table|nil)
 function M:get_completions(ctx, callback)
 	callback = vim.schedule_wrap(callback)
 	local s = session()

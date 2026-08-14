@@ -1,156 +1,245 @@
-vim.g.loaded_netrw = 1
-vim.g.loaded_netrwPlugin = 1
+-- ============================================================================
+-- CONFIG: Editor options -- everything that is set before plugins load.
+-- ============================================================================
+-- WHAT LIVES HERE
+--   1. The `.krsnvim` filetype registration (Lua syntax under the hood).
+--   2. Plain Neovim options, grouped by what they are for.
+--   3. Shell selection per platform.
+--   4. PATH repair: GUI launches (Neovide, the Windows start menu) inherit a
+--      minimal PATH, so node/bun/cargo toolchains are found and prepended here.
+--
+-- WHAT DOES NOT LIVE HERE
+--   Keymaps (lua/config/keymaps/), plugins (lua/plugins/), colors (colors/).
+--
+-- TO CHANGE A SETTING
+--   Edit the tables in the CONFIGURATION block below. Everything under API is
+--   mechanical application of those values.
+-- ============================================================================
 
--- Filetype registration for krsnvim scripts (*.krsnvim)
-vim.filetype.add({
-  extension = {
-    krsnvim = "krsnvim",
-  },
-})
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
 
--- Under the hood, krsnvim scripts use Lua syntax & Treesitter parser
-pcall(function()
-  vim.treesitter.language.register("lua", "krsnvim")
-end)
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "krsnvim",
-  callback = function()
-    vim.bo.syntax = "lua"
-  end,
-})
+local settings = {
+	--- Extension -> filetype registrations.
+	filetypes = { krsnvim = "krsnvim" },
 
-vim.opt.number = true
-vim.opt.cursorline = true
-vim.opt.relativenumber = true
-vim.opt.expandtab = false
-vim.opt.shiftwidth = 2
-vim.opt.tabstop = 2
-vim.opt.softtabstop = 2
-vim.opt.showmode = false -- Hide native mode text (-- INSERT --) from bottom cmdline
-vim.opt.cmdheight = 0 -- Remove dead space bottom command line row when idle (height = 0)
-vim.opt.laststatus = 3 -- Ensure single global statusline at the bottom
+	--- Filetypes that borrow another language's syntax and Treesitter parser.
+	syntax_aliases = { krsnvim = "lua" },
 
--- Enforce cmdheight = 0 on VimEnter to prevent third-party plugins from restoring default cmdheight=1
+	--- Editor options, applied through `vim.opt`.
+	options = {
+		-- Appearance
+		number = true,
+		relativenumber = true,
+		cursorline = true,
+		showmode = false, -- The statusline already shows the mode.
+		cmdheight = 0, -- No dead row at the bottom when idle.
+		laststatus = 3, -- One global statusline.
+
+		-- Indentation: real tabs, two columns wide.
+		expandtab = false,
+		shiftwidth = 2,
+		tabstop = 2,
+		softtabstop = 2,
+
+		-- Encoding
+		encoding = "utf-8",
+
+		-- Behaviour and performance
+		autoread = true, -- Pick up files changed outside the editor.
+		clipboard = "unnamedplus", -- Yank straight to the system clipboard.
+		updatetime = 250, -- Faster CursorHold and diagnostics.
+		timeoutlen = 300, -- Snappier multi-key mappings.
+		redrawtime = 1500, -- Do not freeze redrawing huge files.
+		synmaxcol = 300, -- Stop highlighting very long lines.
+		swapfile = false,
+		writebackup = false,
+		undofile = true, -- Persistent undo instead.
+	},
+
+	--- Options set through pcall because a build may not support them.
+	optional_options = { fileencoding = "utf-8" },
+
+	--- Providers disabled outright (netrw is replaced by neo-tree).
+	disabled_globals = { loaded_netrw = 1, loaded_netrwPlugin = 1 },
+
+	--- Neovide window padding. The defaults leave a visible gap under the status line.
+	neovide = {
+		neovide_padding_top = 0,
+		neovide_padding_bottom = 0,
+		neovide_padding_right = 0,
+		neovide_padding_left = 0,
+	},
+
+	--- Shell used for `:!` and `:terminal`, per platform.
+	--- Windows points at Git Bash, so POSIX one-liners work everywhere.
+	shell = {
+		unix = { shell = "bash" },
+		windows = {
+			shell = "C:\\PROGRA~1\\Git\\bin\\bash.exe",
+			shellcmdflag = "-c",
+			shellxquote = "",
+			shellquote = "",
+		},
+	},
+
+	--- Toolchain directories prepended to PATH when they exist.
+	--- ADD A TOOLCHAIN HERE if a GUI launch cannot find your runtime.
+	--- Entries may be nil (an unset environment variable); they are filtered out
+	--- before use, so the list never ends early on a missing variable.
+	path_candidates = {
+		windows = function(env)
+			return {
+				env.APPDATA .. "\\fnm\\aliases\\default",
+				env.NVM_SYMLINK,
+				env.NVM_HOME,
+				"C:\\Program Files\\nodejs",
+				"C:\\Program Files (x86)\\nodejs",
+				env.APPDATA .. "\\npm",
+				env.PNPM_HOME,
+				env.LOCALAPPDATA .. "\\pnpm",
+				env.APPDATA .. "\\pnpm",
+				env.VOLTA_HOME and (env.VOLTA_HOME .. "\\bin"),
+				env.LOCALAPPDATA .. "\\volta\\bin",
+				env.USERPROFILE .. "\\.volta\\bin",
+				env.USERPROFILE .. "\\scoop\\shims",
+				env.USERPROFILE .. "\\scoop\\apps\\nodejs\\current",
+				env.USERPROFILE .. "\\scoop\\apps\\nodejs-lts\\current",
+				"C:\\ProgramData\\chocolatey\\bin",
+				env.USERPROFILE .. "\\.bun\\bin",
+				env.USERPROFILE .. "\\.deno\\bin",
+				env.LOCALAPPDATA .. "\\Yarn\\bin",
+				env.USERPROFILE .. "\\.cargo\\bin",
+				env.USERPROFILE .. "\\go\\bin",
+			}
+		end,
+		unix = function()
+			local home = vim.fn.expand("~")
+			return {
+				"/opt/homebrew/bin",
+				"/usr/local/bin",
+				home .. "/.local/share/fnm/current/bin",
+				home .. "/.nvm/current/bin",
+				home .. "/.local/share/pnpm",
+				home .. "/.volta/bin",
+				home .. "/.local/share/mise/shims",
+				home .. "/.asdf/shims",
+				home .. "/.bun/bin",
+				home .. "/.deno/bin",
+				home .. "/.cargo/bin",
+				home .. "/go/bin",
+				home .. "/.local/bin",
+			}
+		end,
+	},
+}
+
+local is_windows = vim.fn.has("win32") == 1
+
+-- ============================================================================
+-- GLOBALS & FILETYPES
+-- ============================================================================
+
+for name, value in pairs(settings.disabled_globals) do
+	vim.g[name] = value
+end
+
+vim.filetype.add({ extension = settings.filetypes })
+
+for filetype, language in pairs(settings.syntax_aliases) do
+	-- Treesitter needs the alias registered; `syntax` is the fallback highlighter.
+	pcall(function()
+		vim.treesitter.language.register(language, filetype)
+	end)
+	vim.api.nvim_create_autocmd("FileType", {
+		pattern = filetype,
+		callback = function()
+			vim.bo.syntax = language
+		end,
+	})
+end
+
+-- ============================================================================
+-- OPTIONS
+-- ============================================================================
+
+for name, value in pairs(settings.options) do
+	vim.opt[name] = value
+end
+
+for name, value in pairs(settings.optional_options) do
+	pcall(function()
+		vim.opt[name] = value
+	end)
+end
+
+-- Plugins that print messages restore cmdheight=1 during startup; put it back.
 vim.api.nvim_create_autocmd({ "VimEnter", "UIEnter" }, {
-  callback = function()
-    vim.opt.cmdheight = 0
-  end,
+	callback = function()
+		vim.opt.cmdheight = settings.options.cmdheight
+	end,
 })
 
--- Neovide / GUI window padding settings (removes 15px blank padding below status bar and window edges)
 if vim.g.neovide then
-  vim.g.neovide_padding_top = 0
-  vim.g.neovide_padding_bottom = 0
-  vim.g.neovide_padding_right = 0
-  vim.g.neovide_padding_left = 0
+	for name, value in pairs(settings.neovide) do
+		vim.g[name] = value
+	end
 end
 
--- Unicode & UTF-8 Encoding
-vim.opt.encoding = "utf-8"
-pcall(function()
-  vim.opt.fileencoding = "utf-8"
-end)
+-- ============================================================================
+-- SHELL
+-- ============================================================================
 
--- Performance & Clipboard Optimizations
-vim.opt.autoread = true        -- Automatically reload files modified externally
-vim.opt.clipboard = "unnamedplus" -- Use system clipboard by default
-vim.opt.updatetime = 250       -- Faster CursorHold and diagnostic updates
-vim.opt.timeoutlen = 300       -- Snappier keybindings completion
-vim.opt.redrawtime = 1500      -- Prevent redraw freeze on huge files
-vim.opt.synmaxcol = 300        -- Limit syntax highlight column length for speed
-vim.opt.swapfile = false       -- Disable swapfile I/O overhead
-vim.opt.writebackup = false    -- Disable backup file creation
-vim.opt.undofile = true        -- Save undo history to file efficiently
+local shell_settings = (vim.fn.has("wsl") == 1 or vim.fn.has("unix") == 1) and settings.shell.unix
+	or (is_windows and settings.shell.windows)
 
-
-if vim.fn.has("wsl") == 1 or vim.fn.has("unix") == 1 then
-  vim.opt.shell = "bash"
-elseif vim.fn.has("win32") == 1 then
-  vim.opt.shell = "C:\\PROGRA~1\\Git\\bin\\bash.exe"
-  vim.opt.shellcmdflag = "-c"
-  vim.opt.shellxquote = ""
-  vim.opt.shellquote = ""
+for name, value in pairs(shell_settings or {}) do
+	vim.opt[name] = value
 end
 
--- Fast PATH environment configuration (cached & using libuv for zero startup overhead)
+-- ============================================================================
+-- PATH REPAIR
+-- ============================================================================
+
+--- Prepends every existing toolchain directory to PATH, once per session.
+--- `vim.g._path_setup_done` guards against a config reload doing it twice.
 local function setup_path_env()
-  if vim.g._path_setup_done then
-    return
-  end
-  vim.g._path_setup_done = true
+	if vim.g._path_setup_done then
+		return
+	end
+	vim.g._path_setup_done = true
 
-  local is_win = vim.fn.has("win32") == 1
-  local sep = is_win and ";" or ":"
-  local current_path = vim.env.PATH or ""
+	local uv = vim.uv or vim.loop
+	local separator = is_windows and ";" or ":"
+	local path = vim.env.PATH or ""
 
-  local appdata = vim.env.APPDATA or ""
-  local localappdata = vim.env.LOCALAPPDATA or ""
-  local userprofile = vim.env.USERPROFILE or ""
-  local uv = vim.uv or vim.loop
+	local env = {
+		APPDATA = vim.env.APPDATA or "",
+		LOCALAPPDATA = vim.env.LOCALAPPDATA or "",
+		USERPROFILE = vim.env.USERPROFILE or "",
+		NVM_SYMLINK = vim.env.NVM_SYMLINK,
+		NVM_HOME = vim.env.NVM_HOME,
+		PNPM_HOME = vim.env.PNPM_HOME,
+		VOLTA_HOME = vim.env.VOLTA_HOME,
+	}
 
-  local function is_dir(path)
-    if not path or path == "" then return false end
-    local stat = uv.fs_stat(path)
-    return stat and stat.type == "directory" or false
-  end
+	local candidates = is_windows and settings.path_candidates.windows(env) or settings.path_candidates.unix(env)
 
-  local candidate_paths = {}
+	-- `pairs`, not `ipairs`: an unset environment variable leaves a nil hole in
+	-- the list, and ipairs would stop at the first one and skip every toolchain
+	-- after it.
+	for _, candidate in pairs(candidates) do
+		local stat = candidate ~= "" and uv.fs_stat(candidate) or nil
+		if stat and stat.type == "directory" then
+			local normalized = is_windows and candidate:gsub("/", "\\") or candidate
+			if not path:find(normalized, 1, true) then
+				path = normalized .. separator .. path
+			end
+		end
+	end
 
-  if is_win then
-    candidate_paths = {
-      appdata .. "\\fnm\\aliases\\default",
-      vim.env.NVM_SYMLINK,
-      vim.env.NVM_HOME,
-      "C:\\Program Files\\nodejs",
-      "C:\\Program Files (x86)\\nodejs",
-      appdata .. "\\npm",
-      vim.env.PNPM_HOME,
-      localappdata .. "\\pnpm",
-      appdata .. "\\pnpm",
-      vim.env.VOLTA_HOME and (vim.env.VOLTA_HOME .. "\\bin"),
-      localappdata .. "\\volta\\bin",
-      userprofile .. "\\.volta\\bin",
-      userprofile .. "\\scoop\\shims",
-      userprofile .. "\\scoop\\apps\\nodejs\\current",
-      userprofile .. "\\scoop\\apps\\nodejs-lts\\current",
-      "C:\\ProgramData\\chocolatey\\bin",
-      userprofile .. "\\.bun\\bin",
-      userprofile .. "\\.deno\\bin",
-      localappdata .. "\\Yarn\\bin",
-      userprofile .. "\\.cargo\\bin",
-      userprofile .. "\\go\\bin",
-    }
-  else
-    local home = vim.fn.expand("~")
-    candidate_paths = {
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      home .. "/.local/share/fnm/current/bin",
-      home .. "/.nvm/current/bin",
-      home .. "/.local/share/pnpm",
-      home .. "/.volta/bin",
-      home .. "/.local/share/mise/shims",
-      home .. "/.asdf/shims",
-      home .. "/.bun/bin",
-      home .. "/.deno/bin",
-      home .. "/.cargo/bin",
-      home .. "/go/bin",
-      home .. "/.local/bin",
-    }
-  end
-
-  for _, path in ipairs(candidate_paths) do
-    if is_dir(path) then
-      local normalized = is_win and path:gsub("/", "\\") or path
-      if not current_path:find(normalized, 1, true) then
-        current_path = normalized .. sep .. current_path
-      end
-    end
-  end
-
-  vim.env.PATH = current_path
+	vim.env.PATH = path
 end
 
 setup_path_env()
-
--- GUI & Font configuration with persistence (KRS Plugins are loaded via Lazy)

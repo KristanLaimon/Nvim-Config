@@ -1,138 +1,157 @@
-local cmp_module = require("config.editorconfig_cmp")
-local PROPERTIES = cmp_module.PROPERTIES
-local ns = vim.api.nvim_create_namespace("editorconfig_intellisense")
+-- ============================================================================
+-- PLUGIN: EditorConfig IntelliSense -- diagnostics, hover and completion.
+-- ============================================================================
+-- WHAT IT DOES
+--   `.editorconfig` has no language server, so this file supplies the three
+--   things one would give you:
+--     * diagnostics -- unknown properties warn, invalid values error,
+--     * `K` hover    -- what the property under the cursor means,
+--     * completion   -- registered as a blink.cmp source.
+--
+-- WHERE THE KNOWLEDGE LIVES
+--   lua/krs/lsp/editorconfig.lua. Add a property there and all three features
+--   pick it up.
+-- ============================================================================
 
+local editorconfig = require("krs.lsp.editorconfig")
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local settings = {
+	--- Diagnostic namespace owned by this checker.
+	namespace = vim.api.nvim_create_namespace("editorconfig_intellisense"),
+
+	--- Filetypes and file name treated as EditorConfig.
+	filetypes = { "editorconfig", "dosini" },
+	filename = ".editorconfig",
+
+	--- Events that re-run validation.
+	validate_events = { "BufReadPost", "BufWritePost", "TextChanged", "TextChangedI" },
+
+	--- Hover popup border.
+	border = "rounded",
+}
+
+-- ============================================================================
+-- VALIDATION
+-- ============================================================================
+
+--- True when the buffer is an `.editorconfig` file.
+--- @param bufnr integer
+--- @return boolean
+local function is_editorconfig(bufnr)
+	local filetype = vim.bo[bufnr].filetype
+	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":t")
+	return vim.tbl_contains(settings.filetypes, filetype) or name == settings.filename
+end
+
+--- Reports unknown properties and invalid values as diagnostics.
+--- @param bufnr integer|nil Defaults to the current buffer.
 local function validate_buffer(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
-	if not vim.api.nvim_buf_is_valid(bufnr) then
-		return
-	end
-
-	local ft = vim.bo[bufnr].filetype
-	local filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":t")
-	if ft ~= "editorconfig" and ft ~= "dosini" and filename ~= ".editorconfig" then
+	if not vim.api.nvim_buf_is_valid(bufnr) or not is_editorconfig(bufnr) then
 		return
 	end
 
 	local diagnostics = {}
-	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
-	for i, line in ipairs(lines) do
+	for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
 		local trimmed = vim.trim(line)
-		-- Ignorar líneas vacías, comentarios (#, ;) y cabeceras de sección [...]
-		if trimmed ~= "" and not trimmed:match("^[#;]") and not trimmed:match("^%[.*%]$") then
-			local key, val = trimmed:match("^([%w_]+)%s*=%s*(.-)%s*$")
+		local is_content = trimmed ~= "" and not trimmed:match("^[#;]") and not trimmed:match("^%[.*%]$")
+
+		if is_content then
+			local key, value = trimmed:match("^([%w_]+)%s*=%s*(.-)%s*$")
 			if key then
-				local prop = PROPERTIES[key]
-				if not prop then
+				local known, valid, allowed = editorconfig.validate(key, value)
+
+				if not known then
 					table.insert(diagnostics, {
-						lnum = i - 1,
+						lnum = index - 1,
 						col = 0,
 						end_col = #key,
 						severity = vim.diagnostic.severity.WARN,
-						message = "Propiedad desconocida de EditorConfig: '" .. key .. "'",
+						message = "Unknown EditorConfig property: '" .. key .. "'",
 						source = "EditorConfig",
 					})
-				elseif prop.values and val ~= "" then
-					local valid = false
-					for _, v in ipairs(prop.values) do
-						if v.label == val then
-							valid = true
-							break
-						end
-					end
-					if
-						not valid
-						and tonumber(val)
-						and (key == "indent_size" or key == "tab_width" or key == "max_line_length")
-					then
-						valid = true
-					end
-
-					if not valid then
-						local allowed = {}
-						for _, v in ipairs(prop.values) do
-							table.insert(allowed, v.label)
-						end
-						table.insert(diagnostics, {
-							lnum = i - 1,
-							col = line:find("=") or 0,
-							end_col = #line,
-							severity = vim.diagnostic.severity.ERROR,
-							message = "Valor no válido '"
-								.. val
-								.. "' para '"
-								.. key
-								.. "'. Valores permitidos: "
-								.. table.concat(allowed, ", "),
-							source = "EditorConfig",
-						})
-					end
+				elseif not valid then
+					table.insert(diagnostics, {
+						lnum = index - 1,
+						col = line:find("=") or 0,
+						end_col = #line,
+						severity = vim.diagnostic.severity.ERROR,
+						message = "Invalid value '"
+							.. value
+							.. "' for '"
+							.. key
+							.. "'. Allowed values: "
+							.. table.concat(allowed, ", "),
+						source = "EditorConfig",
+					})
 				end
 			end
 		end
 	end
 
-	vim.diagnostic.set(ns, bufnr, diagnostics)
+	vim.diagnostic.set(settings.namespace, bufnr, diagnostics)
 end
 
+-- ============================================================================
+-- HOVER
+-- ============================================================================
+
+--- Documents the property under the cursor, falling back to LSP hover.
+--- The word under the cursor is tried first, then the property on the line, so
+--- hovering a VALUE still documents its property.
 local function show_hover()
 	local word = vim.fn.expand("<cword>")
-	local prop = PROPERTIES[word]
+	local property = editorconfig.properties[word]
 
-	if not prop then
-		local line = vim.api.nvim_get_current_line()
-		local key = line:match("^%s*([%w_]+)%s*=")
-		if key and PROPERTIES[key] then
-			prop = PROPERTIES[key]
-			word = key
+	if not property then
+		local key = vim.api.nvim_get_current_line():match("^%s*([%w_]+)%s*=")
+		if key and editorconfig.properties[key] then
+			property, word = editorconfig.properties[key], key
 		end
 	end
 
-	if prop then
-		local lines = {
-			"# " .. word .. " (EditorConfig)",
-			"",
-			prop.desc,
-			"",
-			"### Valores permitidos:",
-		}
-		for _, v in ipairs(prop.values) do
-			table.insert(lines, "• `" .. v.label .. "`: " .. v.desc)
-		end
-
-		local floating_opts = {
-			border = "rounded",
-			focus_id = "editorconfig_hover",
-		}
-
-		local buf = vim.api.nvim_create_buf(false, true)
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-		vim.bo[buf].filetype = "markdown"
-
-		vim.lsp.util.open_floating_preview(lines, "markdown", floating_opts)
-	else
+	if not property then
 		vim.lsp.buf.hover()
+		return
 	end
+
+	local lines = {
+		"# " .. word .. " (EditorConfig)",
+		"",
+		property.desc,
+		"",
+		"### Allowed values:",
+	}
+	for _, value in ipairs(property.values or {}) do
+		table.insert(lines, "• `" .. value.label .. "`: " .. value.desc)
+	end
+
+	vim.lsp.util.open_floating_preview(lines, "markdown", {
+		border = settings.border,
+		focus_id = "editorconfig_hover",
+	})
 end
 
--- Asegurar tipo de archivo .editorconfig
-vim.filetype.add({
-	filename = {
-		[".editorconfig"] = "editorconfig",
-	},
-})
+-- ============================================================================
+-- WIRING
+-- ============================================================================
 
--- Autocomandos para diagnóstico y keybind 'K'
-vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "TextChanged", "TextChangedI" }, {
-	pattern = { ".editorconfig", "*.editorconfig" },
+vim.filetype.add({ filename = { [settings.filename] = "editorconfig" } })
+
+vim.api.nvim_create_autocmd(settings.validate_events, {
+	pattern = { settings.filename, "*" .. settings.filename },
 	callback = function(args)
 		validate_buffer(args.buf)
 	end,
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-	pattern = { "editorconfig", "dosini" },
+	pattern = settings.filetypes,
 	callback = function(args)
 		validate_buffer(args.buf)
 		vim.keymap.set("n", "K", show_hover, { buffer = args.buf, desc = "EditorConfig Hover Documentation" })
@@ -145,14 +164,15 @@ return {
 		opts = function(_, opts)
 			opts.sources = opts.sources or {}
 			opts.sources.providers = opts.sources.providers or {}
+
 			opts.sources.providers.editorconfig = {
 				name = "EditorConfig",
-				module = "config.editorconfig_cmp",
+				module = "krs.lsp.editorconfig",
+				-- Above the generic buffer/snippet sources: inside .editorconfig
+				-- these completions are the only relevant ones.
 				score_offset = 100,
 				enabled = function()
-					local ft = vim.bo.filetype
-					local name = vim.fn.expand("%:t")
-					return ft == "editorconfig" or ft == "dosini" or name == ".editorconfig"
+					return is_editorconfig(vim.api.nvim_get_current_buf())
 				end,
 			}
 

@@ -1,4 +1,4 @@
---- @module krsnvim.yaml
+--- @module "krsnvim.yaml"
 --- Native Pure Lua YAML Parser, Encoder, and File I/O manager for `krsnvimscript`.
 --- Handles basic YAML mappings, sequences, numbers, booleans, nulls, and comments.
 ---

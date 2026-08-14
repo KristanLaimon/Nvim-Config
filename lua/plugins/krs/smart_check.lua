@@ -1,33 +1,122 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Ultra-Fast Smart File Check & Real-Time Auto-Reload Manager
+-- KRS PLUGIN: Smart File Check -- auto-reload and deleted-file detection.
 -- ============================================================================
--- PERFORMANCE & ZERO-OVERHEAD DESIGN:
--- 1. In-Memory State Caching: `vim.b[bufnr]._krs_is_deleted` caches deletion status
---    so tabline/bufferline rendering performs ZERO synchronous disk stat calls.
--- 2. Focus-Aware Lifecycle: Timer completely STOPS when Neovim loses window focus,
---    ensuring ZERO background CPU or disk I/O when working in other applications.
--- 3. Smart Debouncing & Throttling: `checktime` is throttled to at most once per 1.2s
---    and ONLY executes when active file buffers are listed.
--- 4. Event-Driven Auto-Reload: Instantly updates state on `FocusGained`, `BufEnter`,
---    `CursorHold`, and `BufWritePost`.
+-- WHAT IT DOES
+--   Keeps buffers in sync with the disk (`checktime`) and tracks which files have
+--   been deleted underneath you, so the bufferline can mark them.
+--
+-- WHY IT IS BUILT THIS WAY (this is a hot path -- it runs forever)
+--   * State is CACHED on the buffer (`b:_krs_is_deleted`), so rendering a tabline
+--     performs zero disk stats.
+--   * The timer STOPS on FocusLost: no CPU or disk I/O while you are in another
+--     application.
+--   * `checktime` is throttled (`M.settings.throttle_ms`) and skipped entirely
+--     while the command line or a terminal has focus, where it would interrupt.
+--
+-- PUBLIC GLOBAL
+--   `_G.Is_File_Deleted(bufnr)` -- used by the bufferline; keep the name.
 -- ============================================================================
 
 local M = {}
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Shortest gap between two disk checks, in milliseconds.
+	throttle_ms = 1200,
+
+	--- Background timer interval, in milliseconds. Only runs while focused.
+	poll_interval_ms = 2000,
+
+	--- Buffer names matching any of these are virtual, not files on disk.
+	virtual_patterns = { "^%a[%a%d+.-]+://", "^node:" },
+
+	--- Events that trigger a throttled check.
+	check_events = { "BufEnter", "BufWritePost", "CursorHold", "CursorHoldI", "WinEnter", "TermClose" },
+}
+
+-- ============================================================================
+-- STATE
+-- ============================================================================
 
 local uv = vim.uv or vim.loop
 local is_focused = true
 local check_timer = nil
 local last_check_time = 0
 
--- Fast in-memory check used by bufferline.nvim (0 disk I/O during tab rendering)
+-- ============================================================================
+-- BUFFER STATE
+-- ============================================================================
+
+--- True when the buffer is a real file on disk (not a terminal, not a URL).
+--- @param bufnr integer
+--- @return boolean
+local function is_disk_file(bufnr)
+	if vim.bo[bufnr].buftype ~= "" then
+		return false
+	end
+
+	local name = vim.api.nvim_buf_get_name(bufnr)
+	if name == "" then
+		return false
+	end
+	for _, pattern in ipairs(M.settings.virtual_patterns) do
+		if name:match(pattern) then
+			return false
+		end
+	end
+	return true
+end
+
+--- True while the user is in the command line or a terminal, where a `checktime`
+--- would steal focus or interrupt typing.
+--- @return boolean
+local function in_blocking_mode()
+	local mode = vim.api.nvim_get_mode().mode
+	return mode:find("^c") ~= nil or mode:find("^t") ~= nil
+end
+
+--- Refreshes the cached deleted-state of one buffer, redrawing the tabline when
+--- it changed.
+---
+--- @param bufnr integer
+--- @return boolean is_deleted
+function M.update_buf_state(bufnr)
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return false
+	end
+
+	if not is_disk_file(bufnr) then
+		vim.b[bufnr]._krs_is_deleted = false
+		return false
+	end
+
+	local is_deleted = uv.fs_stat(vim.api.nvim_buf_get_name(bufnr)) == nil
+	local previous = vim.b[bufnr]._krs_is_deleted
+	vim.b[bufnr]._krs_is_deleted = is_deleted
+
+	if previous ~= nil and previous ~= is_deleted then
+		pcall(vim.cmd, "redrawtabline")
+	end
+	return is_deleted
+end
+
+--- Cached "has this file been deleted?" lookup. Zero disk I/O on a warm cache,
+--- which is what makes it safe to call from tabline rendering.
+---
+--- @param bufnr integer|nil Defaults to the current buffer.
+--- @return boolean is_deleted
 _G.Is_File_Deleted = function(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
-	if not bufnr or bufnr == 0 then
-		bufnr = vim.api.nvim_buf_get_name and vim.api.nvim_get_current_buf() or 0
+	if bufnr == 0 then
+		bufnr = vim.api.nvim_get_current_buf()
 	end
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return false
 	end
+
 	local cached = vim.b[bufnr]._krs_is_deleted
 	if cached ~= nil then
 		return cached
@@ -35,104 +124,81 @@ _G.Is_File_Deleted = function(bufnr)
 	return M.update_buf_state(bufnr)
 end
 
--- Update cached deletion state for a single buffer
-function M.update_buf_state(bufnr)
-	if not vim.api.nvim_buf_is_valid(bufnr) then
-		return false
-	end
-	if vim.bo[bufnr].buftype ~= "" then
-		vim.b[bufnr]._krs_is_deleted = false
-		return false
-	end
-
-	local path = vim.api.nvim_buf_get_name(bufnr)
-	if path == "" or path:match("^%a[%a%d+.-]+://") or path:match("^node:") then
-		vim.b[bufnr]._krs_is_deleted = false
-		return false
-	end
-
-	local is_deleted = (uv.fs_stat(path) == nil)
-	local prev_state = vim.b[bufnr]._krs_is_deleted
-	vim.b[bufnr]._krs_is_deleted = is_deleted
-
-	if prev_state ~= nil and prev_state ~= is_deleted then
-		pcall(vim.cmd, "redrawtabline")
-	end
-	return is_deleted
-end
-
--- Check all active file buffers with throttling
+--- Re-checks every listed file buffer, then runs `checktime` once.
+--- @param force boolean|nil Ignore the throttle window.
 function M.check_all_buffers(force)
 	local now = uv.now()
-	if not force and (now - last_check_time) < 1200 then
+	if not force and (now - last_check_time) < M.settings.throttle_ms then
 		return
 	end
 	last_check_time = now
 
-	local bufs = vim.api.nvim_list_bufs()
-	local file_bufs_count = 0
+	local file_buffers = 0
 	local state_changed = false
 
-	for _, b in ipairs(bufs) do
-		if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buftype == "" and vim.fn.buflisted(b) == 1 then
-			local name = vim.api.nvim_buf_get_name(b)
-			if name ~= "" and not name:match("^%a[%a%d+.-]+://") and not name:match("^node:") then
-				file_bufs_count = file_bufs_count + 1
-				local prev = vim.b[b]._krs_is_deleted
-				local curr = M.update_buf_state(b)
-				if prev ~= nil and prev ~= curr then
-					state_changed = true
-				end
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf) and vim.fn.buflisted(buf) == 1 and is_disk_file(buf) then
+			file_buffers = file_buffers + 1
+			local previous = vim.b[buf]._krs_is_deleted
+			local current = M.update_buf_state(buf)
+			if previous ~= nil and previous ~= current then
+				state_changed = true
 			end
 		end
 	end
 
-	if file_bufs_count > 0 then
+	-- `checktime` on an editor with no file buffers is pure overhead.
+	if file_buffers > 0 then
 		pcall(vim.cmd, "checktime")
 	end
-
 	if state_changed then
 		pcall(vim.cmd, "redrawtabline")
 	end
 end
 
--- Timer lifecycle control (Focus-aware)
+-- ============================================================================
+-- TIMER LIFECYCLE
+-- ============================================================================
+
 local function stop_timer()
 	if check_timer then
 		check_timer:stop()
 	end
 end
 
+--- Starts (or restarts) the polling timer. No-op while unfocused.
 local function start_timer()
 	if not is_focused then
 		return
 	end
-	if not check_timer then
-		check_timer = uv.new_timer()
-	end
+
+	check_timer = check_timer or uv.new_timer()
 	check_timer:stop()
 	check_timer:start(
-		2000,
-		2000,
+		M.settings.poll_interval_ms,
+		M.settings.poll_interval_ms,
 		vim.schedule_wrap(function()
-			if is_focused then
-				local mode = vim.api.nvim_get_mode().mode
-				if not mode:find("^c") and not mode:find("^t") then
-					M.check_all_buffers(false)
-				end
-			else
+			if not is_focused then
 				stop_timer()
+				return
+			end
+			if not in_blocking_mode() then
+				M.check_all_buffers(false)
 			end
 		end)
 	)
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Enables `autoread`, wires the focus-aware timer and the event checks.
 function M.setup()
 	vim.opt.autoread = true
 
 	local group = vim.api.nvim_create_augroup("KRSSmartCheckAutoRead", { clear = true })
 
-	-- Focus Gained: Resume timer & force immediate check
 	vim.api.nvim_create_autocmd("FocusGained", {
 		group = group,
 		callback = function()
@@ -142,7 +208,6 @@ function M.setup()
 		end,
 	})
 
-	-- Focus Lost: Freeze timer completely (0% background CPU)
 	vim.api.nvim_create_autocmd("FocusLost", {
 		group = group,
 		callback = function()
@@ -151,23 +216,15 @@ function M.setup()
 		end,
 	})
 
-	-- User interaction & buffer switch events (throttled)
-	vim.api.nvim_create_autocmd(
-		{ "BufEnter", "BufWritePost", "CursorHold", "CursorHoldI", "WinEnter", "TermClose" },
-		{
-			group = group,
-			callback = function()
-				if is_focused then
-					local mode = vim.api.nvim_get_mode().mode
-					if not mode:find("^c") and not mode:find("^t") then
-						M.check_all_buffers(false)
-					end
-				end
-			end,
-		}
-	)
+	vim.api.nvim_create_autocmd(M.settings.check_events, {
+		group = group,
+		callback = function()
+			if is_focused and not in_blocking_mode() then
+				M.check_all_buffers(false)
+			end
+		end,
+	})
 
-	-- Redraw tabline when shell detects file change/deletion
 	vim.api.nvim_create_autocmd("FileChangedShellPost", {
 		group = group,
 		callback = function()
@@ -175,25 +232,22 @@ function M.setup()
 		end,
 	})
 
-	-- Initial startup check & timer start
 	M.check_all_buffers(true)
 	start_timer()
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.SmartCheck = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_smart_check",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_smart_check",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

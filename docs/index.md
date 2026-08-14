@@ -13,7 +13,9 @@ Documentation for **KrsVim** — a Windows-first, WSL-aware Neovim config built 
 | 🛠️ [**Languages, LSP & Formatting**](languages.md) | Mason servers, Conform formatters, Treesitter parsers, completion tuning |
 | 🌐 [**Adding a Language / LSP**](adding-language.md) | Step-by-step for a new server, formatter and parser |
 | 📦 [**Plugin Inventory**](plugins.md) | Every third-party plugin and every custom `krs` module |
-| 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` specs are wired, the `lazydir` fix, the `config/krs` migration |
+| 🏛️ [**Architecture**](architecture.md) | The four layers, startup sequence, dependency graph, where to put new code |
+| 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` specs are wired, and the `lazydir` fix behind it |
+| 🧪 [**Testing**](testing.md) | Running the suite, writing a spec, what is covered |
 
 ### Daily driving
 | Page | Contents |
@@ -47,7 +49,7 @@ Documentation for **KrsVim** — a Windows-first, WSL-aware Neovim config built 
 
 ## 🚀 What makes this config different
 
-1. **Everything is a local module.** `lua/plugins/krs/*.lua` files are real lazy.nvim specs that live in-repo — no plugin repos, no `setup()` boilerplate. See [Module Architecture](module-architecture.md).
+1. **Everything is a local module.** `lua/plugins/krs/*.lua` files are real lazy.nvim specs that live in-repo — no plugin repos, no `setup()` boilerplate. Shared logic sits one layer below in `lua/krs/`, where it is unit-testable. See [Architecture](architecture.md).
 2. **Per-project state, not global state.** Tasks, launch profiles, breakpoints and type schemas are stored under `.krsnvim/` in the project itself (`tasks.json`, `launch.json`, `breakpoints.json`, `types.json`).
 3. **A real debugger story.** Seven languages wired through per-language modules, plus a Bun adapter that VSCode never shipped standalone, a repl completion source that asks the debug adapter instead of the buffer, and breakpoints that survive a restart.
 4. **Unified floating UI.** Input prompts, diagnostics, code actions, terminals, git and file explorers all use the same rounded floating look, with `vim.ui.input` globally overridden by [`input_modal`](input-modal.md).

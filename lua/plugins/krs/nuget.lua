@@ -1,32 +1,87 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Nuget Package Manager (C# projects only)
+-- KRS PLUGIN: NuGet Manager -- package references for C# projects.
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Only activates when the current project contains a .csproj file.
--- 2. Reads <PackageReference> entries straight from the .csproj (no `dotnet
---    list package` dependency, works even on older SDKs).
--- 3. Add/Update/Remove shell out to the `dotnet` CLI, which is the tool that
---    actually mutates the .csproj correctly.
--- 4. Telescope picker (`:NugetManager`, `<leader>ng`):
---      [a] Add package      [u] Update package      [d] Remove package
+-- WHAT IT DOES
+--   Lists `<PackageReference>` entries straight out of the `.csproj` and lets you
+--   add, update or remove them. `:NugetManager` / `<leader>ng`.
+--
+-- WHY IT READS THE .csproj DIRECTLY
+--   `dotnet list package` needs a restore and a recent SDK; the XML is always
+--   there and parsing it works offline. WRITES still go through the `dotnet` CLI,
+--   because that is the tool that mutates the project file correctly.
+--
+-- PICKER KEYS
+--   a / <C-a> add     u / <C-u> update     d / <C-d> remove
 -- ============================================================================
+
+local store = require("krs.core.store")
 
 local M = {}
 
-function M.has_csharp_project()
-	return #vim.fn.globpath(vim.fn.getcwd(), "**/*.csproj", false, true) > 0
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Glob used to find project files under the working directory.
+	project_glob = "**/*.csproj",
+
+	--- Notification title.
+	notify_title = "Nuget",
+
+	--- Picker geometry.
+	picker_width = 0.75,
+
+	keys = {
+		--- Open the manager.
+		open = "<leader>ng",
+	},
+
+	--- Both attribute orders of a PackageReference. Each pattern captures two
+	--- values; `swap` says the version comes first.
+	reference_patterns = {
+		{ pattern = '<PackageReference%s+Include="([^"]+)"%s+Version="([^"]+)"', swap = false },
+		{ pattern = '<PackageReference%s+Version="([^"]+)"%s+Include="([^"]+)"', swap = true },
+	},
+}
+
+--- Notification helper carrying the module's title.
+--- @param msg string
+--- @param level integer|nil Defaults to INFO.
+local function notify(msg, level)
+	vim.notify(msg, level or vim.log.levels.INFO, { title = M.settings.notify_title })
 end
 
-local function find_csproj(callback)
-	local matches = vim.fn.globpath(vim.fn.getcwd(), "**/*.csproj", false, true)
+-- ============================================================================
+-- PROJECT DISCOVERY & PARSING
+-- ============================================================================
+
+--- Project files under the working directory.
+--- @return string[] paths
+local function find_projects()
+	return vim.fn.globpath(vim.fn.getcwd(), M.settings.project_glob, false, true)
+end
+
+--- True when this workspace contains a C# project.
+--- @return boolean
+function M.has_csharp_project()
+	return #find_projects() > 0
+end
+
+--- Resolves the project to operate on, asking when there are several.
+--- @param callback fun(csproj: string)
+local function with_project(callback)
+	local matches = find_projects()
+
 	if #matches == 0 then
-		vim.notify("No .csproj found in current project", vim.log.levels.WARN, { title = "Nuget" })
+		notify("No .csproj found in current project", vim.log.levels.WARN)
 		return
 	end
 	if #matches == 1 then
 		callback(matches[1])
 		return
 	end
+
 	vim.ui.select(matches, { prompt = "Select .csproj:" }, function(choice)
 		if choice then
 			callback(choice)
@@ -34,30 +89,25 @@ local function find_csproj(callback)
 	end)
 end
 
--- Parse <PackageReference Include="X" Version="Y" /> entries (either
--- attribute order) directly from the .csproj file
+--- Package references declared in a project file, sorted by name.
+--- @param csproj_path string
+--- @return table[] packages `{ name, version }`
 local function parse_packages(csproj_path)
-	local packages = {}
-	local seen = {}
-	local f = io.open(csproj_path, "r")
-	if not f then
-		return packages
+	local content = store.read_file(csproj_path)
+	if not content then
+		return {}
 	end
-	local content = f:read("*a")
-	f:close()
 
-	local function add(name, version)
-		if not seen[name] then
-			seen[name] = true
-			table.insert(packages, { name = name, version = version })
+	local packages, seen = {}, {}
+	for _, rule in ipairs(M.settings.reference_patterns) do
+		for first, second in content:gmatch(rule.pattern) do
+			local name = rule.swap and second or first
+			local version = rule.swap and first or second
+			if not seen[name] then
+				seen[name] = true
+				table.insert(packages, { name = name, version = version })
+			end
 		end
-	end
-
-	for include, version in content:gmatch('<PackageReference%s+Include="([^"]+)"%s+Version="([^"]+)"') do
-		add(include, version)
-	end
-	for version, include in content:gmatch('<PackageReference%s+Version="([^"]+)"%s+Include="([^"]+)"') do
-		add(include, version)
 	end
 
 	table.sort(packages, function(a, b)
@@ -66,18 +116,21 @@ local function parse_packages(csproj_path)
 	return packages
 end
 
+--- Runs `dotnet` with the given arguments, reporting the outcome.
+--- @param args string[] Arguments after `dotnet`.
+--- @param on_done fun(ok: boolean)|nil
 local function run_dotnet(args, on_done)
-	vim.notify("dotnet " .. table.concat(args, " "), vim.log.levels.INFO, { title = "Nuget" })
+	notify("dotnet " .. table.concat(args, " "))
+
 	vim.system(vim.list_extend({ "dotnet" }, args), { text = true }, function(result)
 		vim.schedule(function()
 			if result.code ~= 0 then
-				vim.notify(
+				notify(
 					(result.stderr ~= "" and result.stderr or result.stdout) or "dotnet command failed",
-					vim.log.levels.ERROR,
-					{ title = "Nuget" }
+					vim.log.levels.ERROR
 				)
 			else
-				vim.notify("Done", vim.log.levels.INFO, { title = "Nuget" })
+				notify("Done")
 			end
 			if on_done then
 				on_done(result.code == 0)
@@ -86,10 +139,29 @@ local function run_dotnet(args, on_done)
 	end)
 end
 
+--- Builds the `dotnet add package` argument list.
+--- @param csproj string Project file.
+--- @param name string Package name.
+--- @param version string|nil Blank or nil means latest.
+--- @return string[] args
+local function add_package_args(csproj, name, version)
+	local args = { "add", csproj, "package", name }
+	if version and version ~= "" then
+		table.insert(args, "--version")
+		table.insert(args, version)
+	end
+	return args
+end
+
+-- ============================================================================
+-- PICKER
+-- ============================================================================
+
+--- Opens the package picker for a project file.
+--- @param csproj string Project file path.
 function M.show_picker(csproj)
-	local ok_telescope = pcall(require, "telescope")
-	if not ok_telescope then
-		vim.notify("Telescope is not available for Nuget Manager", vim.log.levels.ERROR, { title = "Nuget" })
+	if not pcall(require, "telescope") then
+		notify("Telescope is not available for Nuget Manager", vim.log.levels.ERROR)
 		return
 	end
 
@@ -100,8 +172,6 @@ function M.show_picker(csproj)
 	local action_state = require("telescope.actions.state")
 	local themes = require("telescope.themes")
 
-	local packages = parse_packages(csproj)
-
 	pickers
 		.new(
 			themes.get_dropdown({
@@ -109,12 +179,12 @@ function M.show_picker(csproj)
 					" 📦 Nuget [%s] (a: Add | u: Update | d: Remove) ",
 					vim.fn.fnamemodify(csproj, ":t")
 				),
-				width = 0.75,
+				width = M.settings.picker_width,
 				results_title = "Package References",
 			}),
 			{
 				finder = finders.new_table({
-					results = packages,
+					results = parse_packages(csproj),
 					entry_maker = function(entry)
 						return {
 							value = entry,
@@ -125,13 +195,26 @@ function M.show_picker(csproj)
 				}),
 				sorter = conf.generic_sorter({}),
 				attach_mappings = function(prompt_bufnr, map)
+					--- Reopens the picker so the list reflects the change.
 					local function refresh()
 						vim.schedule(function()
 							M.show_picker(csproj)
 						end)
 					end
 
-					local function add_package()
+					--- Binds one action to a normal-mode and an insert-mode key.
+					local function map_both(normal_key, insert_key, fn)
+						map("n", normal_key, fn)
+						map("i", insert_key, fn)
+					end
+
+					--- Selected package, or nil.
+					local function selected()
+						local selection = action_state.get_selected_entry()
+						return selection and selection.value or nil
+					end
+
+					map_both("a", "<C-a>", function()
 						actions.close(prompt_bufnr)
 						vim.schedule(function()
 							vim.ui.input({ prompt = "Package name to add: " }, function(name)
@@ -139,54 +222,38 @@ function M.show_picker(csproj)
 									return
 								end
 								vim.ui.input({ prompt = "Version (blank = latest): " }, function(version)
-									local args = { "add", csproj, "package", name }
-									if version and version ~= "" then
-										table.insert(args, "--version")
-										table.insert(args, version)
-									end
-									run_dotnet(args, refresh)
+									run_dotnet(add_package_args(csproj, name, version), refresh)
 								end)
 							end)
 						end)
-					end
-					map("n", "a", add_package)
-					map("i", "<C-a>", add_package)
+					end)
 
-					local function remove_package()
-						local selection = action_state.get_selected_entry()
-						if not selection then
-							return
-						end
-						actions.close(prompt_bufnr)
-						vim.schedule(function()
-							run_dotnet({ "remove", csproj, "package", selection.value.name }, refresh)
-						end)
-					end
-					map("n", "d", remove_package)
-					map("i", "<C-d>", remove_package)
-
-					local function update_package()
-						local selection = action_state.get_selected_entry()
-						if not selection then
+					map_both("u", "<C-u>", function()
+						local package = selected()
+						if not package then
 							return
 						end
 						actions.close(prompt_bufnr)
 						vim.schedule(function()
 							vim.ui.input(
-								{ prompt = "New version for " .. selection.value.name .. " (blank = latest): " },
+								{ prompt = "New version for " .. package.name .. " (blank = latest): " },
 								function(version)
-									local args = { "add", csproj, "package", selection.value.name }
-									if version and version ~= "" then
-										table.insert(args, "--version")
-										table.insert(args, version)
-									end
-									run_dotnet(args, refresh)
+									run_dotnet(add_package_args(csproj, package.name, version), refresh)
 								end
 							)
 						end)
-					end
-					map("n", "u", update_package)
-					map("i", "<C-u>", update_package)
+					end)
+
+					map_both("d", "<C-d>", function()
+						local package = selected()
+						if not package then
+							return
+						end
+						actions.close(prompt_bufnr)
+						vim.schedule(function()
+							run_dotnet({ "remove", csproj, "package", package.name }, refresh)
+						end)
+					end)
 
 					return true
 				end,
@@ -195,45 +262,45 @@ function M.show_picker(csproj)
 		:find()
 end
 
+--- Opens the manager, choosing the project first.
 function M.open_manager()
-	find_csproj(function(csproj)
-		M.show_picker(csproj)
-	end)
+	with_project(M.show_picker)
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers `:NugetManager` and its keymap.
 function M.setup()
 	if vim.fn.exists(":NugetManager") == 0 then
 		vim.api.nvim_create_user_command("NugetManager", function()
 			if not M.has_csharp_project() then
-				vim.notify("No C# project (.csproj) found in current workspace", vim.log.levels.WARN, { title = "Nuget" })
+				notify("No C# project (.csproj) found in current workspace", vim.log.levels.WARN)
 				return
 			end
 			M.open_manager()
 		end, { desc = "Open Nuget Package Manager (C# projects only)" })
 	end
 
-	vim.keymap.set("n", "<leader>ng", function()
+	vim.keymap.set("n", M.settings.keys.open, function()
 		vim.cmd("NugetManager")
 	end, { desc = "Nuget Package Manager" })
 end
 
 M.setup()
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.NugetManager = M
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_nuget_manager",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-	},
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_nuget_manager",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	dependencies = { "nvim-telescope/telescope.nvim" },
+	config = M.setup,
+}, { __index = M })

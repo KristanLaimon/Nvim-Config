@@ -1,46 +1,64 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Live Colorscheme Previewer
+-- KRS PLUGIN: Live Colorscheme Preview.
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Listens to Vim command line events (`CmdlineChanged` and `CmdlineLeave`).
--- 2. When you type `:colorscheme <theme>` and navigate with `<Tab>`, it captures the theme name.
--- 3. Temporarily applies the theme in real time for instant preview (`pcall(vim.cmd.colorscheme, name)`).
--- 4. If input is cancelled (pressing Esc without Enter), automatically restores the original theme (`vim.v.event.abort`).
--- 5. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   While you type `:colorscheme <name>` (and tab through the completions) the
+--   theme is applied live. Confirming with <CR> keeps it; cancelling with <Esc>
+--   restores the theme you started from.
+--
+-- HOW IT WORKS
+--   `CmdlineChanged` applies each candidate and remembers the original theme the
+--   first time. `CmdlineLeave` checks `vim.v.event.abort`: on an aborted command
+--   line with no theme applied, the original is put back.
 -- ============================================================================
 
 local M = {}
 
-local colorscheme_preview_orig = nil
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
 
+M.settings = {
+	--- Matches `:colo`/`:colorscheme` plus a single argument. The capture is the
+	--- theme name to preview.
+	command_pattern = "^colo%S*%s+(%S+)%s*$",
+
+	--- Autocmd group owning both listeners.
+	augroup = "KRSColorschemeLivePreview",
+}
+
+--- Theme active before the preview started; nil when no preview is in progress.
+local original_colorscheme = nil
+
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Theme named on the command line right now, if any.
+--- @return string|nil name
+local function pending_colorscheme()
+	if vim.fn.getcmdtype() ~= ":" then
+		return nil
+	end
+	return vim.fn.getcmdline():match(M.settings.command_pattern)
+end
+
+--- Installs the two command-line listeners.
 function M.setup()
-	local group = vim.api.nvim_create_augroup("KRSColorschemeLivePreview", { clear = true })
+	local group = vim.api.nvim_create_augroup(M.settings.augroup, { clear = true })
 
-	-- Event 1: Command line text modified
 	vim.api.nvim_create_autocmd("CmdlineChanged", {
 		group = group,
 		callback = function()
-			if vim.fn.getcmdtype() ~= ":" then
-				return
-			end
-
-			local cmdline = vim.fn.getcmdline()
-			local name = cmdline:match("^colo%S*%s+(%S+)%s*$")
-
+			local name = pending_colorscheme()
 			if not name then
 				return
 			end
-
-			-- Save original theme before previewing
-			if colorscheme_preview_orig == nil then
-				colorscheme_preview_orig = vim.g.colors_name
-			end
-
+			original_colorscheme = original_colorscheme or vim.g.colors_name
 			pcall(vim.cmd.colorscheme, name)
 		end,
 	})
 
-	-- Event 2: Command line confirmed or left
 	vim.api.nvim_create_autocmd("CmdlineLeave", {
 		group = group,
 		callback = function()
@@ -48,33 +66,27 @@ function M.setup()
 				return
 			end
 
-			local cmdline = vim.fn.getcmdline()
-			local applied = cmdline:match("^colo%S*%s+(%S+)%s*$")
-
-			-- If cancelled with Esc (abort = true) and not applied -> revert to previous theme
-			if colorscheme_preview_orig and vim.v.event.abort and not applied then
-				pcall(vim.cmd.colorscheme, colorscheme_preview_orig)
+			-- Aborted (<Esc>) with nothing applied: undo the preview.
+			if original_colorscheme and vim.v.event.abort and not pending_colorscheme() then
+				pcall(vim.cmd.colorscheme, original_colorscheme)
 			end
-
-			colorscheme_preview_orig = nil
+			original_colorscheme = nil
 		end,
 	})
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.ColorschemePreview = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_colorscheme_preview",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_colorscheme_preview",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

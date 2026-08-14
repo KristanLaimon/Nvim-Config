@@ -1,19 +1,41 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: VSCode-Style Command Palette (Ctrl + Shift + P)
+-- KRS PLUGIN: Command Palette (Ctrl + Shift + P).
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Activated with <Ctrl+Shift+P> from any mode (Normal, Insert, Visual, Terminal).
--- 2. Presents a Telescope picker with fuzzy search.
--- 3. Uses a configurable array (`M.commands`) supporting 3 action types:
---      a) `cmd`: Executes a Neovim/Vimscript command (e.g. "Telescope find_files", "Lazy", "Mason")
---      b) `keys`: Simulates keypresses (e.g. "<C-k>", "<leader>e", "<F2>")
---      c) `fn`: Executes a custom Lua function directly.
--- 4. You can add your own commands at runtime using `M.add_command({ ... })`.
+-- WHAT IT DOES
+--   A fuzzy picker over every command this config exposes, reachable from any
+--   mode. The list below IS the configuration -- add entries to `M.commands`.
+--
+-- ENTRY SHAPE -- exactly one action per entry
+--   { name = "Label shown in the list",
+--     category = "Files",          -- grouping prefix, also fuzzy-searchable
+--     cmd  = "Neotree toggle",     -- a) run an Ex command
+--     keys = "<C-k>",              -- b) feed keys, as if typed
+--     fn   = function() end }      -- c) call Lua directly
+--
+-- FROM ANOTHER MODULE
+--   require("plugins.krs.command_palette").add_command({ name = ..., cmd = ... })
 -- ============================================================================
 
 local M = {}
 
--- Array of user-configurable commands
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Picker geometry and titles.
+	picker_width = 0.75,
+	prompt_title = " 🚀🦊 Command Palette (Ctrl+Shift+P) ",
+	results_title = "Available Commands",
+
+	keys = {
+		--- Open the palette. Bound in normal, insert, visual and terminal mode.
+		open = { "<C-S-p>", "<C-S-P>" },
+	},
+}
+
+--- Everything the palette offers, in display order. EDIT THIS LIST.
+--- @type table[]
 M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 📁 Files & Search
@@ -94,14 +116,20 @@ M.commands = {
 	{ name = "🚀 Open Launch Profiles Manager (<C-S-q>)", cmd = "LaunchProfiles", category = "Transpiler" },
 }
 
--- Public function to dynamically add commands from any plugin or config
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Appends an entry at runtime, so other modules can contribute commands.
+--- @param item table Entry in the shape documented at the top of this file.
 function M.add_command(item)
 	if type(item) == "table" and item.name then
 		table.insert(M.commands, item)
 	end
 end
 
--- Execute action associated with selected entry
+--- Runs the action of an entry: Ex command, simulated keys, or Lua function.
+--- @param item table|nil Palette entry.
 local function execute_item(item)
 	if not item then
 		return
@@ -120,10 +148,9 @@ local function execute_item(item)
 	end
 end
 
--- Open Command Palette with Telescope
+--- Opens the palette picker.
 function M.open_palette()
-	local ok_telescope, _ = pcall(require, "telescope")
-	if not ok_telescope then
+	if not pcall(require, "telescope") then
 		vim.notify(
 			"Telescope is not available for Command Palette",
 			vim.log.levels.ERROR,
@@ -142,9 +169,9 @@ function M.open_palette()
 	pickers
 		.new(
 			themes.get_dropdown({
-				prompt_title = " 🚀🦊 Command Palette (Ctrl+Shift+P) ",
-				width = 0.75,
-				results_title = "Available Commands",
+				prompt_title = M.settings.prompt_title,
+				width = M.settings.picker_width,
+				results_title = M.settings.results_title,
 			}),
 			{
 				finder = finders.new_table({
@@ -181,6 +208,11 @@ function M.open_palette()
 		:find()
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers `:CommandPalette` and the open keys.
 function M.setup()
 	if vim.fn.exists(":CommandPalette") == 0 then
 		vim.api.nvim_create_user_command("CommandPalette", function()
@@ -188,40 +220,30 @@ function M.setup()
 		end, { desc = "Open Command Palette" })
 	end
 
-	local modes = { "n", "i", "v", "t" }
-	vim.keymap.set(modes, "<C-S-p>", function()
-		if vim.fn.mode() == "t" then
-			vim.cmd("stopinsert")
-		end
-		M.open_palette()
-	end, { noremap = true, silent = true, desc = "Open Command Palette" })
-
-	vim.keymap.set(modes, "<C-S-P>", function()
-		if vim.fn.mode() == "t" then
-			vim.cmd("stopinsert")
-		end
-		M.open_palette()
-	end, { noremap = true, silent = true, desc = "Open Command Palette" })
+	for _, key in ipairs(M.settings.keys.open) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, function()
+			if vim.fn.mode() == "t" then
+				vim.cmd("stopinsert")
+			end
+			M.open_palette()
+		end, { noremap = true, silent = true, desc = "Open Command Palette" })
+	end
 end
 
 M.setup()
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.CommandPalette = M
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_command_palette",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-	},
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_command_palette",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	dependencies = { "nvim-telescope/telescope.nvim" },
+	config = M.setup,
+}, { __index = M })
 

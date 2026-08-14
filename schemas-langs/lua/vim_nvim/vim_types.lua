@@ -1,14 +1,84 @@
 ---@meta
--- Neovim & Vim Global Types Definition
--- Injected dynamically by KRS Type Injector
+-- ============================================================================
+-- Neovim & Vim global type stub -- injected by the KRS Type Injector.
+-- ============================================================================
+-- WHY THIS FILE EXISTS
+--   Projects that edit Lua without the Neovim runtime on their lua_ls path still
+--   want `vim.` to resolve. This stub declares the namespace so the editor stops
+--   flagging every `vim.*` access as undefined.
+--
+-- KEEP IT COMPLETE
+--   lua_ls treats `---@class vim` as the WHOLE truth about the table: any field
+--   missing here is reported as "Undefined field", even inside Neovim itself.
+--   Add new namespaces to the list below rather than removing the class.
+-- ============================================================================
 
 ---@class vim
----@field api table
----@field fn table
----@field lsp table
----@field keymap table
----@field g table
----@field opt table
----@field env table
----@field fs table
+---@field api table Neovim API functions (`nvim_*`).
+---@field fn table Vimscript function bridge.
+---@field cmd any Ex command runner: callable, and indexable as `vim.cmd.edit`.
+---@field lsp table LSP client framework.
+---@field diagnostic table Diagnostic framework.
+---@field treesitter table Treesitter integration.
+---@field keymap table Keymap helpers (`set`, `del`).
+---@field g table Global variables.
+---@field b table Buffer-scoped variables.
+---@field w table Window-scoped variables.
+---@field t table Tabpage-scoped variables.
+---@field v table Vim predefined variables (`v:count`, `v:argv`, ...).
+---@field env table Environment variables.
+---@field o table Global options.
+---@field opt table Option objects with list/map helpers.
+---@field opt_local table Window/buffer local option objects.
+---@field bo table Buffer-local options.
+---@field wo table Window-local options.
+---@field go table Global-only options.
+---@field fs table Filesystem path utilities.
+---@field uv table libuv event loop bindings.
+---@field loop table Deprecated alias of `vim.uv`.
+---@field json table JSON encode/decode.
+---@field log table Log levels (`vim.log.levels`).
+---@field ui table UI hooks (`input`, `select`, `open`).
+---@field uri table URI conversion helpers.
+---@field uri_from_fname function Path -> file URI.
+---@field uri_from_bufnr function Buffer -> file URI.
+---@field uri_to_fname function File URI -> path.
+---@field uri_to_bufnr function File URI -> buffer.
+---@field health table Health-check reporting.
+---@field filetype table Filetype detection.
+---@field iter function Iterator constructor.
+---@field notify function Emit a notification.
+---@field notify_once function Emit a notification at most once.
+---@field print function Print helper.
+---@field inspect function Pretty-print any value.
+---@field schedule function Run a callback on the main loop.
+---@field schedule_wrap function Wrap a callback to run on the main loop.
+---@field defer_fn function Run a callback after a delay.
+---@field wait function Block until a condition holds.
+---@field system function Run a process.
+---@field trim function Trim surrounding whitespace.
+---@field split function Split a string.
+---@field gsplit function Split a string lazily.
+---@field startswith function String prefix test.
+---@field endswith function String suffix test.
+---@field deepcopy function Recursive table copy.
+---@field tbl_extend function Merge tables.
+---@field tbl_deep_extend function Merge tables recursively.
+---@field tbl_keys function Table keys as a list.
+---@field tbl_values function Table values as a list.
+---@field tbl_map function Map over a table.
+---@field tbl_filter function Filter a table.
+---@field tbl_contains function Membership test.
+---@field tbl_count function Count entries.
+---@field tbl_isempty function Emptiness test.
+---@field tbl_get function Nested lookup.
+---@field list_extend function Append a list to another.
+---@field list_slice function Slice a list.
+---@field list_contains function List membership test.
+---@field validate function Argument validation.
+---@field is_callable function Callable test.
+---@field spairs function Sorted pairs iterator.
+---@field regex function Compile a Vim regex.
+---@field str_utfindex function UTF index conversion.
+---@field str_byteindex function Byte index conversion.
 vim = vim or {}

@@ -86,5 +86,5 @@ Documentation is opt-in (`<C-space>`), and `{` / `[` are excluded from trigger c
 
 | Source | Fires in | Offers |
 |---|---|---|
-| [`lazyscripts.dap_repl_source`](debug-adapters.md#36-repl-completion-immediate-window) | `dap-repl`, only while a session is live | Real variables from the stopped frame, via the adapter's `completions` / `scopes` requests |
+| [`krs.lsp.dap_repl_source`](debug-adapters.md#36-repl-completion-immediate-window) | `dap-repl`, only while a session is live | Real variables from the stopped frame, via the adapter's `completions` / `scopes` requests |
 | [`plugins.krs.launch_cmp`](launch-profiles.md#-intellisense-inside-launchjson) | Any file named `launch.json` | Discovered project tasks for `pre_launch_tasks`, runtimes for `runtime`, `run`/`debug` for `mode` |

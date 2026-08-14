@@ -1,31 +1,113 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Reusable Floating Input / Rename Modal Box
+-- KRS PLUGIN: Input Modal -- the one floating prompt every module reuses.
 -- ============================================================================
--- Component props / options:
---   opts = {
---     label = "Rename",             -- Modal title label (string)
---     title = "Rename",             -- Alias for label
---     default_value = "current",    -- Initial text content (string)
---     default = "current",          -- Alias for default_value
---     relative = "editor"|"cursor", -- Window anchoring (default: "editor")
---     callback = function(ok, new_text) end -- Callback function
---   }
+-- WHAT IT DOES
+--   A centered, self-resizing input box. It also REPLACES `vim.ui.input`, so
+--   every prompt in the config (and in third-party plugins) looks the same.
+--
+-- USAGE
+--   require("plugins.krs.input_modal").open({
+--     label = "Rename",            -- title; `title` and `prompt` also accepted
+--     default_value = "old name",  -- initial text; `default` also accepted
+--     relative = "editor",         -- or "cursor"
+--     callback = function(ok, text) end,
+--   })
+--
+-- BEHAVIOUR NOTES
+--   * <CR> confirms, <S-CR>/<M-CR> inserts a newline, <Esc> leaves insert mode
+--     and a second <Esc> (or q) cancels.
+--   * The box grows with the text, up to the ratios in `M.settings`.
+--   * `callback` is guaranteed to fire exactly once -- confirm, cancel, or the
+--     window being closed by anything else.
+--   * The buffer is `acwrite`, so `:w` inside the modal confirms too.
 -- ============================================================================
 
 local M = {}
 
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Largest the box may grow, as a fraction of the editor.
+	max_width_ratio = 0.70,
+	max_height_ratio = 0.70,
+
+	--- Narrowest the box may be, and the padding added around the text.
+	min_width = 36,
+	label_padding = 10,
+	text_padding = 6,
+
+	--- Window border and title decoration.
+	border = "rounded",
+	title_icon = "📝",
+
+	keys = {
+		confirm = { "<CR>" },
+		newline = { "<S-CR>", "<S-Enter>", "<M-CR>" },
+		cancel = { "<Esc>", "q", "<C-c>" },
+	},
+}
+
+-- ============================================================================
+-- GEOMETRY
+-- ============================================================================
+
+--- Computes the box size and position for the given content.
+--- Height counts WRAPPED lines, so a long single line still gets the rows it
+--- needs instead of scrolling inside a one-line window.
+---
+--- @param lines string[] Current buffer content.
+--- @param label string Title text, which sets the minimum width.
+--- @return integer width
+--- @return integer height
+--- @return integer row
+--- @return integer col
+local function measure(lines, label)
+	local cols = vim.o.columns or 80
+	local rows = vim.o.lines or 24
+
+	local max_width = math.max(30, math.floor(cols * M.settings.max_width_ratio))
+	local min_width = math.min(math.max(#label + M.settings.label_padding, M.settings.min_width), max_width)
+
+	local longest = 0
+	for _, line in ipairs(lines) do
+		longest = math.max(longest, #line)
+	end
+
+	local width = math.min(math.max(longest + M.settings.text_padding, min_width), max_width)
+
+	local wrapped = 0
+	for _, line in ipairs(lines) do
+		wrapped = wrapped + (#line == 0 and 1 or math.ceil(#line / math.max(width, 1)))
+	end
+
+	local max_height = math.max(3, math.floor(rows * M.settings.max_height_ratio))
+	local height = math.min(math.max(wrapped, 1), max_height)
+
+	return width,
+		height,
+		math.max(0, math.floor((rows - (height + 2)) / 2)),
+		math.max(0, math.floor((cols - (width + 2)) / 2))
+end
+
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Opens the input modal.
+--- @param opts table `{ label|title|prompt, default_value|default, relative, callback }`
 function M.open(opts)
 	opts = opts or {}
-	local label = opts.label or opts.title or opts.prompt or "Input"
-	label = label:gsub("^%s*", ""):gsub(":%s*$", "")
 
-	local default_val = opts.default_value or opts.default or ""
-	local callback = opts.callback or function() end
+	local label = (opts.label or opts.title or opts.prompt or "Input"):gsub("^%s*", ""):gsub(":%s*$", "")
+	--- @type fun(ok: boolean, text: string)
+	local callback = opts.callback or function(_, _) end
 	local relative = opts.relative or "editor"
-
 	local orig_win = vim.api.nvim_get_current_win()
 
 	local buf = vim.api.nvim_create_buf(false, true)
+	-- `acwrite` so `:w` can be caught as "confirm" (see BufWriteCmd below).
 	vim.bo[buf].buftype = "acwrite"
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].swapfile = false
@@ -33,80 +115,42 @@ function M.open(opts)
 	vim.b[buf].completion = false
 	vim.api.nvim_buf_set_name(buf, "Input: " .. label)
 
-	local lines = vim.split(default_val, "\n", { plain = true })
+	local lines = vim.split(opts.default_value or opts.default or "", "\n", { plain = true })
 	if #lines == 0 then
 		lines = { "" }
 	end
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-	local function recalculate_dimensions(cur_lines)
-		local cols = vim.o.columns or 80
-		local lines_count = vim.o.lines or 24
-		local max_allowed_width = math.max(30, math.floor(cols * 0.70))
-		local min_width = math.min(math.max(#label + 10, 36), max_allowed_width)
-
-		local max_line_len = 0
-		for _, l in ipairs(cur_lines) do
-			if #l > max_line_len then
-				max_line_len = #l
-			end
-		end
-
-		local new_w = math.min(math.max(max_line_len + 6, min_width), max_allowed_width)
-
-		local display_height = 0
-		for _, l in ipairs(cur_lines) do
-			if #l == 0 then
-				display_height = display_height + 1
-			else
-				display_height = display_height + math.ceil(#l / math.max(new_w, 1))
-			end
-		end
-
-		local max_allowed_height = math.max(3, math.floor(lines_count * 0.70))
-		local new_h = math.min(math.max(display_height, 1), max_allowed_height)
-
-		local new_row = math.max(0, math.floor((lines_count - (new_h + 2)) / 2))
-		local new_col = math.max(0, math.floor((cols - (new_w + 2)) / 2))
-
-		return new_w, new_h, new_row, new_col
-	end
-
-	local width, height, row, col = recalculate_dimensions(lines)
-
+	local width, height, row, col = measure(lines, label)
 	local win_opts = {
 		relative = relative,
 		width = width,
 		height = height,
 		style = "minimal",
-		border = "rounded",
-		title = " 📝 " .. label .. " ",
+		border = M.settings.border,
+		title = " " .. M.settings.title_icon .. " " .. label .. " ",
 		title_pos = "center",
 	}
-
 	if relative == "cursor" then
-		win_opts.row = 1
-		win_opts.col = 0
+		win_opts.row, win_opts.col = 1, 0
 	else
-		win_opts.relative = "editor"
-		win_opts.row = row
-		win_opts.col = col
+		win_opts.relative, win_opts.row, win_opts.col = "editor", row, col
 	end
 
 	local win = vim.api.nvim_open_win(buf, true, win_opts)
-	pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
-	pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
-	pcall(vim.api.nvim_set_option_value, "scrolloff", 0, { win = win })
-	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
+	for option, value in pairs({ wrap = true, linebreak = true, scrolloff = 0, cursorline = false }) do
+		pcall(vim.api.nvim_set_option_value, option, value, { win = win })
+	end
 
 	vim.cmd("startinsert!")
 
 	local finished = false
 
+	--- Closes the float and hands focus back to the caller.
+	--- `<CR>` confirms from insert mode, but closing the float does not leave it:
+	--- focus would return to the caller's buffer still in insert, moving the cursor
+	--- and firing blink.cmp there. Leave insert BEFORE giving the window back.
 	local function close_win()
-		-- <CR> confirms from insert mode, but closing the float does not leave it:
-		-- focus returns to the caller's buffer still in insert, which moves the cursor
-		-- and fires blink.cmp there. Leave insert before giving the window back.
 		vim.cmd("stopinsert")
 		if vim.api.nvim_buf_is_valid(buf) then
 			pcall(function()
@@ -121,40 +165,52 @@ function M.open(opts)
 		end
 	end
 
-	local function confirm()
+	--- Ends the modal exactly once. `ok` false means cancelled.
+	local function finish(ok)
 		if finished then
 			return
 		end
 		finished = true
-		local text_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-		local result_text = table.concat(text_lines, "\n")
+
+		local text = ok and table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") or ""
 		close_win()
-		callback(true, result_text)
+		callback(ok, text)
 	end
 
-	local function cancel()
-		if finished then
-			return
-		end
-		finished = true
-		close_win()
-		callback(false, "")
-	end
-
-	-- Dynamic resizing on text change
+	--- Re-measures the float after every edit.
 	local function resize()
-		if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
+		if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
 			return
 		end
-		local cur_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-		local new_w, new_h, new_row, new_col = recalculate_dimensions(cur_lines)
-		local new_config = { width = new_w, height = new_h }
+
+		local new_w, new_h, new_row, new_col = measure(vim.api.nvim_buf_get_lines(buf, 0, -1, false), label)
+		local config = { width = new_w, height = new_h }
 		if relative == "editor" then
-			new_config.relative = "editor"
-			new_config.row = new_row
-			new_config.col = new_col
+			config.relative, config.row, config.col = "editor", new_row, new_col
 		end
-		pcall(vim.api.nvim_win_set_config, win, new_config)
+
+		pcall(vim.api.nvim_win_set_config, win, config)
+		pcall(vim.api.nvim_win_call, win, function()
+			vim.fn.winrestview({ topline = 1 })
+		end)
+	end
+
+	--- Splits the current line at the cursor, since <CR> is taken by confirm.
+	local function insert_newline()
+		if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
+			return
+		end
+
+		local cursor = vim.api.nvim_win_get_cursor(win)
+		local cursor_row, cursor_col = cursor[1], cursor[2]
+		local line = vim.api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1] or ""
+		vim.api.nvim_buf_set_lines(buf, cursor_row - 1, cursor_row, false, {
+			line:sub(1, cursor_col),
+			line:sub(cursor_col + 1),
+		})
+		vim.api.nvim_win_set_cursor(win, { cursor_row + 1, 0 })
+
+		resize()
 		pcall(vim.api.nvim_win_call, win, function()
 			vim.fn.winrestview({ topline = 1 })
 		end)
@@ -166,60 +222,51 @@ function M.open(opts)
 	})
 
 	local kopts = { buffer = buf, noremap = true, silent = true }
-	vim.keymap.set({ "n", "i" }, "<CR>", confirm, kopts)
-
-	local function insert_newline()
-		if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
-			return
-		end
-		local cursor = vim.api.nvim_win_get_cursor(win)
-		local row, col = cursor[1], cursor[2]
-		local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
-		local before = line:sub(1, col)
-		local after = line:sub(col + 1)
-		vim.api.nvim_buf_set_lines(buf, row - 1, row, false, { before, after })
-		local new_row = row + 1
-		vim.api.nvim_win_set_cursor(win, { new_row, 0 })
-		resize()
-		pcall(vim.api.nvim_win_call, win, function()
-			vim.fn.winrestview({ topline = 1 })
-		end)
+	for _, key in ipairs(M.settings.keys.confirm) do
+		vim.keymap.set({ "n", "i" }, key, function()
+			finish(true)
+		end, kopts)
+	end
+	for _, key in ipairs(M.settings.keys.newline) do
+		vim.keymap.set({ "n", "i" }, key, insert_newline, kopts)
+	end
+	for _, key in ipairs(M.settings.keys.cancel) do
+		vim.keymap.set("n", key, function()
+			finish(false)
+		end, kopts)
 	end
 
-	vim.keymap.set({ "n", "i" }, "<S-CR>", insert_newline, kopts)
-	vim.keymap.set({ "n", "i" }, "<S-Enter>", insert_newline, kopts)
-	vim.keymap.set({ "n", "i" }, "<M-CR>", insert_newline, kopts)
-
+	-- In insert mode <Esc> only leaves insert; cancelling takes a second press.
 	vim.keymap.set("i", "<Esc>", "<Cmd>stopinsert<CR>", kopts)
-	vim.keymap.set("n", "<Esc>", cancel, kopts)
-	vim.keymap.set("n", "q", cancel, kopts)
-	vim.keymap.set("n", "<C-c>", cancel, kopts)
 
 	vim.api.nvim_create_autocmd("BufWriteCmd", {
 		buffer = buf,
 		callback = function()
-			confirm()
+			finish(true)
 		end,
 	})
 
+	-- Anything else that closes the window still has to report a cancellation.
 	vim.api.nvim_create_autocmd("WinClosed", {
 		pattern = tostring(win),
 		once = true,
 		callback = function()
-			if not finished then
-				finished = true
-				if vim.api.nvim_buf_is_valid(buf) then
-					pcall(function()
-						vim.bo[buf].modified = false
-					end)
-				end
-				callback(false, "")
+			if finished then
+				return
 			end
+			finished = true
+			if vim.api.nvim_buf_is_valid(buf) then
+				pcall(function()
+					vim.bo[buf].modified = false
+				end)
+			end
+			callback(false, "")
 		end,
 	})
 end
 
--- Override default vim.ui.input to use our reusable modal
+--- Replaces `vim.ui.input` with this modal, so every prompt in the editor -- ours
+--- and third-party -- shares one look.
 function M.setup_ui_input_override()
 	vim.ui.input = function(opts, on_confirm)
 		opts = opts or {}
@@ -227,31 +274,25 @@ function M.setup_ui_input_override()
 			label = opts.prompt or "Input",
 			default_value = opts.default or "",
 			relative = "editor",
-			callback = function(ok, new_text)
-				if ok then
-					on_confirm(new_text)
-				else
-					on_confirm(nil)
-				end
+			callback = function(ok, text)
+				on_confirm(ok and text or nil)
 			end,
 		})
 	end
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.InputModal = M
 
 M.setup_ui_input_override()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_input_modal",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup_ui_input_override()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_input_modal",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup_ui_input_override,
+}, { __index = M })

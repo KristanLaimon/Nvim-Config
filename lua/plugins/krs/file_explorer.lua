@@ -1,164 +1,160 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Native Floating File Explorer (Pure Lua Telescope)
+-- KRS PLUGIN: Floating File Explorer -- pure Lua, no external binaries.
 -- ============================================================================
--- 1. 100% Native in Lua without external binaries (avoids 'Executable not found' errors).
--- 2. Defaults to user's Desktop directory (Cross-platform).
--- 3. Allows creating files, folders, renaming, deleting, and navigating.
--- 4. Key 'o' or '<C-o>' opens folders as Active Project (CWD).
--- 5. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   Browses the filesystem in a Telescope picker with no `fd`/`rg` dependency, so
+--   it never fails with "Executable not found". Two pickers share one directory
+--   listing engine:
+--     * the explorer  -- browse, create, rename, delete, copy, favorite, open
+--     * the move target picker -- navigate to a folder and drop a file into it
+--
+-- KEYS (explorer)
+--   <CR> open file / enter folder    o  set folder as project root (CWD)
+--   a create   r rename   d delete   c copy   m move   f favorite
+--   h/<BS>/u parent      l/<Right> enter    ? help    q close
+--
+-- WHERE IT STARTS
+--   On the dashboard: the Desktop. Otherwise the current working directory,
+--   unless that is the bare home directory with no project file open -- then the
+--   Desktop again, because home is almost never what you meant.
+--
+-- FAVORITES -- `<data>/project_favorites.json`
+--   A path -> true map. Favorited directories are also pushed into project.nvim's
+--   recent list so they show up on the dashboard.
 -- ============================================================================
+
+local path = require("krs.core.path")
+local favorites = require("krs.projects.favorites")
 
 local M = {}
 
-local favorites_file = vim.fn.stdpath("data") .. "/project_favorites.json"
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
 
-local function load_favorites()
-	local f = io.open(favorites_file, "r")
-	if not f then
-		return {}
-	end
-	local content = f:read("*a")
-	f:close()
-	local ok, data = pcall(vim.json.decode, content)
-	if ok and type(data) == "table" then
-		return data
-	end
-	return {}
+M.settings = {
+	--- Directories tried, in order, when looking for the Desktop.
+	desktop_dirs = { "Desktop", "OneDrive/Desktop" },
+
+	--- Telescope layout shared by both pickers.
+	layout = { width = 0.85, height = 0.80, prompt_position = "top" },
+
+	--- Row icons.
+	icons = { dir = "📁 ", file = "📄 ", favorite = "⭐ " },
+
+	keys = {
+		--- Open the explorer. Bound in normal, insert, visual and terminal mode.
+		open = { "<C-S-f>", "<C-S-F>" },
+	},
+}
+
+-- ============================================================================
+-- FAVORITES
+-- ============================================================================
+
+--- Storage key of a path in the shared favorites file.
+--- Thin alias so this file reads naturally; the rule lives in krs.projects.favorites.
+--- @param p string|nil Path.
+--- @return string key
+local function favorite_key(p)
+	return favorites.key(p)
 end
 
-local function save_favorites(favs)
-	local ok, encoded = pcall(vim.json.encode, favs)
-	if ok then
-		local f = io.open(favorites_file, "w")
-		if f then
-			f:write(encoded)
-			f:close()
+--- Loads the favorites map.
+--- @return table<string,boolean>
+local function load_favorites()
+	return favorites.load()
+end
+
+--- Adds a directory to project.nvim's recent project list, if it is not there.
+--- @param dir string Directory path.
+local function remember_recent_project(dir)
+	local ok, history = pcall(require, "project_nvim.utils.history")
+	if not ok or not history.recent_projects then
+		return
+	end
+
+	for _, p in ipairs(history.recent_projects) do
+		if favorite_key(p) == favorite_key(dir) then
+			return
 		end
 	end
+	table.insert(history.recent_projects, dir)
+	pcall(history.write_projects_to_history)
 end
 
-local function normalize_path(p)
-	if not p or p == "" then
-		return ""
-	end
-	local clean = p:gsub("\\", "/"):gsub("/$", "")
-	if vim.fn.has("win32") == 1 or vim.fn.has("wsl") == 1 then
-		clean = clean:sub(1, 1):lower() .. clean:sub(2)
-	end
-	return clean
-end
+-- ============================================================================
+-- DIRECTORY LISTING -- shared by both pickers
+-- ============================================================================
 
--- Get Desktop path cross-platform (Windows / macOS / Linux)
+--- Cross-platform Desktop directory, falling back to the home directory.
+--- @return string dir
 function M.get_desktop_path()
 	local home = vim.fn.expand("~")
-	local desktop = home .. "/Desktop"
-	if vim.fn.isdirectory(desktop) == 1 then
-		return desktop
+	for _, candidate in ipairs(M.settings.desktop_dirs) do
+		local dir = path.join(home, candidate)
+		if path.is_dir(dir) then
+			return dir
+		end
 	end
-
-	local onedrive_desktop = home .. "/OneDrive/Desktop"
-	if vim.fn.isdirectory(onedrive_desktop) == 1 then
-		return onedrive_desktop
-	end
-
 	return home
 end
 
--- Open native file explorer in Telescope
-function M.open_desktop_explorer(opts)
-	local pickers = require("telescope.pickers")
-	local finders = require("telescope.finders")
-	local conf = require("telescope.config").values
-	local actions = require("telescope.actions")
-	local action_state = require("telescope.actions.state")
-
-	opts = opts or {}
-	local curr_dir = opts.path
-
-	if not curr_dir or curr_dir == "" then
-		local is_dashboard = (vim.bo.filetype == "alpha")
-		if is_dashboard then
-			curr_dir = M.get_desktop_path()
-		else
-			local cwd = vim.fn.getcwd()
-			local home = vim.fn.expand("~")
-			local desktop = M.get_desktop_path()
-
-			if cwd and cwd ~= "" and vim.fn.isdirectory(cwd) == 1 then
-				local norm_cwd = normalize_path(cwd)
-				local norm_home = normalize_path(home)
-				if norm_cwd == norm_home then
-					local has_project_file = false
-					for _, b in ipairs(vim.api.nvim_list_bufs()) do
-						if vim.fn.buflisted(b) == 1 and vim.api.nvim_buf_get_name(b) ~= "" and vim.bo[b].filetype ~= "alpha" and vim.bo[b].filetype ~= "neo-tree" then
-							has_project_file = true
-							break
-						end
-					end
-					if has_project_file then
-						curr_dir = cwd
-					else
-						curr_dir = desktop
-					end
-				else
-					curr_dir = cwd
-				end
-			else
-				curr_dir = desktop
-			end
-		end
+--- Normalizes a directory argument into an existing absolute directory.
+--- @param dir string Requested directory.
+--- @param fallback string Directory used when `dir` does not exist.
+--- @return string dir
+local function resolve_dir(dir, fallback)
+	local resolved = (vim.fn.fnamemodify(dir, ":p"):gsub("[/\\]$", ""))
+	if not path.is_dir(resolved) then
+		return fallback
 	end
+	return resolved
+end
 
-	curr_dir = vim.fn.fnamemodify(curr_dir, ":p"):gsub("[/\\]$", "")
-
-	if vim.fn.isdirectory(curr_dir) == 0 then
-		curr_dir = M.get_desktop_path()
-	end
-
-	local favs = load_favorites()
-
-	local parent = vim.fn.fnamemodify(curr_dir, ":h")
-	local norm_parent = normalize_path(parent)
-	local norm_curr = normalize_path(curr_dir)
-	local has_parent = (norm_parent ~= "" and norm_parent ~= norm_curr)
-
+--- Lists a directory as picker entries, newest sort rules applied:
+--- parent first, then favorites, then directories, then files, each alphabetical.
+---
+--- @param dir string Directory to list.
+--- @param starred table<string,boolean>|nil Favorites map; omit to skip stars.
+--- @return table[] entries `{ name, path, key, is_dir, is_parent, is_favorite, display }`
+local function list_directory(dir, starred)
+	local icons = M.settings.icons
 	local entries = {}
 
-	if has_parent then
+	local parent = vim.fn.fnamemodify(dir, ":h")
+	if parent ~= "" and not path.equals(parent, dir) then
 		table.insert(entries, {
 			name = "../",
 			path = parent,
-			norm = norm_parent,
+			key = favorite_key(parent),
 			is_dir = true,
 			is_parent = true,
 			is_favorite = false,
-			display = "📁 ../",
+			display = icons.dir .. "../",
 		})
 	end
 
-	local handle = vim.uv.fs_scandir(curr_dir)
-	if handle then
-		while true do
-			local name, type = vim.uv.fs_scandir_next(handle)
-			if not name then
-				break
-			end
-			local full_path = curr_dir .. "/" .. name
-			local norm_path = normalize_path(full_path)
-			local is_dir = (type == "directory")
-			local is_fav = favs[norm_path] == true
-			local icon = is_dir and "📁 " or "📄 "
-			local fav_mark = is_fav and "⭐ " or ""
-
-			table.insert(entries, {
-				name = name,
-				path = full_path,
-				norm = norm_path,
-				is_dir = is_dir,
-				is_favorite = is_fav,
-				display = fav_mark .. icon .. name,
-			})
+	local handle = vim.uv.fs_scandir(dir)
+	while handle do
+		local name, entry_type = vim.uv.fs_scandir_next(handle)
+		if not name then
+			break
 		end
+
+		local full_path = path.join(dir, name)
+		local key = favorite_key(full_path)
+		local is_dir = entry_type == "directory"
+		local is_favorite = starred ~= nil and starred[key] == true
+
+		table.insert(entries, {
+			name = name,
+			path = full_path,
+			key = key,
+			is_dir = is_dir,
+			is_favorite = is_favorite,
+			display = (is_favorite and icons.favorite or "") .. (is_dir and icons.dir or icons.file) .. name,
+		})
 	end
 
 	table.sort(entries, function(a, b)
@@ -174,138 +170,214 @@ function M.open_desktop_explorer(opts)
 		return a.name:lower() < b.name:lower()
 	end)
 
-	pickers.new({
-		prompt_title = " 📁 Explorer: " .. curr_dir .. " ",
-		results_title = " Files / Folders | [f / Ctrl+F]=Favorite | Press [?] for help ",
+	return entries
+end
+
+--- Sort key keeping the parent entry, then favorites, then folders on top even
+--- while the user filters.
+--- @param entry table Listing entry.
+--- @return string ordinal
+local function entry_ordinal(entry)
+	return (entry.is_parent and "00_" or "01_")
+		.. (entry.is_favorite and "0_" or "1_")
+		.. (entry.is_dir and "0_" or "1_")
+		.. entry.name
+end
+
+--- Builds the picker options both pickers share.
+--- @param opts table `{ prompt_title, results_title, entries, attach_mappings }`
+--- @return table picker_opts
+local function picker_options(opts)
+	local finders = require("telescope.finders")
+	local conf = require("telescope.config").values
+
+	return {
+		prompt_title = opts.prompt_title,
+		results_title = opts.results_title,
 		finder = finders.new_table({
-			results = entries,
+			results = opts.entries,
 			entry_maker = function(entry)
-				local parent_prefix = entry.is_parent and "00_" or "01_"
-				local fav_prefix = entry.is_favorite and "0_" or "1_"
-				local dir_prefix = entry.is_dir and "0_" or "1_"
-				return {
-					value = entry,
-					display = entry.display,
-					ordinal = parent_prefix .. fav_prefix .. dir_prefix .. entry.name,
-				}
+				return { value = entry, display = entry.display, ordinal = entry_ordinal(entry) }
 			end,
 		}),
 		sorter = conf.generic_sorter({}),
 		layout_strategy = "horizontal",
-		layout_config = {
-			width = 0.85,
-			height = 0.80,
-			prompt_position = "top",
-		},
+		layout_config = M.settings.layout,
+		attach_mappings = opts.attach_mappings,
+	}
+end
+
+-- ============================================================================
+-- EXPLORER
+-- ============================================================================
+
+--- Directory the explorer opens in when the caller does not name one.
+--- @return string dir
+local function default_start_dir()
+	if vim.bo.filetype == "alpha" then
+		return M.get_desktop_path()
+	end
+
+	local cwd = vim.fn.getcwd()
+	if cwd == "" or not path.is_dir(cwd) then
+		return M.get_desktop_path()
+	end
+	if not path.equals(cwd, vim.fn.expand("~")) then
+		return cwd
+	end
+
+	-- Sitting in the bare home directory: only stay if a real file is open.
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		local ft = vim.bo[buf].filetype
+		local named = vim.api.nvim_buf_get_name(buf) ~= ""
+		if vim.fn.buflisted(buf) == 1 and named and ft ~= "alpha" and ft ~= "neo-tree" then
+			return cwd
+		end
+	end
+	return M.get_desktop_path()
+end
+
+--- Makes a directory the active project: clears buffers, changes the working
+--- directory, records it as recent, and reopens neo-tree there.
+--- @param target string Directory to adopt.
+local function set_project_root(target)
+	pcall(vim.cmd, "Neotree close")
+	pcall(vim.cmd, "only")
+
+	vim.cmd("enew")
+	local new_buf = vim.api.nvim_get_current_buf()
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if buf ~= new_buf and vim.api.nvim_buf_is_valid(buf) then
+			pcall(vim.api.nvim_buf_delete, buf, { force = true })
+		end
+	end
+
+	pcall(vim.api.nvim_set_current_dir, target)
+
+	local history_ok, history = pcall(require, "project_nvim.utils.history")
+	if history_ok and history.recent_projects then
+		table.insert(history.recent_projects, target)
+		pcall(history.write_projects_to_history)
+	end
+	pcall(function()
+		require("plugins.krs.wsl").add_recent_project(target)
+	end)
+
+	pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target))
+	vim.notify("📁 Project root changed to:\n" .. target, vim.log.levels.INFO, { title = "Active Project" })
+end
+
+--- Opens the file explorer.
+--- @param opts table|nil `{ path = string }` Directory to open.
+function M.open_desktop_explorer(opts)
+	opts = opts or {}
+
+	local pickers = require("telescope.pickers")
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
+
+	local curr_dir = resolve_dir(
+		(opts.path and opts.path ~= "") and opts.path or default_start_dir(),
+		M.get_desktop_path()
+	)
+	local entries = list_directory(curr_dir, load_favorites())
+
+	pickers.new(picker_options({
+		prompt_title = " 📁 Explorer: " .. curr_dir .. " ",
+		results_title = " Files / Folders | [f / Ctrl+F]=Favorite | Press [?] for help ",
+		entries = entries,
 		attach_mappings = function(prompt_bufnr, map)
-			actions.select_default:replace(function()
+			--- Selection under the cursor, or nil. `skip_parent` filters out `../`
+			--- for actions that must not touch the parent directory.
+			local function selected(skip_parent)
 				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value then
+				local value = selection and selection.value or nil
+				if value and skip_parent and value.is_parent then
+					return nil
+				end
+				return value
+			end
+
+			--- Closes the picker, then reopens the explorer on `dir`.
+			local function reopen(dir)
+				vim.schedule(function()
+					M.open_desktop_explorer({ path = dir or curr_dir })
+				end)
+			end
+
+			--- Binds one action to several key/mode pairs.
+			local function map_all(bindings, fn)
+				for _, binding in ipairs(bindings) do
+					map(binding[1], binding[2], fn)
+				end
+			end
+
+			actions.select_default:replace(function()
+				local item = selected()
+				if not item then
 					return
 				end
-				local item = selection.value
+				actions.close(prompt_bufnr)
 				if item.is_dir then
-					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_desktop_explorer({ path = item.path })
-					end)
+					reopen(item.path)
 				else
-					actions.close(prompt_bufnr)
 					vim.cmd("edit " .. vim.fn.fnameescape(item.path))
 				end
 			end)
 
-			local set_project_cwd = function()
-				local selection = action_state.get_selected_entry()
-				local target = curr_dir
-				if selection and selection.value and selection.value.is_dir then
-					target = selection.value.path
-				end
+			map_all({ { "i", "<C-o>" }, { "n", "<C-o>" }, { "n", "o" }, { "n", "O" } }, function()
+				local item = selected()
+				local target = (item and item.is_dir) and item.path or curr_dir
 				actions.close(prompt_bufnr)
+				set_project_root(target)
+			end)
 
-				pcall(vim.cmd, "Neotree close")
-				pcall(vim.cmd, "only")
-
-				vim.cmd("enew")
-				local new_buf = vim.api.nvim_get_current_buf()
-
-				for _, b in ipairs(vim.api.nvim_list_bufs()) do
-					if b ~= new_buf and vim.api.nvim_buf_is_valid(b) then
-						pcall(vim.api.nvim_buf_delete, b, { force = true })
-					end
-				end
-
-				pcall(vim.api.nvim_set_current_dir, target)
-
-				local history_ok, history = pcall(require, "project_nvim.utils.history")
-				if history_ok and history.recent_projects then
-					table.insert(history.recent_projects, target)
-					pcall(history.write_projects_to_history)
-				end
-				pcall(function()
-					require("plugins.krs.wsl").add_recent_project(target)
-				end)
-
-				pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(target))
-				vim.notify("📁 Project root changed to:\n" .. target, vim.log.levels.INFO, { title = "Active Project" })
-			end
-			map("i", "<C-o>", set_project_cwd)
-			map("n", "<C-o>", set_project_cwd)
-			map("n", "o", set_project_cwd)
-			map("n", "O", set_project_cwd)
-
-			local create_item = function()
+			map_all({ { "n", "a" }, { "i", "<C-a>" } }, function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Create new (add '/' at end for folder): " }, function(name)
 						if not name or name == "" then
 							return
 						end
-						local full_path = curr_dir .. "/" .. name
+						local full_path = path.join(curr_dir, name)
 						if name:sub(-1) == "/" or name:sub(-1) == "\\" then
 							vim.fn.mkdir(full_path, "p")
 							vim.notify("📁 Folder created: " .. name, vim.log.levels.INFO)
 						else
-							local f = io.open(full_path, "w")
-							if f then
-								f:close()
+							local file = io.open(full_path, "w")
+							if file then
+								file:close()
 								vim.notify("📄 File created: " .. name, vim.log.levels.INFO)
 							end
 						end
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
-			end
-			map("n", "a", create_item)
-			map("i", "<C-a>", create_item)
+			end)
 
-			local rename_item = function()
-				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value or selection.value.is_parent then
+			map("n", "r", function()
+				local item = selected(true)
+				if not item then
 					return
 				end
-				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Rename to: ", default = item.name }, function(new_name)
 						if not new_name or new_name == "" or new_name == item.name then
 							return
 						end
-						local new_path = curr_dir .. "/" .. new_name
-						os.rename(item.path, new_path)
+						os.rename(item.path, path.join(curr_dir, new_name))
 						vim.notify("✏️ Renamed to: " .. new_name, vim.log.levels.INFO)
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
-			end
-			map("n", "r", rename_item)
+			end)
 
-			local delete_item = function()
-				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value or selection.value.is_parent then
+			map("n", "d", function()
+				local item = selected(true)
+				if not item then
 					return
 				end
-				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Delete '" .. item.name .. "'? (y/n): " }, function(confirm)
@@ -316,293 +388,190 @@ function M.open_desktop_explorer(opts)
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
-			end
-			map("n", "d", delete_item)
+			end)
 
-			local copy_item = function()
-				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value or selection.value.is_parent then
+			map("n", "c", function()
+				local item = selected(true)
+				if not item then
 					return
 				end
-				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Copy '" .. item.name .. "' to: ", default = item.name }, function(new_name)
 						if not new_name or new_name == "" or new_name == item.name then
 							return
 						end
-						local dest_path = curr_dir .. "/" .. new_name
+						local dest = path.join(curr_dir, new_name)
+
 						if item.is_dir then
+							-- No portable recursive copy in Lua; shell out per platform.
 							if vim.fn.has("win32") == 1 then
-								local win_src = item.path:gsub("/", "\\")
-								local win_dst = dest_path:gsub("/", "\\")
-								vim.fn.system({ "xcopy", win_src, win_dst, "/E", "/I", "/H", "/Y" })
+								vim.fn.system({
+									"xcopy",
+									item.path:gsub("/", "\\"),
+									dest:gsub("/", "\\"),
+									"/E", "/I", "/H", "/Y",
+								})
 							else
-								vim.fn.system({ "cp", "-r", item.path, dest_path })
+								vim.fn.system({ "cp", "-r", item.path, dest })
 							end
 							vim.notify("📋 Copied folder to: " .. new_name, vim.log.levels.INFO)
 						else
-							local success, err = vim.uv.fs_copyfile(item.path, dest_path)
-							if success then
-								vim.notify("📋 Copied file to: " .. new_name, vim.log.levels.INFO)
-							else
-								vim.notify("Error copying file: " .. tostring(err), vim.log.levels.ERROR)
-							end
+							local ok, err = vim.uv.fs_copyfile(item.path, dest)
+							vim.notify(
+								ok and ("📋 Copied file to: " .. new_name) or ("Error copying file: " .. tostring(err)),
+								ok and vim.log.levels.INFO or vim.log.levels.ERROR
+							)
 						end
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
-			end
-			map("n", "c", copy_item)
+			end)
 
-			local move_item = function()
-				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value or selection.value.is_parent then
+			map("n", "m", function()
+				local item = selected(true)
+				if not item then
 					return
 				end
-				local item = selection.value
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
-					M.open_move_picker({
-						source_path = item.path,
-						root_dir = curr_dir,
-					})
+					M.open_move_picker({ source_path = item.path, root_dir = curr_dir })
 				end)
-			end
-			map("n", "m", move_item)
+			end)
 
-			local toggle_favorite = function()
-				local selection = action_state.get_selected_entry()
-				local target_path = nil
-				local target_name = nil
-
-				if selection and selection.value and not selection.value.is_parent then
-					target_path = selection.value.path
-					target_name = selection.value.name
-				else
-					target_path = curr_dir
-					target_name = vim.fn.fnamemodify(curr_dir, ":t")
-				end
-
-				if not target_path or target_path == "" then
+			map_all({ { "i", "<C-f>" }, { "n", "<C-f>" }, { "n", "f" } }, function()
+				-- With `../` selected (or nothing), favorite the directory itself.
+				local item = selected(true)
+				local target_path = item and item.path or curr_dir
+				local target_name = item and item.name or vim.fn.fnamemodify(curr_dir, ":t")
+				if target_path == "" then
 					return
 				end
 
-				local norm = normalize_path(target_path)
-				local current_favs = load_favorites()
-
-				if current_favs[norm] then
-					current_favs[norm] = nil
-					vim.notify("Removed from favorites: " .. target_name, vim.log.levels.INFO, { title = "Explorer Favorites" })
-				else
-					current_favs[norm] = true
-					if vim.fn.isdirectory(target_path) == 1 then
-						local history_ok, history = pcall(require, "project_nvim.utils.history")
-						if history_ok and history.recent_projects then
-							local exists = false
-							for _, p in ipairs(history.recent_projects) do
-								if normalize_path(p) == norm then
-									exists = true
-									break
-								end
-							end
-							if not exists then
-								table.insert(history.recent_projects, target_path)
-								pcall(history.write_projects_to_history)
-							end
-						end
+				if favorites.toggle(target_path) then
+					if path.is_dir(target_path) then
+						remember_recent_project(target_path)
 					end
 					vim.notify("⭐ Saved as favorite: " .. target_name, vim.log.levels.INFO, { title = "Explorer Favorites" })
+				else
+					vim.notify("Removed from favorites: " .. target_name, vim.log.levels.INFO, { title = "Explorer Favorites" })
 				end
 
-				save_favorites(current_favs)
-
 				actions.close(prompt_bufnr)
-				vim.schedule(function()
-					M.open_desktop_explorer({ path = curr_dir })
-				end)
-			end
-			map("i", "<C-f>", toggle_favorite)
-			map("n", "<C-f>", toggle_favorite)
-			map("n", "f", toggle_favorite)
+				reopen()
+			end)
 
-			local close_explorer = function()
-				actions.close(prompt_bufnr)
-			end
-			map("n", "q", close_explorer)
-
-			local go_parent = function()
+			local function go_parent()
 				local parent = vim.fn.fnamemodify(curr_dir, ":h")
 				if parent and parent ~= curr_dir then
 					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_desktop_explorer({ path = parent })
-					end)
+					reopen(parent)
 				end
 			end
-			map("n", "h", go_parent)
-			map("n", "<BS>", go_parent)
-			map("n", "<Left>", go_parent)
-			map("n", "u", go_parent)
+			map_all({ { "n", "h" }, { "n", "<BS>" }, { "n", "<Left>" }, { "n", "u" }, { "i", "<C-h>" } }, go_parent)
 
-			map("i", "<C-h>", go_parent)
+			-- In insert mode <BS> only navigates when the filter is empty; otherwise
+			-- it has to keep deleting characters.
 			map("i", "<BS>", function()
-				local line = action_state.get_current_line()
-				if line == "" then
+				if action_state.get_current_line() == "" then
 					go_parent()
 				else
 					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<BS>", true, false, true), "n", false)
 				end
 			end)
 
-			local drill_in = function()
-				local selection = action_state.get_selected_entry()
-				if selection and selection.value and selection.value.is_dir then
+			map_all({ { "n", "l" }, { "n", "<Right>" } }, function()
+				local item = selected()
+				if item and item.is_dir then
 					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_desktop_explorer({ path = selection.value.path })
-					end)
+					reopen(item.path)
 				end
-			end
-			map("n", "l", drill_in)
-			map("n", "<Right>", drill_in)
+			end)
 
-			local show_help = function()
+			map_all({ { "n", "?" }, { "n", "<F1>" } }, function()
 				require("plugins.krs.context_help").show_help()
-			end
-			map("n", "?", show_help)
-			map("n", "<F1>", show_help)
+			end)
+
+			map("n", "q", function()
+				actions.close(prompt_bufnr)
+			end)
 
 			return true
 		end,
-	}):find()
+	})):find()
 end
 
+-- ============================================================================
+-- MOVE TARGET PICKER
+-- ============================================================================
+
+--- Navigates folders to pick a destination for `source_path`, confirmed with `O`.
+--- @param opts table `{ source_path = string, root_dir = string?, path = string? }`
 function M.open_move_picker(opts)
 	opts = opts or {}
+
 	local source_path = opts.source_path
 	if not source_path or source_path == "" then
 		vim.notify("No file selected to move", vim.log.levels.WARN, { title = "Move File" })
 		return
 	end
 
-	local source_name = vim.fn.fnamemodify(source_path, ":t")
 	local pickers = require("telescope.pickers")
-	local finders = require("telescope.finders")
-	local conf = require("telescope.config").values
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
 
+	local source_name = vim.fn.fnamemodify(source_path, ":t")
 	local root_dir = opts.root_dir or vim.fn.getcwd()
-	local curr_dir = opts.path or root_dir
-	curr_dir = vim.fn.fnamemodify(curr_dir, ":p"):gsub("[/\\]$", "")
+	local curr_dir = resolve_dir(opts.path or root_dir, root_dir)
 
-	if vim.fn.isdirectory(curr_dir) == 0 then
-		curr_dir = root_dir
-	end
-
-	local parent = vim.fn.fnamemodify(curr_dir, ":h")
-	local norm_parent = normalize_path(parent)
-	local norm_curr = normalize_path(curr_dir)
-	local has_parent = (norm_parent ~= "" and norm_parent ~= norm_curr)
-
-	local entries = {}
-
-	if has_parent then
-		table.insert(entries, {
-			name = "../",
-			path = parent,
-			is_dir = true,
-			is_parent = true,
-			display = "📁 ../",
-		})
-	end
-
-	local handle = vim.uv.fs_scandir(curr_dir)
-	if handle then
-		while true do
-			local name, type = vim.uv.fs_scandir_next(handle)
-			if not name then
-				break
-			end
-			local full_path = curr_dir .. "/" .. name
-			local is_dir = (type == "directory")
-			local icon = is_dir and "📁 " or "📄 "
-
-			table.insert(entries, {
-				name = name,
-				path = full_path,
-				is_dir = is_dir,
-				display = icon .. name,
-			})
-		end
-	end
-
-	table.sort(entries, function(a, b)
-		if a.is_parent ~= b.is_parent then
-			return a.is_parent == true
-		end
-		if a.is_dir ~= b.is_dir then
-			return a.is_dir == true
-		end
-		return a.name:lower() < b.name:lower()
-	end)
-
-	pickers.new({
+	pickers.new(picker_options({
 		prompt_title = " 🚚 Move '" .. source_name .. "' ➜ Navigate & press [O] to confirm target folder ",
 		results_title = " Folders / Files | Press [O] to Move File Here | [l] Open Folder | [h] Parent ",
-		finder = finders.new_table({
-			results = entries,
-			entry_maker = function(entry)
-				local parent_prefix = entry.is_parent and "00_" or "01_"
-				local dir_prefix = entry.is_dir and "0_" or "1_"
-				return {
-					value = entry,
-					display = entry.display,
-					ordinal = parent_prefix .. dir_prefix .. entry.name,
-				}
-			end,
-		}),
-		sorter = conf.generic_sorter({}),
-		layout_strategy = "horizontal",
-		layout_config = {
-			width = 0.85,
-			height = 0.80,
-			prompt_position = "top",
-		},
+		entries = list_directory(curr_dir, nil),
 		attach_mappings = function(prompt_bufnr, map)
-			actions.select_default:replace(function()
+			--- Reopens this picker somewhere else, keeping the source file.
+			local function reopen(dir)
+				vim.schedule(function()
+					M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = dir })
+				end)
+			end
+
+			local function map_all(bindings, fn)
+				for _, binding in ipairs(bindings) do
+					map(binding[1], binding[2], fn)
+				end
+			end
+
+			local function selected_dir()
 				local selection = action_state.get_selected_entry()
-				if selection and selection.value and selection.value.is_dir then
+				local value = selection and selection.value or nil
+				return (value and value.is_dir) and value.path or nil
+			end
+
+			actions.select_default:replace(function()
+				local dir = selected_dir()
+				if dir then
 					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = selection.value.path })
-					end)
+					reopen(dir)
 				end
 			end)
 
-			local execute_move = function()
-				local selection = action_state.get_selected_entry()
-				local target_dir = curr_dir
-				if selection and selection.value and selection.value.is_dir then
-					target_dir = selection.value.path
-				end
-
+			map_all({ { "n", "O" }, { "n", "o" }, { "i", "<C-o>" } }, function()
+				local target_dir = selected_dir() or curr_dir
 				actions.close(prompt_bufnr)
 
-				local dest_path = target_dir .. "/" .. source_name
+				local dest_path = path.join(target_dir, source_name)
 				if source_path == dest_path then
 					vim.notify("File is already in this directory", vim.log.levels.WARN, { title = "Move File" })
 					return
 				end
-
-				if vim.fn.filereadable(dest_path) == 1 or vim.fn.isdirectory(dest_path) == 1 then
+				if path.is_file(dest_path) or path.is_dir(dest_path) then
 					vim.notify("Target file already exists: " .. dest_path, vim.log.levels.ERROR, { title = "Move File" })
 					return
 				end
 
-				local success, err = os.rename(source_path, dest_path)
-				if success then
+				local ok, err = os.rename(source_path, dest_path)
+				if ok then
 					vim.notify("🚚 Moved '" .. source_name .. "' to:\n" .. target_dir, vim.log.levels.INFO, { title = "Move File" })
 					pcall(function()
 						require("neo-tree.sources.manager").refresh("filesystem")
@@ -610,65 +579,54 @@ function M.open_move_picker(opts)
 				else
 					vim.notify("Error moving file: " .. tostring(err), vim.log.levels.ERROR, { title = "Move File" })
 				end
-			end
+			end)
 
-			map("n", "O", execute_move)
-			map("n", "o", execute_move)
-			map("i", "<C-o>", execute_move)
-
-			local create_item = function()
+			map_all({ { "n", "a" }, { "i", "<C-a>" } }, function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Create folder to move into (add '/' at end): " }, function(name)
 						if name and name ~= "" then
-							local full_path = curr_dir .. "/" .. name
-							vim.fn.mkdir(full_path, "p")
+							vim.fn.mkdir(path.join(curr_dir, name), "p")
 						end
 						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = curr_dir })
 					end)
 				end)
-			end
-			map("n", "a", create_item)
-			map("i", "<C-a>", create_item)
+			end)
 
-			local close_picker = function()
-				actions.close(prompt_bufnr)
-			end
-			map("n", "q", close_picker)
-
-			local go_parent = function()
+			map_all({ { "n", "h" }, { "n", "<BS>" }, { "n", "<Left>" }, { "n", "u" } }, function()
 				local parent = vim.fn.fnamemodify(curr_dir, ":h")
 				if parent and parent ~= curr_dir then
 					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = parent })
-					end)
+					reopen(parent)
 				end
-			end
-			map("n", "h", go_parent)
-			map("n", "<BS>", go_parent)
-			map("n", "<Left>", go_parent)
-			map("n", "u", go_parent)
+			end)
 
-			local drill_in = function()
-				local selection = action_state.get_selected_entry()
-				if selection and selection.value and selection.value.is_dir then
+			map_all({ { "n", "l" }, { "n", "<Right>" } }, function()
+				local dir = selected_dir()
+				if dir then
 					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_move_picker({ source_path = source_path, root_dir = root_dir, path = selection.value.path })
-					end)
+					reopen(dir)
 				end
-			end
-			map("n", "l", drill_in)
-			map("n", "<Right>", drill_in)
+			end)
+
+			map("n", "q", function()
+				actions.close(prompt_bufnr)
+			end)
 
 			return true
 		end,
-	}):find()
+	})):find()
 end
 
+-- ============================================================================
+-- WSL EXPLORER
+-- ============================================================================
+
+--- Opens the explorer inside a WSL distribution's filesystem, asking which one
+--- when several are installed.
 function M.open_wsl_explorer()
 	local wsl = require("plugins.krs.wsl")
+
 	if not wsl.available() then
 		vim.notify("WSL is not available on this system", vim.log.levels.WARN, { title = "WSL Explorer" })
 		return
@@ -682,7 +640,7 @@ function M.open_wsl_explorer()
 
 	local function open_distro(distro)
 		local root = wsl.distro_root(distro)
-		if vim.fn.isdirectory(root) == 0 then
+		if not path.is_dir(root) then
 			vim.notify("Could not reach WSL distro filesystem: " .. root, vim.log.levels.ERROR, { title = "WSL Explorer" })
 			return
 		end
@@ -700,29 +658,26 @@ function M.open_wsl_explorer()
 	end
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers `:TelescopeFileBrowserDesktop`, `:TelescopeFileBrowserWSL` and keys.
 function M.setup()
-	if vim.fn.exists(":TelescopeFileBrowserDesktop") == 0 then
-		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
-			M.open_desktop_explorer()
-		end, { desc = "Open Floating File Explorer (Desktop)" })
+	local commands = {
+		TelescopeFileBrowserDesktop = { M.open_desktop_explorer, "Open Floating File Explorer (Desktop)" },
+		TelescopeFileBrowserWSL = { M.open_wsl_explorer, "Open Floating File Explorer (WSL)" },
+	}
+	for name, spec in pairs(commands) do
+		if vim.fn.exists(":" .. name) == 0 then
+			vim.api.nvim_create_user_command(name, function()
+				spec[1]()
+			end, { desc = spec[2] })
+		end
 	end
 
-	if vim.fn.exists(":TelescopeFileBrowserWSL") == 0 then
-		vim.api.nvim_create_user_command("TelescopeFileBrowserWSL", function()
-			M.open_wsl_explorer()
-		end, { desc = "Open Floating File Explorer (WSL)" })
-	end
-
-	local modes = { "n", "i", "v", "t" }
-	for _, mode in ipairs(modes) do
-		vim.keymap.set(mode, "<C-S-f>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.open_desktop_explorer()
-		end, { noremap = true, silent = true, desc = "Open Floating File Explorer (Desktop)" })
-
-		vim.keymap.set(mode, "<C-S-F>", function()
+	for _, key in ipairs(M.settings.keys.open) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, function()
 			if vim.fn.mode() == "t" then
 				vim.cmd("stopinsert")
 			end
@@ -731,23 +686,19 @@ function M.setup()
 	end
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.FileExplorer = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_file_explorer",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-	},
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_file_explorer",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	dependencies = { "nvim-telescope/telescope.nvim" },
+	config = M.setup,
+}, { __index = M })

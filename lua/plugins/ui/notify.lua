@@ -1,8 +1,12 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Floating Toast Notifications (nvim-notify)
+-- PLUGIN: nvim-notify -- floating toast notifications.
 -- ============================================================================
--- Replaces native Neovim cmdline `:echo` notifications with floating toast windows
--- that appear in the top-right / top-left corner and auto-hide after 3 seconds.
+-- Replaces `vim.notify`, so every message in this config (task results, git
+-- output, launch errors) appears as a toast in the corner instead of a cmdline
+-- echo that scrolls away. Loaded eagerly and with high priority, because modules
+-- start notifying during startup.
+--
+-- Timing and size are the `opts` below; `timeout` is how long a toast stays.
 -- ============================================================================
 
 return {

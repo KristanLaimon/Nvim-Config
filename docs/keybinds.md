@@ -1,6 +1,6 @@
 # ⌨️ Keybinds
 
-Leader is `<Space>`. Global mappings live in `lua/config/keybinds.lua`; module-local ones are defined by the module itself.
+Leader is `<Space>`. Global mappings live in `lua/config/keymaps/` — one file per domain (`editor`, `search`, `lsp`, `debug`, `krs`) — while module-local ones are defined by the module itself, in its `M.settings.keys` block.
 
 Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focused, and `<C-S-p>` fuzzy-searches every registered command.
 

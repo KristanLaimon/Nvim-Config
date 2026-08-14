@@ -1,202 +1,302 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Modular Type Injector (Lua & TypeScript / JavaScript)
+-- KRS PLUGIN: Type Injector -- per-project type definitions for Lua and TS/JS.
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. Scans available type schemas from:
---      - /nvim/schemas-langs/lua/<schema_name>/
---      - /nvim/schemas-langs/typescript_javascript/<schema_name>/
--- 2. Integrates NPM Type Package Manager for TS/JS:
---      - Install @types packages directly from NPM
---      - Display version following from package.json
---      - Enable, Disable, Delete, and Version Update schemas
--- 3. Stores project-specific schema activations in .krsnvim/types.json (or .nvimkrs).
--- 4. Applies them per language:
---      - lua_ls  : Lua.workspace.library, live via didChangeConfiguration
---      - tsgo    : a single generated .krsnvim/types.d.ts holding /// <reference path>
--- 5. Offers an emergent Telescope popup menu.
--- 6. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   Turns bundles of type definitions ("schemas") on and off PER PROJECT, so a
+--   Love2D script gets Love types, a Neovim config gets vim types, and a plain
+--   Lua project gets neither.
+--
+--   Schemas live in `schemas-langs/<lang>/<schema>/` (both in this config and in
+--   `stdpath("data")`). For TS/JS they can also be installed straight from npm
+--   (`@types/...`) through the picker.
+--
+-- HOW EACH LANGUAGE IS WIRED
+--   lua_ls  `Lua.workspace.library` is rewritten and pushed live through
+--           `workspace/didChangeConfiguration`.
+--   tsgo    A single generated `.krsnvim/types.d.ts` holds one
+--           `/// <reference path>` per active schema, and `tsconfig.json` is
+--           patched to include it (tsgo ignores types outside the project).
+--
+-- COMMANDS
+--   :TypeInjector / :KrsTypes      Open the picker.
+--   :KrsGitignoreGenerated         Add the generated file to .gitignore.
+--
+-- PROJECT FILE -- `.krsnvim/types.json`
+--   { "lua": ["vim_nvim"], "typescript_javascript": ["node"] }
 -- ============================================================================
+
+local store = require("krs.core.store")
+local path = require("krs.core.path")
 
 local M = {}
 
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Per-project file, inside `.krsnvim/`.
+	config_file = "types.json",
+
+	--- Legacy single-file config at the project root.
+	legacy_project_file = ".nvimkrs",
+
+	--- Markers used to find the project root when no LSP client knows it.
+	root_markers = { "tsconfig.json", "jsconfig.json", "package.json", ".krsnvim", ".nvimkrs", ".git" },
+
+	--- Directory holding schema bundles, relative to `data` and `config`.
+	schemas_dir = "schemas-langs",
+
+	--- Generated TypeScript reference file, relative to the project root.
+	ref_file = ".krsnvim/types.d.ts",
+
+	--- Glob added to tsconfig `include` so the generated file is picked up.
+	include_glob = ".krsnvim/**/*.d.ts",
+
+	--- Notification title.
+	notify_title = "KRS Type Injector",
+
+	--- Supported languages. ADD A LANGUAGE HERE.
+	---   key        Folder under `schemas-langs/`, and key in types.json.
+	---   filetypes  Buffers that open this language's picker directly.
+	---   lsp        Client whose settings are refreshed after a change.
+	languages = {
+		{ key = "lua", label = "Lua", filetypes = { "lua" }, lsp = "lua_ls" },
+		{
+			key = "typescript_javascript",
+			label = "TypeScript / JavaScript",
+			filetypes = { "typescript", "javascript", "typescriptreact", "javascriptreact" },
+			lsp = "tsgo",
+		},
+	},
+}
+
+--- Kept as top-level fields: other modules and docs refer to them.
+M.REF_FILE = M.settings.ref_file
+M.INCLUDE_GLOB = M.settings.include_glob
+
+--- Placeholder row shown when a language has no schemas installed yet.
+local INSTALL_PLACEHOLDER = "__install_new__"
+
+--- Notification helper carrying the module's title.
+--- @param msg string
+--- @param level integer|nil Defaults to INFO.
+local function notify(msg, level)
+	vim.notify(msg, level or vim.log.levels.INFO, { title = M.settings.notify_title })
+end
+
+--- Empty activation table, one list per language.
+--- @return table
+local function empty_types()
+	local out = {}
+	for _, lang in ipairs(M.settings.languages) do
+		out[lang.key] = {}
+	end
+	return out
+end
+
+-- ============================================================================
+-- PROJECT RESOLUTION & PERSISTENCE
+-- ============================================================================
+
+--- Project root for a buffer.
+--- An attached lua_ls/tsgo client knows the real root, so it wins; otherwise walk
+--- up for a marker. The home directory is rejected: it is never a project.
+---
+--- @param bufnr integer|nil
+--- @return string root
 function M.get_project_root(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 
 	for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-		if (client.name == "tsgo" or client.name == "lua_ls") and client.root_dir then
-			return vim.fs.normalize(client.root_dir)
+		for _, lang in ipairs(M.settings.languages) do
+			if client.name == lang.lsp and client.root_dir then
+				return vim.fs.normalize(client.root_dir)
+			end
 		end
 	end
 
-	local dir = vim.api.nvim_buf_get_name(bufnr)
-	dir = dir ~= "" and vim.fs.dirname(dir) or vim.fn.getcwd()
-	dir = vim.fs.normalize(dir)
-
-	local root = vim.fs.root(dir, {
-		"tsconfig.json",
-		"jsconfig.json",
-		"package.json",
-		".krsnvim",
-		".nvimkrs",
-		".git",
-	})
+	local dir = vim.fs.normalize(path.buffer_dir(bufnr))
+	local root = vim.fs.root(dir, M.settings.root_markers)
 	local home = vim.fs.normalize(vim.env.USERPROFILE or vim.env.HOME or ""):lower()
+
 	if not root or vim.fs.normalize(root):lower() == home then
 		return dir
 	end
 	return vim.fs.normalize(root)
 end
 
+--- Path of the activation file for a project.
+--- Prefers `.krsnvim/types.json`, falls back to the legacy `.nvimkrs` file.
+---
+--- @param root string|nil Project root.
+--- @return string filepath
 function M.get_config_path(root)
-	root = root or M.get_project_root()
-	local norm_root = root:gsub("\\", "/")
-	local krs_dir = norm_root .. "/.krsnvim"
+	local norm_root = path.normalize(root or M.get_project_root())
+	local krs_file = path.join(norm_root, ".krsnvim", M.settings.config_file)
 
-	if vim.fn.isdirectory(krs_dir) == 1 then
-		return krs_dir .. "/types.json"
+	if path.is_dir(path.join(norm_root, ".krsnvim")) then
+		return krs_file
 	end
 
-	local nvimkrs_file = norm_root .. "/.nvimkrs"
-	if vim.fn.filereadable(nvimkrs_file) == 1 then
-		return nvimkrs_file
+	local legacy = path.join(norm_root, M.settings.legacy_project_file)
+	if path.is_file(legacy) then
+		return legacy
 	end
-
-	return krs_dir .. "/types.json"
+	return krs_file
 end
 
+--- Active schemas per language for a project.
+--- @param root string|nil Project root.
+--- @return table types `{ lua = {...}, typescript_javascript = {...} }`
 function M.load_project_types(root)
-	root = root or M.get_project_root()
-	local filepath = M.get_config_path(root)
-
-	if vim.fn.filereadable(filepath) == 0 then
-		return { lua = {}, typescript_javascript = {} }
+	local parsed = store.load(M.get_config_path(root or M.get_project_root()), nil)
+	if type(parsed) ~= "table" then
+		return empty_types()
 	end
 
-	local content = table.concat(vim.fn.readfile(filepath), "\n")
-	if content == "" then
-		return { lua = {}, typescript_javascript = {} }
-	end
-
-	local ok, parsed = pcall(vim.json.decode, content)
-	if not ok or type(parsed) ~= "table" then
-		return { lua = {}, typescript_javascript = {} }
-	end
-
-	if parsed.types and type(parsed.types) == "table" then
+	-- The legacy `.nvimkrs` file nests everything under a `types` key.
+	if type(parsed.types) == "table" then
 		parsed = parsed.types
 	end
 
-	local lua_types = (type(parsed.lua) == "table") and parsed.lua or {}
-	local ts_types = (type(parsed.typescript_javascript) == "table") and parsed.typescript_javascript or {}
-
-	return {
-		lua = lua_types,
-		typescript_javascript = ts_types,
-	}
+	local out = empty_types()
+	for _, lang in ipairs(M.settings.languages) do
+		if type(parsed[lang.key]) == "table" then
+			out[lang.key] = parsed[lang.key]
+		end
+	end
+	return out
 end
 
+--- Persists the activation table.
+--- Writing to the legacy file merges into it instead of replacing it, so the
+--- other settings it holds survive.
+---
+--- @param root string|nil Project root.
+--- @param data table Activation table.
 function M.save_project_types(root, data)
-	root = root or M.get_project_root()
-	local filepath = M.get_config_path(root)
-	local norm_filepath = filepath:gsub("\\", "/")
+	local filepath = M.get_config_path(root or M.get_project_root())
 
-	local parent_dir = vim.fs.dirname(norm_filepath)
-	if parent_dir and vim.fn.isdirectory(parent_dir) == 0 then
-		vim.fn.mkdir(parent_dir, "p")
-	end
-
-	if norm_filepath:sub(-8) == ".nvimkrs" and vim.fn.filereadable(norm_filepath) == 1 then
-		local content = table.concat(vim.fn.readfile(norm_filepath), "\n")
-		local ok, parsed = pcall(vim.json.decode, content)
-		if ok and type(parsed) == "table" then
-			parsed.types = data
-			local json_str = vim.json.encode(parsed)
-			vim.fn.writefile(vim.split(json_str, "\n"), norm_filepath)
+	if filepath:sub(-#M.settings.legacy_project_file) == M.settings.legacy_project_file and path.is_file(filepath) then
+		local existing = store.load(filepath, nil)
+		if type(existing) == "table" then
+			existing.types = data
+			store.save(filepath, existing)
 			return
 		end
 	end
 
-	local json_str = vim.json.encode(data)
-	vim.fn.writefile(vim.split(json_str, "\n"), norm_filepath)
+	store.save(filepath, data)
 end
 
+-- ============================================================================
+-- SCHEMA STORE
+-- ============================================================================
+
+--- Directories searched for a language's schemas: the writable data directory
+--- first (npm installs land there), then the ones shipped with this config.
+---
+--- @param lang string Language key.
+--- @return string[] roots
 function M.get_schema_roots(lang)
 	return {
-		vim.fs.normalize(vim.fn.stdpath("data") .. "/schemas-langs/" .. lang),
-		vim.fs.normalize(vim.fn.stdpath("config") .. "/schemas-langs/" .. lang),
+		vim.fs.normalize(path.join(vim.fn.stdpath("data"), M.settings.schemas_dir, lang)),
+		vim.fs.normalize(path.join(vim.fn.stdpath("config"), M.settings.schemas_dir, lang)),
 	}
 end
 
+--- Directory new schemas are installed into.
+--- @param lang string Language key.
+--- @return string dir
 function M.get_schemas_base_dir(lang)
 	return M.get_schema_roots(lang)[1]
 end
 
+--- Locates an installed schema.
+--- @param lang string Language key.
+--- @param schema_name string Schema folder name.
+--- @return string|nil dir
 function M.resolve_schema_dir(lang, schema_name)
 	for _, root in ipairs(M.get_schema_roots(lang)) do
-		local p = root .. "/" .. schema_name
-		if vim.fn.isdirectory(p) == 1 then
-			return p
+		local candidate = path.join(root, schema_name)
+		if path.is_dir(candidate) then
+			return candidate
 		end
 	end
 	return nil
 end
 
+--- Every schema installed for a language, sorted, without duplicates.
+--- @param lang string Language key.
+--- @return string[] names
 function M.scan_available_schemas(lang)
-	local seen = {}
-	local results = {}
+	local seen, results = {}, {}
+
 	for _, schemas_dir in ipairs(M.get_schema_roots(lang)) do
-		if vim.fn.isdirectory(schemas_dir) == 1 then
+		if path.is_dir(schemas_dir) then
 			for _, name in ipairs(vim.fn.readdir(schemas_dir)) do
-				if not seen[name] and vim.fn.isdirectory(schemas_dir .. "/" .. name) == 1 then
+				if not seen[name] and path.is_dir(path.join(schemas_dir, name)) then
 					seen[name] = true
 					table.insert(results, name)
 				end
 			end
 		end
 	end
+
 	table.sort(results)
 	return results
 end
 
+--- Version of an installed schema, read from its package.json.
+--- @param lang string Language key.
+--- @param schema_name string Schema folder name.
+--- @return string|nil version Prefixed with "v", or nil when unknown.
 function M.get_schema_version(lang, schema_name)
-	local schemas_dir = M.resolve_schema_dir(lang, schema_name)
-	if not schemas_dir then
+	local schema_dir = M.resolve_schema_dir(lang, schema_name)
+	if not schema_dir then
 		return nil
 	end
 
-	local paths_to_try = {
-		schemas_dir .. "/package.json",
-		schemas_dir .. "/node_modules/@types/" .. schema_name .. "/package.json",
+	local candidates = {
+		path.join(schema_dir, "package.json"),
+		path.join(schema_dir, "node_modules/@types", schema_name, "package.json"),
 	}
-
-	for _, p in ipairs(paths_to_try) do
-		if vim.fn.filereadable(p) == 1 then
-			local content = table.concat(vim.fn.readfile(p), "\n")
-			local ok, parsed = pcall(vim.json.decode, content)
-			if ok and parsed and parsed.version then
-				return "v" .. tostring(parsed.version)
-			end
+	for _, candidate in ipairs(candidates) do
+		local version = store.load(candidate, {}).version
+		if version then
+			return "v" .. tostring(version)
 		end
 	end
 	return nil
 end
 
-function M.get_active_lua_libraries(root)
-	local active = M.load_project_types(root).lua
-	local lib_paths = { vim.env.VIMRUNTIME }
+-- ============================================================================
+-- LUA WIRING
+-- ============================================================================
 
-	for _, name in ipairs(active) do
+--- Library paths lua_ls should load: the Neovim runtime plus every active schema.
+--- @param root string|nil Project root.
+--- @return string[] paths
+function M.get_active_lua_libraries(root)
+	local paths = { vim.env.VIMRUNTIME }
+	for _, name in ipairs(M.load_project_types(root).lua) do
 		local schema_path = M.resolve_schema_dir("lua", name)
 		if schema_path then
-			table.insert(lib_paths, schema_path)
+			table.insert(paths, schema_path)
 		end
 	end
-	return lib_paths
+	return paths
 end
 
-M.REF_FILE = ".krsnvim/types.d.ts"
-M.INCLUDE_GLOB = ".krsnvim/**/*.d.ts"
+-- ============================================================================
+-- TYPESCRIPT WIRING
+-- ============================================================================
 
+--- Adds `glob` to a tsconfig/jsconfig `include` array, whatever shape it has.
+--- @param cfg string Config file path.
+--- @param glob string Glob to add.
+--- @return boolean patched False when the file could not be handled.
 local function patch_include(cfg, glob)
 	local content = table.concat(vim.fn.readfile(cfg), "\n")
 	if content:find(glob, 1, true) then
@@ -209,8 +309,10 @@ local function patch_include(cfg, glob)
 	elseif content:find('"include"%s*:%s*%[') then
 		patched = content:gsub('("include"%s*:%s*%[)', '%1 "' .. glob .. '",', 1)
 	elseif content:find("^%s*{") then
+		-- No include at all: add one. With an explicit "files" list, adding "**/*"
+		-- would widen the project, so only the generated glob goes in.
 		local entries = content:find('"files"%s*:') and '"' .. glob .. '"' or '"**/*", "' .. glob .. '"'
-		patched = content:gsub("^(%s*{)", "%1\n\t\"include\": [" .. entries .. "],", 1)
+		patched = content:gsub("^(%s*{)", '%1\n\t"include": [' .. entries .. "],", 1)
 	else
 		return false
 	end
@@ -222,6 +324,9 @@ local function patch_include(cfg, glob)
 	return true
 end
 
+--- Makes sure the project has a tsconfig that includes the generated types,
+--- creating one when there is none.
+--- @param norm_root string Normalized project root.
 local function ensure_ts_project_config(norm_root)
 	local found = vim.fs.find({ "tsconfig.json", "jsconfig.json" }, {
 		path = norm_root,
@@ -229,80 +334,90 @@ local function ensure_ts_project_config(norm_root)
 		type = "file",
 		limit = 1,
 	})
-	local cfg = found[1]
 
-	if not cfg then
+	if not found[1] then
 		vim.fn.writefile({
 			"{",
 			'\t"compilerOptions": {',
 			'\t\t"allowJs": true',
 			"\t},",
-			'\t"include": ["**/*", "' .. M.INCLUDE_GLOB .. '"]',
+			'\t"include": ["**/*", "' .. M.settings.include_glob .. '"]',
 			"}",
-		}, norm_root .. "/tsconfig.json")
-		vim.notify(
-			"Created tsconfig.json -- tsgo ignores injected types without one.",
-			vim.log.levels.INFO,
-			{ title = "KRS Type Injector" }
-		)
+		}, path.join(norm_root, "tsconfig.json"))
+		notify("Created tsconfig.json -- tsgo ignores injected types without one.")
 		return
 	end
 
-	cfg = vim.fs.normalize(cfg)
-
+	local cfg = vim.fs.normalize(found[1])
 	local cfg_dir = vim.fs.dirname(cfg)
-	local glob = M.INCLUDE_GLOB
+
+	-- A config further up the tree needs the path from ITS directory down to us.
+	local glob = M.settings.include_glob
 	if cfg_dir:lower() ~= norm_root:lower() then
-		glob = norm_root:sub(#cfg_dir + 2) .. "/" .. M.INCLUDE_GLOB
+		glob = norm_root:sub(#cfg_dir + 2) .. "/" .. M.settings.include_glob
 	end
 
 	if not patch_include(cfg, glob) then
-		vim.notify(
+		notify(
 			'Add "' .. glob .. '" to "include" in ' .. cfg .. "\ninjected types stay inactive until then.",
-			vim.log.levels.WARN,
-			{ title = "KRS Type Injector" }
+			vim.log.levels.WARN
 		)
 	end
 end
 
+--- Declaration files contributed by the active schemas.
+--- An npm-installed schema exposes `node_modules/@types/<pkg>/index.d.ts`; a
+--- hand-written one exposes `index.d.ts`, or any `*.d.ts` it contains.
+---
+--- @param active_names string[] Active schema names.
+--- @return string[] files Sorted absolute paths.
 local function active_schema_entries(active_names)
 	local entries = {}
+
 	for _, name in ipairs(active_names) do
 		local schema_dir = M.resolve_schema_dir("typescript_javascript", name)
 		if schema_dir then
-			local types_dir = schema_dir .. "/node_modules/@types"
-			if vim.fn.isdirectory(types_dir) == 1 then
+			local types_dir = path.join(schema_dir, "node_modules/@types")
+			if path.is_dir(types_dir) then
 				for pkg, kind in vim.fs.dir(types_dir) do
-					local index = types_dir .. "/" .. pkg .. "/index.d.ts"
-					if kind == "directory" and vim.fn.filereadable(index) == 1 then
+					local index = path.join(types_dir, pkg, "index.d.ts")
+					if kind == "directory" and path.is_file(index) then
 						table.insert(entries, index)
 					end
 				end
 			else
-				local index = schema_dir .. "/index.d.ts"
-				if vim.fn.filereadable(index) == 1 then
+				local index = path.join(schema_dir, "index.d.ts")
+				if path.is_file(index) then
 					table.insert(entries, index)
 				else
-					for _, f in ipairs(vim.fn.glob(schema_dir .. "/*.d.ts", false, true)) do
-						table.insert(entries, vim.fs.normalize(f))
+					for _, file in ipairs(vim.fn.glob(schema_dir .. "/*.d.ts", false, true)) do
+						table.insert(entries, vim.fs.normalize(file))
 					end
 				end
 			end
 		end
 	end
+
 	table.sort(entries)
 	return entries
 end
 
+--- Rewrites `.krsnvim/types.d.ts` and tells tsgo the file changed.
+--- With no active schemas the file is deleted instead.
+---
+--- @param root string Project root.
+--- @param active_names string[]|nil Active TS/JS schema names.
 function M.sync_ts_type_links(root, active_names)
 	local norm_root = vim.fs.normalize(root)
-	local ref_file = norm_root .. "/" .. M.REF_FILE
+	local ref_file = path.join(norm_root, M.settings.ref_file)
 	local entries = active_schema_entries(active_names or {})
 
+	--- tsgo watches files rather than polling; `kind` is the LSP FileChangeType
+	--- (1 = created, 2 = changed, 3 = deleted).
 	local function notify_tsgo(kind, also_config)
 		local changes = { { uri = vim.uri_from_fname(ref_file), type = kind } }
 		if also_config then
-			table.insert(changes, { uri = vim.uri_from_fname(norm_root .. "/tsconfig.json"), type = 1 })
+			table.insert(changes, { uri = vim.uri_from_fname(path.join(norm_root, "tsconfig.json")), type = 1 })
 		end
 		for _, client in ipairs(vim.lsp.get_clients({ name = "tsgo" })) do
 			client:notify("workspace/didChangeWatchedFiles", { changes = changes })
@@ -310,208 +425,245 @@ function M.sync_ts_type_links(root, active_names)
 	end
 
 	if #entries == 0 then
-		if vim.fn.filereadable(ref_file) == 1 then
+		if path.is_file(ref_file) then
 			vim.fn.delete(ref_file)
 			notify_tsgo(3, false)
 		end
 		return
 	end
 
-	local had_config = vim.fn.filereadable(norm_root .. "/tsconfig.json") == 1
+	local had_config = path.is_file(path.join(norm_root, "tsconfig.json"))
 	ensure_ts_project_config(norm_root)
 
-	local ref_dir = vim.fs.dirname(ref_file)
-	if vim.fn.isdirectory(ref_dir) == 0 then
-		vim.fn.mkdir(ref_dir, "p")
-	end
+	path.ensure_dir(vim.fs.dirname(ref_file))
 
-	local ref_lines = { "// Auto-generated by KRS Type Injector -- do not edit." }
-	for _, path in ipairs(entries) do
-		table.insert(ref_lines, '/// <reference path="' .. path .. '" />')
+	local lines = { "// Auto-generated by KRS Type Injector -- do not edit." }
+	for _, entry in ipairs(entries) do
+		table.insert(lines, '/// <reference path="' .. entry .. '" />')
 	end
-	vim.fn.writefile(ref_lines, ref_file)
+	vim.fn.writefile(lines, ref_file)
 
 	notify_tsgo(1, not had_config)
 end
 
-function M.apply_lsp_settings(root, opts)
+--- Pushes the active schemas into the running language servers.
+--- @param root string|nil Project root.
+function M.apply_lsp_settings(root)
 	root = root or M.get_project_root()
-	opts = opts or {}
-	local active_data = M.load_project_types(root)
+	local active = M.load_project_types(root)
 
 	local lua_libs = M.get_active_lua_libraries(root)
-	local lua_clients = vim.lsp.get_clients({ name = "lua_ls" })
-	for _, client in ipairs(lua_clients) do
-		if client.config and client.config.settings and client.config.settings.Lua then
-			client.config.settings.Lua.workspace = client.config.settings.Lua.workspace or {}
-			client.config.settings.Lua.workspace.library = lua_libs
-			client.notify("workspace/didChangeConfiguration", { settings = client.config.settings })
+	for _, client in ipairs(vim.lsp.get_clients({ name = "lua_ls" })) do
+		local settings = client.config and client.config.settings
+		if settings and settings.Lua then
+			settings.Lua.workspace = settings.Lua.workspace or {}
+			settings.Lua.workspace.library = lua_libs
+			client.notify("workspace/didChangeConfiguration", { settings = settings })
 		end
 	end
-	M.sync_ts_type_links(root, active_data.typescript_javascript)
+
+	M.sync_ts_type_links(root, active.typescript_javascript)
 end
 
+-- ============================================================================
+-- NPM INSTALL
+-- ============================================================================
+
+--- Installs a TypeScript type package into the schema store.
+--- Accepts `node`, `@scope/pkg`, and either with an `@version` suffix. A bare
+--- name is resolved as `@types/<name>`; a scoped name is taken as-is.
+---
+--- @param input_pkg string Package specification.
+--- @param callback fun(ok: boolean, schema_folder: string)|nil
 function M.install_npm_types(input_pkg, callback)
 	if not input_pkg or input_pkg == "" then
 		return
 	end
 
-	local pkg_name = input_pkg:gsub("^%s+", ""):gsub("%s+$", "")
-	local target_ver = ""
-	
-	if pkg_name:find("@", 2) then
-		local at_idx = pkg_name:find("@", 2)
-		target_ver = pkg_name:sub(at_idx + 1)
-		pkg_name = pkg_name:sub(1, at_idx - 1)
+	local pkg_name = vim.trim(input_pkg)
+	local target_version = ""
+
+	-- Search from index 2, so a leading `@scope` is not read as a version.
+	local at_index = pkg_name:find("@", 2)
+	if at_index then
+		target_version = pkg_name:sub(at_index + 1)
+		pkg_name = pkg_name:sub(1, at_index - 1)
 	end
 
-	local full_npm_pkg = pkg_name
-	local schema_folder = pkg_name
-
-	if not pkg_name:find("^@") then
-		full_npm_pkg = "@types/" .. pkg_name
-		schema_folder = pkg_name
-	else
+	local npm_package, schema_folder
+	if pkg_name:find("^@") then
+		npm_package = pkg_name
 		schema_folder = pkg_name:gsub("^@", ""):gsub("/", "__")
+	else
+		npm_package = "@types/" .. pkg_name
+		schema_folder = pkg_name
+	end
+	if target_version ~= "" then
+		npm_package = npm_package .. "@" .. target_version
 	end
 
-	if target_ver ~= "" then
-		full_npm_pkg = full_npm_pkg .. "@" .. target_ver
+	local schema_dir = path.ensure_dir(path.join(M.get_schemas_base_dir("typescript_javascript"), schema_folder))
+
+	-- npm refuses to install into a directory with no manifest.
+	local pkg_json = path.join(schema_dir, "package.json")
+	if not path.is_file(pkg_json) then
+		store.save(pkg_json, { name = "krs-schema-" .. schema_folder, private = true })
 	end
 
-	local base_dir = M.get_schemas_base_dir("typescript_javascript")
-	local schema_dir = base_dir .. "/" .. schema_folder
+	notify("📦 Installing " .. npm_package .. " via npm...")
 
-	if vim.fn.isdirectory(schema_dir) == 0 then
-		vim.fn.mkdir(schema_dir, "p")
-	end
-
-	vim.notify("📦 Installing " .. full_npm_pkg .. " via npm...", vim.log.levels.INFO, { title = "KRS Type Injector" })
-
-	local pkg_json = schema_dir .. "/package.json"
-	if vim.fn.filereadable(pkg_json) == 0 then
-		vim.fn.writefile({ '{"name": "krs-schema-' .. schema_folder .. '", "private": true}' }, pkg_json)
-	end
-
-	local cmd = { "npm", "install", "--save-dev", full_npm_pkg }
-
-	vim.system(cmd, { cwd = schema_dir }, function(obj)
+	vim.system({ "npm", "install", "--save-dev", npm_package }, { cwd = schema_dir }, function(obj)
 		vim.schedule(function()
 			if obj.code == 0 then
-				vim.notify("✅ Installed " .. full_npm_pkg .. " successfully!", vim.log.levels.INFO, { title = "KRS Type Injector" })
-				if callback then
-					callback(true, schema_folder)
-				end
+				notify("✅ Installed " .. npm_package .. " successfully!")
 			else
-				vim.notify("❌ Failed to install " .. full_npm_pkg .. ":\n" .. (obj.stderr or ""), vim.log.levels.ERROR, { title = "KRS Type Injector" })
-				if callback then
-					callback(false, schema_folder)
-				end
+				notify("❌ Failed to install " .. npm_package .. ":\n" .. (obj.stderr or ""), vim.log.levels.ERROR)
+			end
+			if callback then
+				callback(obj.code == 0, schema_folder)
 			end
 		end)
 	end)
 end
 
-function M.open_menu()
-	local root = M.get_project_root()
-	local current_ft = vim.bo.filetype
-	local active_data = M.load_project_types(root)
+-- ============================================================================
+-- PICKER
+-- ============================================================================
 
+--- Language definition matching a filetype, or nil.
+--- @param filetype string
+--- @return table|nil language
+local function language_for_filetype(filetype)
+	for _, lang in ipairs(M.settings.languages) do
+		if vim.tbl_contains(lang.filetypes, filetype) then
+			return lang
+		end
+	end
+	return nil
+end
+
+--- Opens the schema picker for one language.
+--- @param lang table Entry from `M.settings.languages`.
+--- @param root string Project root.
+--- @param active_data table Activation table, mutated in place.
+local function open_schema_picker(lang, root, active_data)
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
 	local conf = require("telescope.config").values
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
 
-	local function open_schema_picker(lang_key, lang_label)
-		local available = M.scan_available_schemas(lang_key)
-		local active_set = {}
-		for _, name in ipairs(active_data[lang_key] or {}) do
-			active_set[name] = true
-		end
+	local active_set = {}
+	for _, name in ipairs(active_data[lang.key] or {}) do
+		active_set[name] = true
+	end
 
-		local items = {}
-		for _, name in ipairs(available) do
-			local is_active = active_set[name] == true
-			local ver = M.get_schema_version(lang_key, name)
-			local ver_tag = ver and (" (" .. ver .. ")") or ""
-			local display_name = (is_active and "✅ " or "⬜ ") .. name .. ver_tag
-			table.insert(items, {
-				name = name,
-				is_active = is_active,
-				display = display_name,
-				lang = lang_key,
-			})
-		end
+	local items = {}
+	for _, name in ipairs(M.scan_available_schemas(lang.key)) do
+		local version = M.get_schema_version(lang.key, name)
+		table.insert(items, {
+			name = name,
+			is_active = active_set[name] == true,
+			display = (active_set[name] and "✅ " or "⬜ ") .. name .. (version and (" (" .. version .. ")") or ""),
+		})
+	end
 
-		if #items == 0 and lang_key == "typescript_javascript" then
-			table.insert(items, {
-				name = "__install_new__",
-				is_active = false,
-				display = "➕ [No schemas found] Press Ctrl+N to install from NPM",
-				lang = lang_key,
-			})
-		end
+	if #items == 0 and lang.key == "typescript_javascript" then
+		table.insert(items, {
+			name = INSTALL_PLACEHOLDER,
+			is_active = false,
+			display = "➕ [No schemas found] Press Ctrl+N to install from NPM",
+		})
+	end
 
-		pickers.new({
-			prompt_title = " 💉 Type Injector (" .. lang_label .. ") | Enter/Tab: Toggle | Ctrl+N: Install NPM | Ctrl+D: Delete ",
+	--- Persists a change and refreshes the language servers.
+	local function persist()
+		M.save_project_types(root, active_data)
+		M.apply_lsp_settings(root)
+	end
+
+	--- Removes a schema from the active list of this language.
+	local function deactivate(name)
+		local kept = {}
+		for _, existing in ipairs(active_data[lang.key]) do
+			if existing ~= name then
+				table.insert(kept, existing)
+			end
+		end
+		active_data[lang.key] = kept
+	end
+
+	--- Prompts for an npm package, installs it, and activates it.
+	local function install_flow(prompt)
+		vim.ui.input({ prompt = prompt }, function(pkg)
+			if not pkg or pkg == "" then
+				return
+			end
+			M.install_npm_types(pkg, function(ok, schema_folder)
+				if ok and not vim.tbl_contains(active_data.typescript_javascript, schema_folder) then
+					table.insert(active_data.typescript_javascript, schema_folder)
+					persist()
+				end
+				M.open_menu()
+			end)
+		end)
+	end
+
+	pickers
+		.new({
+			prompt_title = " 💉 Type Injector ("
+				.. lang.label
+				.. ") | Enter/Tab: Toggle | Ctrl+N: Install NPM | Ctrl+D: Delete ",
 			finder = finders.new_table({
 				results = items,
 				entry_maker = function(entry)
-					local active_prefix = entry.is_active and "0_" or "1_"
 					return {
 						value = entry,
 						display = entry.display,
-						ordinal = active_prefix .. entry.name,
+						-- Active schemas sort first.
+						ordinal = (entry.is_active and "0_" or "1_") .. entry.name,
 					}
 				end,
 			}),
 			sorter = conf.generic_sorter({}),
 			attach_mappings = function(prompt_bufnr, map)
-				local function toggle_selected()
+				--- Selected item, or nil.
+				local function selected()
 					local selection = action_state.get_selected_entry()
-					if not selection or not selection.value then
+					return selection and selection.value or nil
+				end
+
+				--- Binds one action to several key/mode pairs.
+				local function map_all(bindings, fn)
+					for _, binding in ipairs(bindings) do
+						map(binding[1], binding[2], fn)
+					end
+				end
+
+				local function toggle_selected()
+					local item = selected()
+					if not item then
 						return
 					end
-					local item = selection.value
 
-					if item.name == "__install_new__" then
+					if item.name == INSTALL_PLACEHOLDER then
 						actions.close(prompt_bufnr)
 						vim.schedule(function()
-							vim.ui.input({ prompt = "Enter NPM package name (e.g. node, express, react): " }, function(pkg)
-								if pkg and pkg ~= "" then
-									M.install_npm_types(pkg, function(ok, installed_schema)
-										if ok then
-											table.insert(active_data.typescript_javascript, installed_schema)
-											M.save_project_types(root, active_data)
-											M.apply_lsp_settings(root)
-										end
-										M.open_menu()
-									end)
-								end
-							end)
+							install_flow("Enter NPM package name (e.g. node, express, react): ")
 						end)
 						return
 					end
 
 					if item.is_active then
-						local new_list = {}
-						for _, n in ipairs(active_data[lang_key]) do
-							if n ~= item.name then
-								table.insert(new_list, n)
-							end
-						end
-						active_data[lang_key] = new_list
+						deactivate(item.name)
 					else
-						table.insert(active_data[lang_key], item.name)
+						table.insert(active_data[lang.key], item.name)
 					end
-
-					M.save_project_types(root, active_data)
-					M.apply_lsp_settings(root)
+					persist()
 
 					actions.close(prompt_bufnr)
 					vim.schedule(function()
-						open_schema_picker(lang_key, lang_label)
+						open_schema_picker(lang, root, active_data)
 					end)
 				end
 
@@ -519,107 +671,86 @@ function M.open_menu()
 				map("n", "<Space>", toggle_selected)
 				map({ "i", "n" }, "<Tab>", toggle_selected)
 
-				local function install_action()
+				map_all({ { "i", "<C-n>" }, { "n", "<C-n>" }, { "i", "<C-i>" }, { "n", "<C-i>" }, { "n", "i" } }, function()
 					actions.close(prompt_bufnr)
 					vim.schedule(function()
-						vim.ui.input({ prompt = "Enter NPM type package (e.g. node, express@18, react): " }, function(pkg)
-							if pkg and pkg ~= "" then
-								M.install_npm_types(pkg, function(ok, installed_schema)
-									if ok then
-										local exists = false
-										for _, n in ipairs(active_data.typescript_javascript) do
-											if n == installed_schema then
-												exists = true
-												break
-											end
-										end
-										if not exists then
-											table.insert(active_data.typescript_javascript, installed_schema)
-											M.save_project_types(root, active_data)
-											M.apply_lsp_settings(root)
-										end
-									end
-									M.open_menu()
-								end)
-							end
-						end)
+						install_flow("Enter NPM type package (e.g. node, express@18, react): ")
 					end)
-				end
+				end)
 
-				map({ "i", "n" }, "<C-n>", install_action)
-				map({ "i", "n" }, "<C-i>", install_action)
-				map("n", "i", install_action)
-
-				local function delete_action()
-					local selection = action_state.get_selected_entry()
-					if not selection or not selection.value then
-						return
-					end
-					local item = selection.value
-					if item.name == "__install_new__" then
+				map_all({ { "i", "<C-d>" }, { "n", "<C-d>" }, { "n", "d" } }, function()
+					local item = selected()
+					if not item or item.name == INSTALL_PLACEHOLDER then
 						return
 					end
 
 					actions.close(prompt_bufnr)
 					vim.schedule(function()
-						vim.ui.input({ prompt = "Delete schema '" .. item.name .. "' from store? (y/n): " }, function(ans)
-							if ans and ans:lower() == "y" then
-								local schema_dir = M.resolve_schema_dir(lang_key, item.name)
+						vim.ui.input({ prompt = "Delete schema '" .. item.name .. "' from store? (y/n): " }, function(answer)
+							if answer and answer:lower() == "y" then
+								local schema_dir = M.resolve_schema_dir(lang.key, item.name)
 								if schema_dir then
 									vim.fn.delete(schema_dir, "rf")
 								end
-
-								local new_list = {}
-								for _, n in ipairs(active_data[lang_key]) do
-									if n ~= item.name then
-										table.insert(new_list, n)
-									end
-								end
-								active_data[lang_key] = new_list
-								M.save_project_types(root, active_data)
-								M.apply_lsp_settings(root)
-								vim.notify("🗑️ Schema deleted: " .. item.name, vim.log.levels.INFO, { title = "KRS Type Injector" })
+								deactivate(item.name)
+								persist()
+								notify("🗑️ Schema deleted: " .. item.name)
 							end
-							open_schema_picker(lang_key, lang_label)
+							open_schema_picker(lang, root, active_data)
 						end)
 					end)
-				end
-
-				map({ "i", "n" }, "<C-d>", delete_action)
-				map("n", "d", delete_action)
+				end)
 
 				return true
 			end,
-		}):find()
-	end
-
-	if current_ft == "lua" then
-		open_schema_picker("lua", "Lua")
-	elseif current_ft == "typescript" or current_ft == "javascript" or current_ft == "typescriptreact" or current_ft == "javascriptreact" then
-		open_schema_picker("typescript_javascript", "TypeScript / JavaScript")
-	else
-		vim.ui.select({ "1. Lua", "2. TypeScript / JavaScript" }, { prompt = "Select Language for Type Injector:" }, function(choice)
-			if choice and choice:find("Lua") then
-				open_schema_picker("lua", "Lua")
-			elseif choice and choice:find("TypeScript") then
-				open_schema_picker("typescript_javascript", "TypeScript / JavaScript")
-			end
-		end)
-	end
+		})
+		:find()
 end
 
+--- Opens the type injector for the current buffer's language, asking which one
+--- when the buffer is neither Lua nor TS/JS.
+function M.open_menu()
+	local root = M.get_project_root()
+	local active_data = M.load_project_types(root)
+
+	local lang = language_for_filetype(vim.bo.filetype)
+	if lang then
+		open_schema_picker(lang, root, active_data)
+		return
+	end
+
+	local choices = {}
+	for index, entry in ipairs(M.settings.languages) do
+		table.insert(choices, index .. ". " .. entry.label)
+	end
+
+	vim.ui.select(choices, { prompt = "Select Language for Type Injector:" }, function(choice)
+		if not choice then
+			return
+		end
+		local index = tonumber(choice:match("^(%d+)%."))
+		if index and M.settings.languages[index] then
+			open_schema_picker(M.settings.languages[index], root, active_data)
+		end
+	end)
+end
+
+-- ============================================================================
+-- HOUSEKEEPING
+-- ============================================================================
+
+--- Adds the generated declaration file to the project's .gitignore.
+--- @param root string|nil Project root.
 function M.gitignore_generated(root)
-	root = root or M.get_project_root()
-	local norm_root = vim.fs.normalize(root):gsub("\\", "/")
-	local gitignore = norm_root .. "/.gitignore"
-	local entry = M.REF_FILE
+	local gitignore = path.join(path.normalize(vim.fs.normalize(root or M.get_project_root())), ".gitignore")
+	local entry = M.settings.ref_file
 
 	local lines = {}
-	if vim.fn.filereadable(gitignore) == 1 then
+	if path.is_file(gitignore) then
 		lines = vim.fn.readfile(gitignore)
-		for _, l in ipairs(lines) do
-			if vim.trim(l) == entry then
-				vim.notify(entry .. " ya está en .gitignore", vim.log.levels.INFO, { title = "KRS Type Injector" })
+		for _, line in ipairs(lines) do
+			if vim.trim(line) == entry then
+				notify(entry .. " is already in .gitignore")
 				return
 			end
 		end
@@ -627,48 +758,61 @@ function M.gitignore_generated(root)
 
 	table.insert(lines, entry)
 	vim.fn.writefile(lines, gitignore)
-	vim.notify("Agregado '" .. entry .. "' a .gitignore", vim.log.levels.INFO, { title = "KRS Type Injector" })
+	notify("Added '" .. entry .. "' to .gitignore")
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers the commands and re-applies the project's types whenever one of the
+--- supported language servers attaches.
 function M.setup()
-	vim.api.nvim_create_user_command("TypeInjector", function()
-		M.open_menu()
-	end, { desc = "Open KRS Modular Type Injector Menu" })
+	local commands = {
+		TypeInjector = { M.open_menu, "Open KRS Modular Type Injector Menu" },
+		KrsTypes = { M.open_menu, "Open KRS Modular Type Injector Menu" },
+		KrsGitignoreGenerated = {
+			function()
+				M.gitignore_generated()
+			end,
+			"Add .krsnvim/types.d.ts (auto-generated) to .gitignore",
+		},
+	}
+	for name, spec in pairs(commands) do
+		vim.api.nvim_create_user_command(name, function()
+			spec[1]()
+		end, { desc = spec[2] })
+	end
 
-	vim.api.nvim_create_user_command("KrsTypes", function()
-		M.open_menu()
-	end, { desc = "Open KRS Modular Type Injector Menu" })
-
-	vim.api.nvim_create_user_command("KrsGitignoreGenerated", function()
-		M.gitignore_generated()
-	end, { desc = "Add .krsnvim/types.d.ts (auto-generated) to .gitignore" })
-
-	local group = vim.api.nvim_create_augroup("KrsTypeInjectorGroup", { clear = true })
 	vim.api.nvim_create_autocmd("LspAttach", {
-		group = group,
+		group = vim.api.nvim_create_augroup("KrsTypeInjectorGroup", { clear = true }),
 		callback = function(args)
 			local client = vim.lsp.get_client_by_id(args.data.client_id)
-			if client and (client.name == "lua_ls" or client.name == "tsgo") then
-				M.apply_lsp_settings(M.get_project_root())
+			if not client then
+				return
+			end
+			for _, lang in ipairs(M.settings.languages) do
+				if client.name == lang.lsp then
+					M.apply_lsp_settings(M.get_project_root())
+					return
+				end
 			end
 		end,
 	})
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.TypeInjector = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_type_injector",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_type_injector",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

@@ -1,4 +1,4 @@
---- @module krsnvim.console
+--- @module "krsnvim.console"
 --- Human-readable Console Logging, Debugging, and JSON Pretty-Printing library for `krsnvimscript`.
 --- Provides `console.log`, `console.info`, `console.warn`, `console.error`, `console.dir`, `console.json`, and direct callable `console(...)`.
 ---

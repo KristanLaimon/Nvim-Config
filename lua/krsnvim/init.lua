@@ -1,4 +1,4 @@
---- @module krsnvim
+--- @module "krsnvim"
 --- Master Entry Point & Global `import()` helper for the `krsnvimscript` automation library suite.
 --- Exposes `json`, `yaml`, `toml`, `terminal`, `cli`, `fs`, `fetch`, `wiki`, and `tests`.
 ---

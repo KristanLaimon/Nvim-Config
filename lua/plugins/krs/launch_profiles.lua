@@ -1,97 +1,169 @@
---- @module plugins.krs.launch_profiles
---- Per-Project Launch Profiles Manager (`.krsnvim/launch.json`).
---- Controls project entry points, runtimes, args, env, pre-launch tasks, DAP debugger integration, and card picker UI.
----
---- @example
---- local lp = require("plugins.krs.launch_profiles")
---- lp.handle_smart_launch()
---- lp.open_management_menu()
+-- ============================================================================
+-- KRS PLUGIN: Launch Profiles -- per-project run/debug configurations.
+-- ============================================================================
+-- WHAT IT DOES
+--   Stores named launch configurations in `.krsnvim/launch.json` and runs them
+--   either as a terminal task or through nvim-dap, after any pre-launch tasks.
+--
+-- KEYBINDS (see M.settings.keys)
+--   <C-S-s>  Smart launch: stop a running debug session, else run the default
+--            profile, else open the management UI.
+--   <C-S-q>  Management UI (run / edit / rename / delete / favorite).
+--
+-- PROJECT FILE -- `.krsnvim/launch.json`
+--   {
+--     "profiles": [{
+--       "id": "profile-1712345678",     // unique, generated on creation
+--       "name": "Run API",
+--       "runtime": "bun",               // see krs.launch.runtimes for the list
+--       "entry_point": "src/index.ts",  // relative to the project root
+--       "args": ["--watch"],
+--       "env": { "NODE_ENV": "development" },
+--       "pre_launch_tasks": ["npm run build"],
+--       "mode": "run",                  // "run" = terminal, "debug" = DAP
+--       "is_default": true,             // only one profile may be the default
+--       "auto_build": false             // dotnet only: build before launching
+--     }]
+--   }
+--
+-- STRUCTURE
+--   krs.launch.runtimes  Runtime table: how to run and how to debug. ADD LANGUAGES THERE.
+--   this file            Persistence, the profile form, the picker, keymaps.
+--
+-- COLLABORATORS
+--   plugins.krs.tasks        Runs pre-launch tasks and terminal launches.
+--   plugins.krs.input_modal  Single-field prompts used by the form.
+--   telescope / dap          Picker UI and debug sessions.
+-- ============================================================================
+
+local store = require("krs.core.store")
+local project = require("krs.core.project")
+local path = require("krs.core.path")
+local ui = require("krs.core.ui")
+local runtimes = require("krs.launch.runtimes")
+
 local M = {}
 
-local RUNTIMES = { "bun", "node", "deno", "python", "go", "php", "dotnet", "krsnvimscript", "krsnvimtranspiler", "custom" }
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
 
---- Resolves the current project root directory.
---- @return string root Absolute path to project root.
+M.settings = {
+	--- Per-project file name, resolved inside `.krsnvim/` (see krs.core.project).
+	config_file = "launch.json",
+
+	--- Notification titles, kept distinct so debugger errors are recognizable.
+	notify_title = "Launch Profiles",
+	debug_notify_title = "Launch Profiles Debugger",
+
+	--- Profile form geometry, in cells.
+	form_width = 78,
+	form_height = 18,
+
+	--- Fields in the profile form, in display order. `edit` names the behaviour:
+	---   "text"   -> prompt through input_modal
+	---   "cycle"  -> step through krs.launch.runtimes.order
+	---   "toggle" -> flip a boolean
+	---   "list"   -> prompt, then split on `separator`
+	--- ADD A PROFILE FIELD HERE and in `M.new_profile` -- the form renders itself.
+	form_fields = {
+		{ key = "name", label = "Profile Name", edit = "text" },
+		{ key = "runtime", label = "Runtime", edit = "cycle" },
+		{ key = "entry_point", label = "Entry Point File", edit = "text", prompt = "Entry Point File (relative path)" },
+		{ key = "args", label = "Command Args", edit = "list", separator = "%S+", join = " ", prompt = "Command Arguments (space separated)" },
+		{ key = "pre_launch_tasks", label = "Pre-launch Tasks", edit = "list", separator = "[^,]+", join = ", ", prompt = "Pre-launch Tasks (comma separated)" },
+		{ key = "mode", label = "Execution Mode", edit = "swap", values = { "run", "debug" } },
+		{ key = "is_default", label = "Primary Default", edit = "toggle" },
+		{ key = "auto_build", label = "Auto Build", edit = "toggle" },
+	},
+
+	keys = {
+		--- Smart launch, bound in normal, insert, visual and terminal mode.
+		smart_launch = { "<C-S-s>", "<C-S-S>" },
+		--- Open the management picker.
+		manage = { "<C-S-q>", "<C-S-Q>" },
+	},
+}
+
+--- Fresh profile used by the creation form.
+--- @param root string Project root, used for the default name.
+--- @return table profile
+function M.new_profile(root)
+	return {
+		id = "profile-" .. os.time(),
+		name = "Run " .. vim.fn.fnamemodify(root, ":t"),
+		runtime = "bun",
+		entry_point = "src/index.ts",
+		args = {},
+		env = {},
+		pre_launch_tasks = {},
+		mode = "run",
+		is_default = false,
+		auto_build = false,
+	}
+end
+
+--- Notification helper carrying the module's title.
+--- @param msg string
+--- @param level integer|nil Defaults to INFO.
+--- @param title string|nil Defaults to `M.settings.notify_title`.
+local function notify(msg, level, title)
+	vim.notify(msg, level or vim.log.levels.INFO, { title = title or M.settings.notify_title })
+end
+
+-- ============================================================================
+-- PERSISTENCE
+-- ============================================================================
+
+--- Project root for the current buffer, shared with the task runner so both
+--- agree on what "this project" means.
+--- @return string root
 function M.get_project_root()
-	local ok, tasks_mod = pcall(require, "plugins.krs.tasks")
-	if ok and tasks_mod.get_project_root then
-		return tasks_mod.get_project_root()
+	local ok, tasks = pcall(require, "plugins.krs.tasks")
+	if ok and tasks.get_project_root then
+		return tasks.get_project_root()
 	end
-	local current = vim.fn.expand("%:p:h")
-	if current == "" then
-		current = vim.fn.getcwd()
-	end
-	return current
+	return project.root()
 end
 
---- Resolves the file path for `launch.json` (`.krsnvim/launch.json`, `.krslocal/launch.json`, `.nvimkrs/launch.json`).
---- @param root string|nil Optional root directory.
---- @return string filepath Path to launch.json.
+--- Resolves `launch.json` for a project (`.krsnvim`, then `.krslocal`, then
+--- `.nvimkrs`). Returns the `.krsnvim` path when the file does not exist yet.
+---
+--- @param root string|nil Project root.
+--- @return string filepath
 function M.get_launch_filepath(root)
-	root = root or M.get_project_root()
-	local norm_root = root:gsub("\\", "/")
-
-	local krsnvim_file = norm_root .. "/.krsnvim/launch.json"
-	if vim.fn.filereadable(krsnvim_file) == 1 then
-		return krsnvim_file
-	end
-
-	local krslocal_file = norm_root .. "/.krslocal/launch.json"
-	if vim.fn.filereadable(krslocal_file) == 1 then
-		return krslocal_file
-	end
-
-	local nvimkrs_file = norm_root .. "/.nvimkrs/launch.json"
-	if vim.fn.filereadable(nvimkrs_file) == 1 then
-		return nvimkrs_file
-	end
-
-	return krsnvim_file
+	return (project.config_path(M.settings.config_file, root or M.get_project_root()))
 end
 
---- Loads all launch profiles defined for the project.
---- @param root string|nil Optional root directory.
---- @return table data Table containing `profiles` array.
+--- Loads every profile defined for the project.
+--- @param root string|nil Project root.
+--- @return table data `{ profiles = {...} }`, always with a profiles array.
 function M.load_profiles(root)
-	local filepath = M.get_launch_filepath(root)
-	local f = io.open(filepath, "r")
-	if not f then
-		return { profiles = {} }
-	end
-	local content = f:read("*a")
-	f:close()
-	if not content or content == "" then
-		return { profiles = {} }
-	end
-	local ok, parsed = pcall(vim.json.decode, content)
-	if ok and type(parsed) == "table" then
-		parsed.profiles = parsed.profiles or {}
-		return parsed
-	end
-	return { profiles = {} }
+	local data = store.load(M.get_launch_filepath(root), { profiles = {} })
+	data.profiles = data.profiles or {}
+	return data
 end
 
+--- Writes the profile file back, creating its directory.
+--- @param root string|nil Project root.
+--- @param data table `{ profiles = {...} }`
 function M.save_profiles(root, data)
 	root = root or M.get_project_root()
 	local filepath = M.get_launch_filepath(root)
-	local dir = vim.fn.fnamemodify(filepath, ":h")
-	if vim.fn.isdirectory(dir) == 0 then
-		vim.fn.mkdir(dir, "p")
-	end
 
-	local content = vim.json.encode(data)
-	local f = io.open(filepath, "w")
-	if f then
-		f:write(content)
-		f:close()
-	else
-		vim.notify("Error writing " .. filepath, vim.log.levels.ERROR, { title = "Launch Profiles" })
+	local ok, err = store.save(filepath, data)
+	if not ok then
+		notify("Error writing " .. filepath .. ": " .. tostring(err), vim.log.levels.ERROR)
 	end
 end
 
+--- Makes one profile the single default, clearing the flag on the others.
+--- @param profile_id string Profile id.
+--- @param root string|nil Project root.
 function M.toggle_default(profile_id, root)
 	root = root or M.get_project_root()
 	local data = M.load_profiles(root)
+
 	local updated_name = ""
 	for _, p in ipairs(data.profiles) do
 		if p.id == profile_id then
@@ -101,36 +173,78 @@ function M.toggle_default(profile_id, root)
 			p.is_default = false
 		end
 	end
+
 	M.save_profiles(root, data)
-	vim.notify("⭐ Primary default profile set: " .. updated_name, vim.log.levels.INFO, { title = "Launch Profiles" })
+	notify("⭐ Primary default profile set: " .. updated_name)
 end
 
+--- Renames a profile in place.
+--- @param profile_id string Profile id.
+--- @param new_name string New display name.
+--- @param root string|nil Project root.
 function M.rename_profile(profile_id, new_name, root)
 	root = root or M.get_project_root()
 	local data = M.load_profiles(root)
-	local old_name = ""
-	local updated = false
+
 	for _, p in ipairs(data.profiles) do
 		if p.id == profile_id then
-			old_name = p.name
+			local old_name = p.name
 			p.name = new_name
-			updated = true
-			break
+			M.save_profiles(root, data)
+			notify("✏️ Profile renamed: " .. old_name .. " ➜ " .. new_name)
+			return
 		end
-	end
-	if updated then
-		M.save_profiles(root, data)
-		vim.notify("✏️ Profile renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, { title = "Launch Profiles" })
 	end
 end
 
+--- Finds a profile by id.
+--- @param data table Loaded profile data.
+--- @param profile_id string Profile id.
+--- @return table|nil profile
+local function find_profile(data, profile_id)
+	for _, p in ipairs(data.profiles or {}) do
+		if p.id == profile_id then
+			return p
+		end
+	end
+	return nil
+end
+
+-- ============================================================================
+-- RUNTIME BRIDGE -- thin wrappers over krs.launch.runtimes
+-- ============================================================================
+
+--- How to run a `.ts`/`.tsx` file under node. Also used by plugins/editor/dap.lua.
+--- @param root string Project root.
+--- @param entry string Entry point.
+--- @return table `{ exe = string, args = string[] }`
+function M.ts_runtime(root, entry)
+	return runtimes.ts_runtime(root, entry)
+end
+
+--- Maps a profile to a real DAP configuration.
+--- @param profile table Launch profile.
+--- @param root string Project root.
+--- @return table|nil config
+function M.build_dap_config(profile, root)
+	return runtimes.build_dap_config(profile, root)
+end
+
+-- ============================================================================
+-- EXECUTION
+-- ============================================================================
+
+--- Runs pre-launch tasks one at a time, stopping at the first failure.
+---
+--- @param tasks_list table[]|string[]|nil Commands or task tables.
+--- @param callback function(success: boolean) Called once, when the chain ends.
 function M.run_pre_launch_tasks(tasks_list, callback)
 	if not tasks_list or #tasks_list == 0 then
 		callback(true)
 		return
 	end
 
-	local tasks_mod = require("plugins.krs.tasks")
+	local tasks = require("plugins.krs.tasks")
 	local idx = 1
 
 	local function run_next()
@@ -139,197 +253,83 @@ function M.run_pre_launch_tasks(tasks_list, callback)
 			return
 		end
 
-		local task_item = tasks_list[idx]
-		local task_cmd = type(task_item) == "table" and (task_item.cmd or task_item.name) or tostring(task_item)
+		local item = tasks_list[idx]
+		local cmd = type(item) == "table" and (item.cmd or item.name) or tostring(item)
 
-		vim.notify("⚙️ Executing pre-launch task [" .. idx .. "/" .. #tasks_list .. "]: " .. task_cmd, vim.log.levels.INFO, { title = "Pre-Launch Tasks" })
+		notify(
+			"⚙️ Executing pre-launch task [" .. idx .. "/" .. #tasks_list .. "]: " .. cmd,
+			vim.log.levels.INFO,
+			"Pre-Launch Tasks"
+		)
 
-		tasks_mod.run_custom_command(task_cmd, nil, function(exit_code)
+		tasks.run_custom_command(cmd, nil, function(exit_code)
 			if exit_code ~= 0 then
-				vim.notify(
-					"❌ Pre-launch task failed with exit code " .. exit_code .. ": " .. task_cmd,
+				notify(
+					"❌ Pre-launch task failed with exit code " .. exit_code .. ": " .. cmd,
 					vim.log.levels.ERROR,
-					{ title = "Launch Profile Aborted" }
+					"Launch Profile Aborted"
 				)
 				callback(false)
-			else
-				idx = idx + 1
-				run_next()
+				return
 			end
+			idx = idx + 1
+			run_next()
 		end)
 	end
 
 	run_next()
 end
 
--- How to run a .ts/.tsx file under node. Shared with lua/plugins/editor/dap.lua.
-local node_major -- memoized, `node -v` costs ~50ms
-function M.ts_runtime(root, entry)
-	if not entry:match("%.[cm]?tsx?$") then
-		return { exe = "node", args = {} }
+--- Starts a debug session for a profile.
+--- @param profile table Launch profile.
+--- @param root string Project root.
+local function start_debug_session(profile, root)
+	local dap_ok, dap = pcall(require, "dap")
+	if not dap_ok then
+		notify("DAP is not installed", vim.log.levels.ERROR)
+		return
 	end
-	-- tsx first when the project has it: handles tsconfig paths, enums, decorators.
-	if vim.fn.isdirectory(root .. "/node_modules/tsx") == 1 then
-		return { exe = "node", args = { "--import", "tsx" } }
+
+	local config = M.build_dap_config(profile, root)
+	if not config then
+		return
 	end
-	if not node_major then
-		local major, minor = (vim.fn.system("node -v") or ""):match("v(%d+)%.(%d+)")
-		node_major = tonumber(major) and (tonumber(major) + tonumber(minor) / 1000) or 0
+
+	local args = profile.args or {}
+	if #args > 0 then
+		config.args = args
 	end
-	-- Node strips TypeScript types natively since 22.18 / 23.6.
-	if node_major >= 22.018 then
-		return { exe = "node", args = {} }
+
+	if not dap.adapters[config.type] then
+		local how = config.type == "bun" and ":KrsBunDapInstall, then restart nvim"
+			or ":Mason (or restart nvim to let mason-nvim-dap fetch it)"
+		notify(
+			"❌ Debug adapter '" .. config.type .. "' is not installed.\n  Install it with " .. how .. ".",
+			vim.log.levels.ERROR,
+			M.settings.debug_notify_title
+		)
+		return
 	end
-	local npx = vim.fn.exepath("npx")
-	return { exe = npx ~= "" and npx or "npx", args = { "tsx" } }
+
+	notify(
+		"🐞 Launching DAP Debugger for " .. (profile.name or profile.id) .. " (" .. (profile.runtime or "node") .. ")",
+		vim.log.levels.INFO,
+		M.settings.debug_notify_title
+	)
+	dap.run(config)
 end
 
--- Locate the built assembly for a .csproj (or a project directory) entry point.
-local function find_dotnet_dll(root, entry)
-	local full = (root .. "/" .. entry):gsub("\\", "/")
-	if entry:match("%.dll$") then
-		return full
-	end
-	local proj_dir = entry:match("%.csproj$") and vim.fn.fnamemodify(full, ":h") or full
-	local name = entry:match("([^/\\]+)%.csproj$") or vim.fn.fnamemodify(proj_dir, ":t")
-	local newest, newest_time = nil, -1
-	for _, dll in ipairs(vim.fn.glob(proj_dir .. "/bin/**/" .. name .. ".dll", false, true)) do
-		local t = vim.fn.getftime(dll)
-		if t > newest_time then
-			newest, newest_time = dll:gsub("\\", "/"), t
-		end
-	end
-	return newest
-end
-
--- Maps a profile runtime to a real DAP configuration.
--- Adapter names must match what mason-nvim-dap / dap-go register:
---   pwa-node (js-debug) | go (nvim-dap-go) | python (debugpy) | php (xdebug) | coreclr (netcoredbg)
-function M.build_dap_config(profile, root)
-	local runtime = profile.runtime or "node"
-	local entry = profile.entry_point or ""
-	local full_entry = (root .. "/" .. entry):gsub("\\", "/")
-	local is_ts = entry:match("%.[cm]?tsx?$") ~= nil
-
-	if runtime == "krsnvimscript" then
-		return {
-			type = "krsnvimscript",
-			request = "launch",
-			name = profile.name,
-			program = full_entry,
-			cwd = root,
-		}
-	elseif runtime == "go" then
-		return {
-			type = "go",
-			request = "launch",
-			name = profile.name,
-			mode = "debug",
-			program = full_entry,
-			cwd = root,
-		}
-	elseif runtime == "python" then
-		return {
-			type = "python",
-			request = "launch",
-			name = profile.name,
-			program = full_entry,
-			cwd = root,
-			console = "integratedTerminal",
-		}
-	elseif runtime == "php" then
-		-- Xdebug is a listener: nvim waits, the PHP process connects back to 9003.
-		return {
-			type = "php",
-			request = "launch",
-			name = profile.name,
-			port = 9003,
-			pathMappings = { ["/var/www/html"] = root },
-		}
-	elseif runtime == "dotnet" then
-		-- netcoredbg launches the built assembly, not the project. With auto_build the
-		-- `dotnet build` already ran as a pre-launch task, so the dll is on disk by now.
-		local dll = find_dotnet_dll(root, entry)
-		if not dll then
-			vim.notify(
-				"❌ No built DLL found for " .. entry .. ".\n  Enable Auto Build on the profile, or point the entry point at bin/Debug/<tfm>/App.dll.",
-				vim.log.levels.ERROR,
-				{ title = "Launch Profiles Debugger" }
-			)
-			return nil
-		end
-		return {
-			type = "coreclr",
-			request = "launch",
-			name = profile.name,
-			program = dll,
-			cwd = root,
-		}
-	end
-
-	if runtime == "bun" then
-		-- Bun's own adapter (WebKit inspector protocol). It spawns bun itself, so no
-		-- runtimeExecutable, and it runs .ts directly with no loader.
-		return {
-			type = "bun",
-			request = "launch",
-			name = profile.name,
-			program = full_entry,
-			cwd = root,
-			stopOnEntry = false,
-			watchMode = false,
-		}
-	end
-
-	-- Everything else goes through js-debug.
-	local cfg = {
-		type = "pwa-node",
-		request = "launch",
-		name = profile.name,
-		program = full_entry,
-		cwd = root,
-		-- Keeps the child process in a nvim terminal buffer instead of popping
-		-- external cmd.exe windows for .cmd shims on Windows.
-		console = "integratedTerminal",
-		sourceMaps = true,
-		-- Keeps js-debug out of node internals and the tsx loader; without it the
-		-- debugger stops there and nvim-dap lists those files as bufferline tabs.
-		skipFiles = { "<node_internals>/**", "**/node_modules/**" },
-	}
-
-	if runtime == "deno" then
-		cfg.runtimeExecutable = "deno"
-		cfg.runtimeArgs = { "run", "--inspect-wait", "--allow-all" }
-		cfg.attachSimplePort = 9229
-		return cfg
-	end
-
-	if is_ts then
-		local rt = M.ts_runtime(root, entry)
-		cfg.runtimeExecutable = rt.exe
-		cfg.runtimeArgs = #rt.args > 0 and rt.args or nil
-	end
-
-	return cfg
-end
-
+--- Runs a profile: pre-launch tasks first, then DAP or a terminal task.
+--- @param profile table|string Profile table, or a profile id to look up.
 function M.run_profile(profile)
 	if not profile then
 		return
 	end
 
 	if type(profile) == "string" then
-		local root = M.get_project_root()
-		local data = M.load_profiles(root)
-		local found = nil
-		for _, p in ipairs(data.profiles or {}) do
-			if p.id == profile then
-				found = p
-				break
-			end
-		end
+		local found = find_profile(M.load_profiles(M.get_project_root()), profile)
 		if not found then
-			vim.notify("❌ Profile not found: " .. profile, vim.log.levels.ERROR, { title = "Launch Profiles" })
+			notify("❌ Profile not found: " .. profile, vim.log.levels.ERROR)
 			return
 		end
 		profile = found
@@ -338,7 +338,7 @@ function M.run_profile(profile)
 	local profile_name = profile.name or profile.id or "Unnamed Profile"
 	local pre_tasks = vim.deepcopy(profile.pre_launch_tasks or {})
 
-	-- auto_build: reuse the pre-launch task runner instead of a second build pipeline.
+	-- auto_build reuses the pre-launch task runner instead of a second pipeline.
 	if profile.auto_build and (profile.runtime or "node") == "dotnet" then
 		local target = profile.entry_point or ""
 		if target:match("%.dll$") then
@@ -352,327 +352,294 @@ function M.run_profile(profile)
 			return
 		end
 
-		local runtime = profile.runtime or "node"
-		local entry = profile.entry_point or ""
-		local args = profile.args or {}
-		local args_str = type(args) == "table" and table.concat(args, " ") or tostring(args)
-		local env = profile.env or {}
+		local root = M.get_project_root()
+		local cmd, ctx = runtimes.build_command(profile, root)
 
-		local cmd = ""
-		if runtime == "bun" then
-			cmd = "bun " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "node" then
-			if entry:match("%.ts$") or entry:match("%.tsx$") then
-				cmd = "npx tsx " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-			else
-				cmd = "node " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-			end
-		elseif runtime == "deno" then
-			cmd = "deno run -A " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "python" then
-			cmd = "python " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "go" then
-			cmd = "go run " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "php" then
-			cmd = "php " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "dotnet" then
-			cmd = "dotnet run --project " .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "krsnvimscript" then
-			cmd = 'nvim --headless -c "lua require[[krsnvim]].setup_globals()" -l ' .. entry .. (args_str ~= "" and (" " .. args_str) or "")
-		elseif runtime == "krsnvimtranspiler" then
-			local transpiler = require("krsnvim").krsnvimtranspiler
-			local root = M.get_project_root()
-			local full_path = (root .. "/" .. entry):gsub("\\", "/")
-			if args_str == "sh" then
-				transpiler.export_sh(full_path)
-			elseif args_str == "ps1" then
-				transpiler.export_ps1(full_path)
-			else
-				transpiler.export_both(full_path)
-			end
+		-- A runtime that executes itself (the transpiler) never reaches DAP or a
+		-- terminal: it did its work while the command was being built.
+		if not cmd then
+			runtimes.get(profile.runtime).execute(ctx)
 			return
-		else
-			cmd = entry .. (args_str ~= "" and (" " .. args_str) or "")
 		end
 
 		if profile.mode == "debug" then
-			local dap_ok, dap = pcall(require, "dap")
-			if not dap_ok then
-				vim.notify("DAP is not installed", vim.log.levels.ERROR, { title = "Launch Profiles" })
-				return
-			end
-
-			local root = M.get_project_root()
-			local dap_config = M.build_dap_config(profile, root)
-			if not dap_config then
-				return
-			end
-			if args and #args > 0 then
-				dap_config.args = args
-			end
-
-			if not dap.adapters[dap_config.type] then
-				local how = dap_config.type == "bun" and ":KrsBunDapInstall, then restart nvim"
-					or ":Mason (or restart nvim to let mason-nvim-dap fetch it)"
-				vim.notify(
-					"❌ Debug adapter '" .. dap_config.type .. "' is not installed.\n  Install it with " .. how .. ".",
-					vim.log.levels.ERROR,
-					{ title = "Launch Profiles Debugger" }
-				)
-				return
-			end
-
-			vim.notify("🐞 Launching DAP Debugger for " .. profile_name .. " (" .. runtime .. ")", vim.log.levels.INFO, { title = "Launch Profiles Debugger" })
-			dap.run(dap_config)
-		else
-			vim.notify("🚀 Launching profile: " .. profile_name .. " (" .. cmd .. ")", vim.log.levels.INFO, { title = "Launch Profiles" })
-			local tasks_mod = require("plugins.krs.tasks")
-			tasks_mod.run_custom_command(cmd, env)
+			start_debug_session(profile, root)
+			return
 		end
+
+		notify("🚀 Launching profile: " .. profile_name .. " (" .. cmd .. ")")
+		require("plugins.krs.tasks").run_custom_command(cmd, profile.env or {})
 	end)
 end
 
 -- ============================================================================
--- 🚀 SINGLE-SCREEN FLOATING FORM WINDOW EDITOR
+-- PROFILE FORM -- single floating window, one line per field
 -- ============================================================================
+
+--- Renders a field's value as shown in the form.
+--- @param profile table Profile being edited.
+--- @param field table Entry from `M.settings.form_fields`.
+--- @return string
+local function render_field_value(profile, field)
+	local value = profile[field.key]
+
+	if field.edit == "list" then
+		return (value and #value > 0) and table.concat(value, field.join) or "(none)"
+	end
+	if field.key == "runtime" then
+		return tostring(value):upper() .. "  (" .. table.concat(runtimes.order, " | ") .. ")"
+	end
+	if field.key == "mode" then
+		return value == "debug" and "🐞 DAP Debugger" or "🖥️ Terminal Task Slot"
+	end
+	if field.key == "is_default" then
+		return value and "✅ YES (Primary for Ctrl+Shift+S)" or "❌ No"
+	end
+	if field.key == "auto_build" then
+		return value and "✅ YES (dotnet build before launch)" or "❌ No  (dotnet only)"
+	end
+	return tostring(value)
+end
+
+--- Opens the profile form. Saving writes the profile back into `launch.json`.
+---
+--- @param root string|nil Project root.
+--- @param existing_profile table|nil Profile to edit; nil creates a new one.
+--- @param on_saved function(profile)|nil Called after a successful save.
 function M.open_form_editor(root, existing_profile, on_saved)
 	root = root or M.get_project_root()
+
 	local is_edit = existing_profile ~= nil
+	local profile = existing_profile and vim.deepcopy(existing_profile) or M.new_profile(root)
+	local fields = M.settings.form_fields
+	local selected = 1
 
-	local p = existing_profile and vim.deepcopy(existing_profile) or {
-		id = "profile-" .. os.time(),
-		name = "Run " .. vim.fn.fnamemodify(root, ":t"),
-		runtime = "bun",
-		entry_point = "src/index.ts",
-		args = {},
-		env = {},
-		pre_launch_tasks = {},
-		mode = "run",
-		is_default = false,
-		auto_build = false,
-	}
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.bo[buf].buftype = "nofile"
-	vim.bo[buf].bufhidden = "wipe"
-	vim.bo[buf].filetype = "krslaunchform"
-
-	local width = 78
-	local height = 18
-
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = math.max(math.floor(((vim.o.lines or 24) - height) / 2), 1),
-		col = math.max(math.floor(((vim.o.columns or 80) - width) / 2), 1),
-		style = "minimal",
-		border = "rounded",
+	local buf, win = ui.float({
+		width = M.settings.form_width,
+		height = M.settings.form_height,
+		filetype = "krslaunchform",
 		title = is_edit and " 📝 Edit Launch Profile Form " or " 🚀 New Launch Profile Form ",
-		title_pos = "center",
 	})
 
-	local selected_field = 1
-
-	local function render_form()
+	local function render()
 		if not vim.api.nvim_buf_is_valid(buf) then
 			return
 		end
 
-		local args_str = (p.args and #p.args > 0) and table.concat(p.args, " ") or "(none)"
-		local pre_str = (p.pre_launch_tasks and #p.pre_launch_tasks > 0) and table.concat(p.pre_launch_tasks, ", ") or "(none)"
-
 		local lines = {
 			" ────────────── Launch Profile Specifications (Form View) ──────────────",
 			"",
-			string.format("  %s [1] Profile Name:     %s", selected_field == 1 and "👉" or "  ", p.name),
-			string.format("  %s [2] Runtime:          %s", selected_field == 2 and "👉" or "  ", p.runtime:upper() .. "  (" .. table.concat(RUNTIMES, " | ") .. ")"),
-			string.format("  %s [3] Entry Point File: %s", selected_field == 3 and "👉" or "  ", p.entry_point),
-			string.format("  %s [4] Command Args:     %s", selected_field == 4 and "👉" or "  ", args_str),
-			string.format("  %s [5] Pre-launch Tasks: %s", selected_field == 5 and "👉" or "  ", pre_str),
-			string.format("  %s [6] Execution Mode:   %s", selected_field == 6 and "👉" or "  ", p.mode == "debug" and "🐞 DAP Debugger" or "🖥️ Terminal Task Slot"),
-			string.format("  %s [7] Primary Default:  %s", selected_field == 7 and "👉" or "  ", p.is_default and "✅ YES (Primary for Ctrl+Shift+S)" or "❌ No"),
-			string.format("  %s [8] Auto Build:      %s", selected_field == 8 and "👉" or "  ", p.auto_build and "✅ YES (dotnet build before launch)" or "❌ No  (dotnet only)"),
+		}
+		for idx, field in ipairs(fields) do
+			table.insert(lines, string.format(
+				"  %s [%d] %-17s %s",
+				selected == idx and "👉" or "  ",
+				idx,
+				field.label .. ":",
+				render_field_value(profile, field)
+			))
+		end
+		vim.list_extend(lines, {
 			"",
 			" ───────────────────────────────────────────────────────────────────────",
-			"  Navigation: [1-8] Select Field  |  [j/k/Tab] Move  |  [Enter/Space] Edit/Cycle",
+			string.format("  Navigation: [1-%d] Select Field  |  [j/k/Tab] Move  |  [Enter/Space] Edit/Cycle", #fields),
 			"  [S] Save Profile  |  [Esc/q] Cancel",
-		}
+		})
+
+		vim.bo[buf].modifiable = true
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+		vim.bo[buf].modifiable = false
 	end
 
-	render_form()
+	--- Applies the edit behaviour of one field, re-rendering when it finishes.
+	local function edit_field(idx)
+		selected = idx
+		render()
 
-	local function save_and_close()
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
-		end
+		local field = fields[idx]
 
-		local data = M.load_profiles(root)
-		if p.is_default then
-			for _, prof in ipairs(data.profiles) do
-				if prof.id ~= p.id then
-					prof.is_default = false
-				end
-			end
-		end
-
-		local found = false
-		for idx, prof in ipairs(data.profiles) do
-			if prof.id == p.id then
-				data.profiles[idx] = p
-				found = true
-				break
-			end
-		end
-		if not found then
-			table.insert(data.profiles, p)
-		end
-
-		M.save_profiles(root, data)
-		vim.notify("✅ Saved Launch Profile: " .. p.name, vim.log.levels.INFO, { title = "Launch Profiles" })
-		if on_saved then
-			on_saved(p)
-		end
-	end
-
-	local function edit_field(field_num)
-		selected_field = field_num
-		render_form()
-
-		local input = require("plugins.krs.input_modal")
-
-		if field_num == 1 then
-			input.open({
-				label = "Profile Name",
-				default_value = p.name,
-				callback = function(ok, val)
-					if ok and val ~= "" then
-						p.name = val
-					end
-					render_form()
-				end,
-			})
-		elseif field_num == 2 then
-			local cur_idx = 1
-			for idx, r in ipairs(RUNTIMES) do
-				if r == p.runtime then
-					cur_idx = idx
+		if field.edit == "toggle" then
+			profile[field.key] = not profile[field.key]
+			render()
+		elseif field.edit == "swap" then
+			profile[field.key] = profile[field.key] == field.values[1] and field.values[2] or field.values[1]
+			render()
+		elseif field.edit == "cycle" then
+			local cur = 1
+			for i, name in ipairs(runtimes.order) do
+				if name == profile[field.key] then
+					cur = i
 					break
 				end
 			end
-			p.runtime = RUNTIMES[(cur_idx % #RUNTIMES) + 1]
-			render_form()
-		elseif field_num == 3 then
-			input.open({
-				label = "Entry Point File (relative path)",
-				default_value = p.entry_point,
-				callback = function(ok, val)
-					if ok and val ~= "" then
-						p.entry_point = val
-					end
-					render_form()
-				end,
-			})
-		elseif field_num == 4 then
-			local cur_args = (p.args and #p.args > 0) and table.concat(p.args, " ") or ""
-			input.open({
-				label = "Command Arguments (space separated)",
-				default_value = cur_args,
-				callback = function(ok, val)
-					p.args = {}
-					if ok and val ~= "" then
-						for arg in val:gmatch("%S+") do
-							table.insert(p.args, arg)
-						end
-					end
-					render_form()
-				end,
-			})
-		elseif field_num == 5 then
-			local cur_pre = (p.pre_launch_tasks and #p.pre_launch_tasks > 0) and table.concat(p.pre_launch_tasks, ", ") or ""
-			input.open({
-				label = "Pre-launch Tasks (comma separated)",
-				default_value = cur_pre,
-				callback = function(ok, val)
-					p.pre_launch_tasks = {}
-					if ok and val ~= "" then
-						for task in val:gmatch("[^,]+") do
-							local trimmed = vim.trim(task)
+			profile[field.key] = runtimes.order[(cur % #runtimes.order) + 1]
+			render()
+		elseif field.edit == "list" then
+			local current = profile[field.key] or {}
+			require("plugins.krs.input_modal").open({
+				label = field.prompt or field.label,
+				default_value = #current > 0 and table.concat(current, field.join) or "",
+				callback = function(ok, value)
+					profile[field.key] = {}
+					if ok and value ~= "" then
+						for item in value:gmatch(field.separator) do
+							local trimmed = vim.trim(item)
 							if trimmed ~= "" then
-								table.insert(p.pre_launch_tasks, trimmed)
+								table.insert(profile[field.key], trimmed)
 							end
 						end
 					end
-					render_form()
+					render()
 				end,
 			})
-		elseif field_num == 6 then
-			p.mode = (p.mode == "run") and "debug" or "run"
-			render_form()
-		elseif field_num == 7 then
-			p.is_default = not p.is_default
-			render_form()
-		elseif field_num == 8 then
-			p.auto_build = not p.auto_build
-			render_form()
+		else
+			require("plugins.krs.input_modal").open({
+				label = field.prompt or field.label,
+				default_value = profile[field.key],
+				callback = function(ok, value)
+					if ok and value ~= "" then
+						profile[field.key] = value
+					end
+					render()
+				end,
+			})
 		end
 	end
 
+	--- Writes the profile back, enforcing the single-default rule.
+	local function save_and_close()
+		ui.close(win)
+
+		local data = M.load_profiles(root)
+		if profile.is_default then
+			for _, other in ipairs(data.profiles) do
+				if other.id ~= profile.id then
+					other.is_default = false
+				end
+			end
+		end
+
+		local replaced = false
+		for idx, other in ipairs(data.profiles) do
+			if other.id == profile.id then
+				data.profiles[idx] = profile
+				replaced = true
+				break
+			end
+		end
+		if not replaced then
+			table.insert(data.profiles, profile)
+		end
+
+		M.save_profiles(root, data)
+		notify("✅ Saved Launch Profile: " .. profile.name)
+		if on_saved then
+			on_saved(profile)
+		end
+	end
+
+	render()
+
 	local kopts = { buffer = buf, noremap = true, silent = true }
+	local function move(delta)
+		return function()
+			selected = (selected - 1 + delta) % #fields + 1
+			render()
+		end
+	end
 
-	local FIELD_COUNT = 8
+	vim.keymap.set("n", "j", move(1), kopts)
+	vim.keymap.set("n", "<Tab>", move(1), kopts)
+	vim.keymap.set("n", "k", move(-1), kopts)
 
-	vim.keymap.set("n", "j", function()
-		selected_field = (selected_field % FIELD_COUNT) + 1
-		render_form()
-	end, kopts)
-	vim.keymap.set("n", "k", function()
-		selected_field = (selected_field - 2) % FIELD_COUNT + 1
-		render_form()
-	end, kopts)
-	vim.keymap.set("n", "<Tab>", function()
-		selected_field = (selected_field % FIELD_COUNT) + 1
-		render_form()
-	end, kopts)
-
-	for i = 1, FIELD_COUNT do
-		vim.keymap.set("n", tostring(i), function()
-			edit_field(i)
+	for idx = 1, #fields do
+		vim.keymap.set("n", tostring(idx), function()
+			edit_field(idx)
 		end, kopts)
 	end
 
-	vim.keymap.set("n", "<CR>", function()
-		edit_field(selected_field)
-	end, kopts)
-	vim.keymap.set("n", "<Space>", function()
-		edit_field(selected_field)
-	end, kopts)
-
-	vim.keymap.set("n", "S", save_and_close, kopts)
-	vim.keymap.set("n", "s", save_and_close, kopts)
-	vim.keymap.set("n", "<C-s>", save_and_close, kopts)
-
-	local function close_cancel()
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
-		end
+	for _, key in ipairs({ "<CR>", "<Space>" }) do
+		vim.keymap.set("n", key, function()
+			edit_field(selected)
+		end, kopts)
 	end
 
-	vim.keymap.set("n", "<Esc>", close_cancel, kopts)
-	vim.keymap.set("n", "q", close_cancel, kopts)
+	for _, key in ipairs({ "S", "s", "<C-s>" }) do
+		vim.keymap.set("n", key, save_and_close, kopts)
+	end
+
+	for _, key in ipairs({ "<Esc>", "q" }) do
+		vim.keymap.set("n", key, function()
+			ui.close(win)
+		end, kopts)
+	end
 end
 
+--- Opens the form with a brand new profile.
+--- @param root string|nil Project root.
+--- @param on_created function(profile)|nil Called after saving.
 function M.open_creation_wizard(root, on_created)
 	M.open_form_editor(root, nil, on_created)
 end
 
+-- ============================================================================
+-- MANAGEMENT PICKER (Telescope)
+-- ============================================================================
+
+--- Card shown in the picker preview.
+--- @param p table Profile.
+--- @return string[] lines
+local function profile_card(p)
+	return {
+		"┌──────────────────────────────────────────────────────────────┐",
+		string.format("│ 🚀 PROFILE CARD: %-43s │", p.name:sub(1, 43)),
+		"├──────────────────────────────────────────────────────────────┤",
+		string.format("│ ⚡ Runtime:        %-42s │", tostring(p.runtime):upper():sub(1, 42)),
+		string.format("│ 📄 Entry Point:    %-42s │", tostring(p.entry_point):sub(1, 42)),
+		string.format("│ 📌 Arguments:      %-42s │", (p.args and #p.args > 0) and table.concat(p.args, " "):sub(1, 42) or "(none)"),
+		string.format("│ ⚙️ Pre-Tasks:      %-42s │", (p.pre_launch_tasks and #p.pre_launch_tasks > 0) and table.concat(p.pre_launch_tasks, ", "):sub(1, 42) or "(none)"),
+		string.format("│ 🛠️ Exec Mode:      %-42s │", (p.mode == "debug" and "🐞 DAP Debugger" or "🖥️ Terminal Task Slot"):sub(1, 42)),
+		string.format("│ ⭐ Primary Default: %-42s │", (p.is_default and "✅ YES (Primary for Ctrl+Shift+S)" or "❌ No"):sub(1, 42)),
+		string.format("│ 🔨 Auto Build:     %-42s │", (p.auto_build and "✅ YES (dotnet build first)" or "❌ No"):sub(1, 42)),
+		"└──────────────────────────────────────────────────────────────┘",
+	}
+end
+
+--- One row of the picker list.
+--- @param p table Profile.
+--- @param idx integer Position in the file.
+--- @return table entry
+local function profile_entry(p, idx)
+	local star = p.is_default and "⭐ [DEFAULT]" or "           "
+	local mode_str = p.mode == "debug" and "🐞 DEBUG" or "🚀 RUN  "
+	local args_str = (p.args and #p.args > 0) and (" [" .. table.concat(p.args, " ") .. "]") or ""
+	local tasks_str = (p.pre_launch_tasks and #p.pre_launch_tasks > 0)
+			and (" (pre: " .. table.concat(p.pre_launch_tasks, ", ") .. ")")
+		or ""
+
+	return {
+		display = string.format(
+			"%s  %s  %-20s ──>  %-22s%s%s",
+			star, mode_str, p.name, p.runtime .. ":" .. p.entry_point, args_str, tasks_str
+		),
+		value = p,
+		-- Defaults sort first; the prefix is stripped by the sorter's display.
+		ordinal = (p.is_default and "0_" or "1_") .. p.name .. " " .. p.runtime .. " " .. p.entry_point,
+		index = idx,
+	}
+end
+
+--- Opens the profile manager: <CR> runs, `d` deletes, `r` renames, `e` edits,
+--- `f` toggles the default, `a` creates. <C-d>/<C-e>/<C-n>/<C-x> mirror them for
+--- insert mode.
+---
+--- @param root string|nil Project root.
 function M.open_management_menu(root)
 	root = root or M.get_project_root()
 	local data = M.load_profiles(root)
 
 	if #data.profiles == 0 then
-		vim.notify("No Launch Profiles found. Opening Form Editor...", vim.log.levels.INFO, { title = "Launch Profiles" })
+		notify("No Launch Profiles found. Opening Form Editor...")
 		M.open_creation_wizard(root, function(new_profile)
 			M.run_profile(new_profile)
 		end)
@@ -691,129 +658,87 @@ function M.open_management_menu(root)
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
 
-	local profile_previewer = previewers.new_buffer_previewer({
-		title = " 📋 Profile Card Preview ",
-		define_preview = function(self, entry, status)
-			local p = entry.value
-			if not p then
-				return
-			end
-
-			local lines = {
-				"┌──────────────────────────────────────────────────────────────┐",
-				string.format("│ 🚀 PROFILE CARD: %-43s │", p.name:sub(1, 43)),
-				"├──────────────────────────────────────────────────────────────┤",
-				string.format("│ ⚡ Runtime:        %-42s │", tostring(p.runtime):upper():sub(1, 42)),
-				string.format("│ 📄 Entry Point:    %-42s │", tostring(p.entry_point):sub(1, 42)),
-				string.format("│ 📌 Arguments:      %-42s │", (p.args and #p.args > 0) and table.concat(p.args, " "):sub(1, 42) or "(none)"),
-				string.format("│ ⚙️ Pre-Tasks:      %-42s │", (p.pre_launch_tasks and #p.pre_launch_tasks > 0) and table.concat(p.pre_launch_tasks, ", "):sub(1, 42) or "(none)"),
-				string.format("│ 🛠️ Exec Mode:      %-42s │", (p.mode == "debug" and "🐞 DAP Debugger" or "🖥️ Terminal Task Slot"):sub(1, 42)),
-				string.format("│ ⭐ Primary Default: %-42s │", (p.is_default and "✅ YES (Primary for Ctrl+Shift+S)" or "❌ No"):sub(1, 42)),
-				string.format("│ 🔨 Auto Build:     %-42s │", (p.auto_build and "✅ YES (dotnet build first)" or "❌ No"):sub(1, 42)),
-				"└──────────────────────────────────────────────────────────────┘",
-			}
-			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
-			pcall(function()
-				vim.bo[self.state.bufnr].filetype = "markdown"
-			end)
-		end,
-	})
-
 	local entries = {}
 	for idx, p in ipairs(data.profiles) do
-		local star = p.is_default and "⭐ [DEFAULT]" or "           "
-		local mode_str = p.mode == "debug" and "🐞 DEBUG" or "🚀 RUN  "
-		local args_str = (p.args and #p.args > 0) and (" [" .. table.concat(p.args, " ") .. "]") or ""
-		local tasks_str = (p.pre_launch_tasks and #p.pre_launch_tasks > 0) and (" (pre: " .. table.concat(p.pre_launch_tasks, ", ") .. ")") or ""
-
-		local display_line = string.format("%s  %s  %-20s ──>  %-22s%s%s", star, mode_str, p.name, p.runtime .. ":" .. p.entry_point, args_str, tasks_str)
-
-		table.insert(entries, {
-			display = display_line,
-			value = p,
-			ordinal = (p.is_default and "0_" or "1_") .. p.name .. " " .. p.runtime .. " " .. p.entry_point,
-			index = idx,
-		})
+		table.insert(entries, profile_entry(p, idx))
 	end
 
 	pickers.new({}, {
 		prompt_title = " 🚀 Launch Profiles | <Enter>: Run | [d] Delete | [r] Rename | [e] Edit | [f] Favorite | [a] New ",
 		layout_strategy = "horizontal",
 		layout_config = {
-			horizontal = {
-				preview_width = 0.48,
-				width = 0.9,
-				height = 0.8,
-			},
+			horizontal = { preview_width = 0.48, width = 0.9, height = 0.8 },
 			preview_cutoff = 0,
 		},
 		finder = finders.new_table({
 			results = entries,
 			entry_maker = function(entry)
-				return {
-					value = entry.value,
-					display = entry.display,
-					ordinal = entry.ordinal,
-				}
+				return { value = entry.value, display = entry.display, ordinal = entry.ordinal }
 			end,
 		}),
-		previewer = profile_previewer,
+		previewer = previewers.new_buffer_previewer({
+			title = " 📋 Profile Card Preview ",
+			define_preview = function(self, entry)
+				if not entry.value then
+					return
+				end
+				vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, profile_card(entry.value))
+				pcall(function()
+					vim.bo[self.state.bufnr].filetype = "markdown"
+				end)
+			end,
+		}),
 		sorter = conf.generic_sorter({}),
 		attach_mappings = function(prompt_bufnr, map)
-			actions.select_default:replace(function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				if selection and selection.value then
-					M.run_profile(selection.value)
-				end
-			end)
-
+			--- Deletes the selected profile and reopens the menu.
 			local function action_delete(selection)
-				if selection and selection.value then
-					local profile_id = selection.value.id
-					local cur_data = M.load_profiles(root)
-					local updated = {}
-					for _, p in ipairs(cur_data.profiles) do
-						if p.id ~= profile_id then
-							table.insert(updated, p)
-						end
-					end
-					cur_data.profiles = updated
-					M.save_profiles(root, cur_data)
-					vim.notify("🗑️ Deleted launch profile: " .. selection.value.name, vim.log.levels.INFO, { title = "Launch Profiles" })
-					M.open_management_menu(root)
+				if not (selection and selection.value) then
+					return
 				end
+				local cur = M.load_profiles(root)
+				local kept = {}
+				for _, p in ipairs(cur.profiles) do
+					if p.id ~= selection.value.id then
+						table.insert(kept, p)
+					end
+				end
+				cur.profiles = kept
+				M.save_profiles(root, cur)
+				notify("🗑️ Deleted launch profile: " .. selection.value.name)
+				M.open_management_menu(root)
 			end
 
 			local function action_rename(selection)
-				if selection and selection.value then
-					local input = require("plugins.krs.input_modal")
-					input.open({
-						label = "Rename Launch Profile",
-						default_value = selection.value.name,
-						callback = function(ok, new_name)
-							if ok and new_name ~= "" and new_name ~= selection.value.name then
-								M.rename_profile(selection.value.id, new_name, root)
-							end
-							M.open_management_menu(root)
-						end,
-					})
+				if not (selection and selection.value) then
+					return
 				end
+				require("plugins.krs.input_modal").open({
+					label = "Rename Launch Profile",
+					default_value = selection.value.name,
+					callback = function(ok, new_name)
+						if ok and new_name ~= "" and new_name ~= selection.value.name then
+							M.rename_profile(selection.value.id, new_name, root)
+						end
+						M.open_management_menu(root)
+					end,
+				})
 			end
 
 			local function action_edit(selection)
-				if selection and selection.value then
-					M.open_form_editor(root, selection.value, function()
-						M.open_management_menu(root)
-					end)
+				if not (selection and selection.value) then
+					return
 				end
+				M.open_form_editor(root, selection.value, function()
+					M.open_management_menu(root)
+				end)
 			end
 
 			local function action_toggle_favorite(selection)
-				if selection and selection.value then
-					M.toggle_default(selection.value.id, root)
-					M.open_management_menu(root)
+				if not (selection and selection.value) then
+					return
 				end
+				M.toggle_default(selection.value.id, root)
+				M.open_management_menu(root)
 			end
 
 			local function action_create_new()
@@ -822,70 +747,47 @@ function M.open_management_menu(root)
 				end)
 			end
 
-			-- Normal mode keymaps: d = delete, r = rename, e = edit form, f = favorite, a = add new
-			map("n", "d", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_delete(selection)
-			end)
+			--- Closes the picker, then runs `fn` with the entry that was selected.
+			--- @param fn function(selection)|function()
+			--- @param needs_selection boolean|nil False for actions that ignore the row.
+			local function with_selection(fn, needs_selection)
+				return function()
+					local selection = needs_selection ~= false and action_state.get_selected_entry() or nil
+					actions.close(prompt_bufnr)
+					fn(selection)
+				end
+			end
 
-			map("n", "r", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_rename(selection)
-			end)
+			actions.select_default:replace(with_selection(function(selection)
+				if selection and selection.value then
+					M.run_profile(selection.value)
+				end
+			end))
 
-			map("n", "e", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_edit(selection)
-			end)
+			map("n", "d", with_selection(action_delete))
+			map("n", "r", with_selection(action_rename))
+			map("n", "e", with_selection(action_edit))
+			map("n", "f", with_selection(action_toggle_favorite))
+			map("n", "a", with_selection(action_create_new, false))
 
-			map("n", "f", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_toggle_favorite(selection)
-			end)
-
-			map("n", "a", function()
-				actions.close(prompt_bufnr)
-				action_create_new()
-			end)
-
-			-- Shortcuts for insert/normal backwards compatibility (<C-d>, <C-e>, <C-n>, <C-x>)
-			map({ "n", "i" }, "<C-d>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_toggle_favorite(selection)
-			end)
-
-			map({ "n", "i" }, "<C-e>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_edit(selection)
-			end)
-
-			map({ "n", "i" }, "<C-n>", function()
-				actions.close(prompt_bufnr)
-				action_create_new()
-			end)
-
-			map({ "n", "i" }, "<C-x>", function()
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				action_delete(selection)
-			end)
+			-- Control-key mirrors so the same actions work while typing a filter.
+			map({ "n", "i" }, "<C-d>", with_selection(action_toggle_favorite))
+			map({ "n", "i" }, "<C-e>", with_selection(action_edit))
+			map({ "n", "i" }, "<C-n>", with_selection(action_create_new, false))
+			map({ "n", "i" }, "<C-x>", with_selection(action_delete))
 
 			return true
 		end,
 	}):find()
 end
 
+--- The `<C-S-s>` behaviour: stop a live debug session, else run the default
+--- profile, else offer the picker (or the creation form when there are none).
 function M.handle_smart_launch()
 	local has_dap, dap = pcall(require, "dap")
 	if has_dap and dap.session() then
 		dap.terminate()
-		vim.notify("⏹️ Debug session terminated", vim.log.levels.INFO, { title = "Launch Profiles" })
+		notify("⏹️ Debug session terminated")
 		return
 	end
 
@@ -899,60 +801,63 @@ function M.handle_smart_launch()
 		return
 	end
 
-	local default_profile = nil
 	for _, p in ipairs(data.profiles) do
 		if p.is_default then
-			default_profile = p
-			break
+			M.run_profile(p)
+			return
 		end
 	end
 
-	if default_profile then
-		M.run_profile(default_profile)
-	else
-		M.open_management_menu(root)
+	M.open_management_menu(root)
+end
+
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers `:LaunchProfiles`, `:LaunchProfilesSmart` and the keymaps.
+function M.setup()
+	pcall(vim.api.nvim_create_user_command, "LaunchProfiles", function()
+		M.open_management_menu()
+	end, { desc = "Open Launch Profiles Management UI" })
+
+	pcall(vim.api.nvim_create_user_command, "LaunchProfilesSmart", function()
+		M.handle_smart_launch()
+	end, { desc = "Run Default Launch Profile or Open Management UI" })
+
+	--- Leaves terminal mode first, so the mapping also works from a terminal.
+	local function from_any_mode(fn)
+		return function()
+			if vim.fn.mode() == "t" then
+				pcall(vim.cmd, "stopinsert")
+			end
+			fn()
+		end
+	end
+
+	local bindings = {
+		{ keys = M.settings.keys.smart_launch, fn = M.handle_smart_launch, desc = "Smart Launch / Profile Debug UI" },
+		{ keys = M.settings.keys.manage, fn = M.open_management_menu, desc = "Open Launch Profiles Management UI" },
+	}
+	for _, binding in ipairs(bindings) do
+		for _, key in ipairs(binding.keys) do
+			vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(function()
+				binding.fn()
+			end), { noremap = true, silent = true, desc = binding.desc })
+		end
 	end
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.LaunchProfiles = M
 
-local plugin_spec = {
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
+
+return setmetatable({
 	name = "krs_launch_profiles",
-	dir = require("lazyscripts.lazydir").for_module(),
+	dir = require("krs.core.lazyspec").for_module(),
 	lazy = false,
-	config = function()
-		pcall(vim.api.nvim_create_user_command, "LaunchProfiles", function()
-			M.open_management_menu()
-		end, { desc = "Open Launch Profiles Management UI" })
-
-		pcall(vim.api.nvim_create_user_command, "LaunchProfilesSmart", function()
-			M.handle_smart_launch()
-		end, { desc = "Run Default Launch Profile or Open Management UI" })
-
-		local modes = { "n", "i", "v", "t" }
-		for _, mode in ipairs(modes) do
-			for _, key in ipairs({ "<C-S-s>", "<C-S-S>" }) do
-				vim.keymap.set(mode, key, function()
-					if vim.fn.mode() == "t" then
-						pcall(vim.cmd, "stopinsert")
-					end
-					M.handle_smart_launch()
-				end, { noremap = true, silent = true, desc = "Smart Launch / Profile Debug UI" })
-			end
-
-			for _, key in ipairs({ "<C-S-q>", "<C-S-Q>" }) do
-				vim.keymap.set(mode, key, function()
-					if vim.fn.mode() == "t" then
-						pcall(vim.cmd, "stopinsert")
-					end
-					M.open_management_menu()
-				end, { noremap = true, silent = true, desc = "Open Launch Profiles Management UI" })
-			end
-		end
-	end,
-}
-
-return setmetatable(plugin_spec, {
-	__index = M,
-})
-
+	config = M.setup,
+}, { __index = M })

@@ -1,4 +1,4 @@
---- @module krsnvim.json
+--- @module "krsnvim.json"
 --- Fast JSON Parser, Encoder, and File Management module for `krsnvimscript`.
 --- Wraps Neovim's native C-accelerated JSON parser (`vim.json`) with safe error handling and file I/O helpers.
 ---

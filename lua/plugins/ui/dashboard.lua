@@ -1,3 +1,32 @@
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local settings = {
+	--- Colour of the ASCII banner. Re-applied on every colorscheme change.
+	header_highlight = { name = "AlphaHeaderOrange", opts = { fg = "#FF8800", bold = true } },
+
+	--- Menu entries, in order: { key, icon, label, command }.
+	buttons = {
+		{ "f", "", "File Explorer (Desktop)", ":TelescopeFileBrowserDesktop<CR>" },
+		{ "p", "", "Recent projects", ":Telescope projects<CR>" },
+		{ "w", "", "Wiki (Documentation)", ":NvimWiki<CR>" },
+		{ "e", "", "Plugins/Extensions", ":Lazy<CR>" },
+		{ "m", "", "Lsps/Languages", ":Mason<CR>" },
+		{ "q", "", "Quit", ":qa<CR>" },
+	},
+
+	--- WSL entry, inserted at this position when WSL is available.
+	wsl_button = { "l", "", "File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>" },
+	wsl_button_position = 4,
+
+	--- Documentation entry point opened by `w` / `:NvimWiki`.
+	wiki_index = "/docs/index.md",
+
+	--- Filetypes that must never be replaced by the dashboard.
+	protected_filetypes = { "alpha", "neo-tree" },
+}
+
 return {
 	"goolord/alpha-nvim",
 	dependencies = { "nvim-tree/nvim-web-devicons" },
@@ -24,57 +53,53 @@ return {
 			[[           ^---^                                                              ^---^               ]],
 		}
 
-		-- Orange highlight for header ASCII art
-		local function set_header_hl()
-			vim.api.nvim_set_hl(0, "AlphaHeaderOrange", { fg = "#FF8800", bold = true })
+		-- `:colorscheme` clears user-defined groups, so the banner colour is
+		-- re-applied whenever the theme changes.
+		local function set_header_highlight()
+			vim.api.nvim_set_hl(0, settings.header_highlight.name, settings.header_highlight.opts)
 		end
-		set_header_hl()
-		vim.api.nvim_create_autocmd("ColorScheme", { callback = set_header_hl })
-		dashboard.section.header.opts.hl = "AlphaHeaderOrange"
+		set_header_highlight()
+		vim.api.nvim_create_autocmd("ColorScheme", { callback = set_header_highlight })
+		dashboard.section.header.opts.hl = settings.header_highlight.name
 
+		--- Opens the documentation index in a normal buffer.
 		local function open_wiki()
-			local docs_dir = vim.fn.stdpath("config") .. "/docs"
-			local index_file = docs_dir .. "/index.md"
-			if vim.fn.filereadable(index_file) == 1 then
-				pcall(vim.cmd, "Neotree close")
-				vim.cmd("edit " .. vim.fn.fnameescape(index_file))
-			else
+			local index_file = vim.fn.stdpath("config") .. settings.wiki_index
+			if vim.fn.filereadable(index_file) == 0 then
 				vim.notify("Wiki index file not found: " .. index_file, vim.log.levels.ERROR)
+				return
 			end
+
+			pcall(vim.cmd, "Neotree close")
+			vim.cmd("edit " .. vim.fn.fnameescape(index_file))
 		end
 
 		vim.api.nvim_create_user_command("NvimWiki", open_wiki, { desc = "Open Neovim Configuration Wiki" })
 
-		dashboard.section.buttons.val = {
-			dashboard.button("f", "  File Explorer (Desktop)", ":TelescopeFileBrowserDesktop<CR>"),
-			dashboard.button("p", "  Recent projects", ":Telescope projects<CR>"),
-			dashboard.button("w", "  Wiki (Documentation)", ":NvimWiki<CR>"),
-			dashboard.button("e", "  Plugins/Extensions", ":Lazy<CR>"),
-			dashboard.button("m", "  Lsps/Languages", ":Mason<CR>"),
-			dashboard.button("q", "  Quit", ":qa<CR>"),
-		}
+		--- Turns a settings entry into an alpha button.
+		--- @param entry table `{ key, icon, label, command }`
+		local function make_button(entry)
+			return dashboard.button(entry[1], entry[2] .. "  " .. entry[3], entry[4])
+		end
 
-		-- Only show the WSL folder button on Windows when WSL is actually installed
+		dashboard.section.buttons.val = vim.tbl_map(make_button, settings.buttons)
+
+		-- The WSL entry would be a dead end on a machine without WSL.
 		local ok_wsl, wsl = pcall(require, "plugins.krs.wsl")
 		if ok_wsl and wsl.available() then
-			table.insert(
-				dashboard.section.buttons.val,
-				4,
-				dashboard.button("l", "  File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>")
-			)
+			table.insert(dashboard.section.buttons.val, settings.wsl_button_position, make_button(settings.wsl_button))
 		end
 
 		dashboard.section.footer.val = ""
 
-		-- Wrap alpha.redraw and alpha.draw in pcall to prevent WinResized invalid window id errors when closing splits/explorer
-		local orig_redraw = alpha.redraw
-		alpha.redraw = function(...)
-			return pcall(orig_redraw, ...)
-		end
-
-		local orig_draw = alpha.draw
-		alpha.draw = function(...)
-			return pcall(orig_draw, ...)
+		-- alpha redraws on WinResized, which fires while a window is already gone
+		-- (closing a split or the explorer) and then throws "invalid window id".
+		-- Wrapping both entry points keeps that out of the message history.
+		for _, name in ipairs({ "redraw", "draw" }) do
+			local original = alpha[name]
+			alpha[name] = function(...)
+				return pcall(original, ...)
+			end
 		end
 
 		alpha.setup(dashboard.opts)
@@ -91,8 +116,8 @@ return {
 					local buftype = vim.bo[buf].buftype
 					local filetype = vim.bo[buf].filetype
 
-					-- Do not open dashboard if focused in terminal, neo-tree, or alpha
-					if buftype == "terminal" or filetype == "alpha" or filetype == "neo-tree" then
+					-- Focus is in a terminal or a panel: leave it alone.
+					if buftype == "terminal" or vim.tbl_contains(settings.protected_filetypes, filetype) then
 						return
 					end
 

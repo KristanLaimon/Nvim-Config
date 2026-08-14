@@ -1,51 +1,106 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: PHP & Laravel Environment & CLI Tool Diagnostics Modal
+-- KRS PLUGIN: PHP Environment Check -- is PHP tooling actually installed?
 -- ============================================================================
--- Checks for PHP, Composer, Intelephense, Pint, and Debug Adapter executables
--- on host Windows and WSL environments. Displays an interactive floating modal
--- window with installation steps if any essential CLI tools are missing.
+-- WHAT IT DOES
+--   Looks for PHP and Composer on the Windows host and, failing that, inside WSL,
+--   then shows a modal with copy-paste install instructions for whatever is
+--   missing. Called by the PHP/Laravel LSP setup before it tries to start.
+--
+-- WHY IT PROBES WSL SECOND
+--   `wsl php -v` boots the distro, which is slow. It only runs when the Windows
+--   side did not already answer.
 -- ============================================================================
+
+local ui = require("krs.core.ui")
 
 local M = {}
 
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Width of the modal, in cells.
+	modal_width = 64,
+
+	--- Modal title.
+	modal_title = " 🐘 PHP & Laravel Environment ",
+
+	--- Keys that dismiss the modal.
+	close_keys = { "<Esc>", "q", "<CR>" },
+
+	--- Tools that must exist, in report order.
+	--- `wsl_probe` is the command run inside WSL, and `wsl_match` the pattern its
+	--- output must contain for the tool to count as present.
+	tools = {
+		{
+			key = "php",
+			label = "PHP CLI binary (php)",
+			executable = "php",
+			wsl_probe = "wsl php -v 2>NUL",
+			wsl_match = "PHP%s+%d",
+		},
+		{
+			key = "composer",
+			label = "Composer package manager (composer)",
+			executable = "composer",
+			wsl_probe = "wsl composer --version 2>NUL",
+			wsl_match = "Composer",
+		},
+	},
+
+	--- Shown under the status list.
+	install_help = {
+		" 📌  How to install PHP & Composer:",
+		"  • Windows (Native):",
+		"     1. Install Laravel Herd: https://herd.laravel.com",
+		"        OR via Scoop: `scoop install php composer`",
+		"        OR via Chocolatey: `choco install php composer`",
+		"  • WSL (Linux/Ubuntu):",
+		"     1. Open WSL terminal and run:",
+		"        `sudo apt update && sudo apt install php-cli composer php-xml php-mbstring`",
+	},
+}
+
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Checks the environment and, unless silenced, shows the modal when something
+--- is missing.
+---
+--- @param silent boolean|nil Suppress the modal and only return the status.
+--- @return table status `{ php, composer, win_php, wsl_php, ..., has_wsl }`
 function M.check_tools(silent)
 	local is_win = vim.fn.has("win32") == 1
 	local has_wsl = is_win and (vim.fn.executable("wsl.exe") == 1 or vim.fn.executable("wsl") == 1)
 
-	local win_php = vim.fn.executable("php") == 1
-	local win_composer = vim.fn.executable("composer") == 1
+	local status = { has_wsl = has_wsl }
+	local all_present = true
 
-	local wsl_php = false
-	local wsl_composer = false
-	if has_wsl and not (win_php and win_composer) then
-		local wsl_php_check = vim.fn.system("wsl php -v 2>NUL")
-		wsl_php = type(wsl_php_check) == "string" and wsl_php_check:match("PHP%s+%d") ~= nil
-		local wsl_comp_check = vim.fn.system("wsl composer --version 2>NUL")
-		wsl_composer = type(wsl_comp_check) == "string" and wsl_comp_check:match("Composer") ~= nil
-	end
+	for _, tool in ipairs(M.settings.tools) do
+		local on_windows = vim.fn.executable(tool.executable) == 1
+		local on_wsl = false
 
-	local has_php = win_php or wsl_php
-	local has_composer = win_composer or wsl_composer
-
-	local status = {
-		php = has_php,
-		composer = has_composer,
-		win_php = win_php,
-		wsl_php = wsl_php,
-		win_composer = win_composer,
-		wsl_composer = wsl_composer,
-		has_wsl = has_wsl,
-	}
-
-	if not (status.php and status.composer) then
-		if not silent then
-			M.show_missing_modal(status)
+		if has_wsl and not on_windows then
+			local out = vim.fn.system(tool.wsl_probe)
+			on_wsl = type(out) == "string" and out:match(tool.wsl_match) ~= nil
 		end
+
+		status["win_" .. tool.key] = on_windows
+		status["wsl_" .. tool.key] = on_wsl
+		status[tool.key] = on_windows or on_wsl
+		all_present = all_present and status[tool.key]
 	end
 
+	if not all_present and not silent then
+		M.show_missing_modal(status)
+	end
 	return status
 end
 
+--- Renders the environment report modal.
+--- @param status table Result of `M.check_tools`.
 function M.show_missing_modal(status)
 	local lines = {
 		" ⚠️  PHP & Laravel Environment Status ",
@@ -54,78 +109,43 @@ function M.show_missing_modal(status)
 		"",
 	}
 
-	if not status.php then
-		table.insert(lines, "  ❌  PHP CLI binary (php) is NOT installed or in PATH")
-	else
-		local env_str = status.win_php and "Windows" or "WSL"
-		table.insert(lines, "  ✅  PHP CLI binary is available (" .. env_str .. ")")
-	end
-
-	if not status.composer then
-		table.insert(lines, "  ❌  Composer package manager (composer) is NOT installed")
-	else
-		local env_str = status.win_composer and "Windows" or "WSL"
-		table.insert(lines, "  ✅  Composer is available (" .. env_str .. ")")
-	end
-
-	table.insert(lines, "")
-	table.insert(lines, " 📌  How to install PHP & Composer:")
-	table.insert(lines, "  • Windows (Native):")
-	table.insert(lines, "     1. Install Laravel Herd: https://herd.laravel.com")
-	table.insert(lines, "        OR via Scoop: `scoop install php composer`")
-	table.insert(lines, "        OR via Chocolatey: `choco install php composer`")
-	table.insert(lines, "  • WSL (Linux/Ubuntu):")
-	table.insert(lines, "     1. Open WSL terminal and run:")
-	table.insert(lines, "        `sudo apt update && sudo apt install php-cli composer php-xml php-mbstring`")
-	table.insert(lines, "")
-	table.insert(lines, " ──────────────────────────────────────────────────────────")
-	table.insert(lines, " Press <Esc> or 'q' to dismiss this window.")
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.bo[buf].buftype = "nofile"
-	vim.bo[buf].bufhidden = "wipe"
-	vim.bo[buf].filetype = "krsphpmodal"
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-
-	local width = 64
-	local height = #lines
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = math.max(math.floor(((vim.o.lines or 24) - height) / 2), 1),
-		col = math.max(math.floor(((vim.o.columns or 80) - width) / 2), 1),
-		style = "minimal",
-		border = "rounded",
-		title = " 🐘 PHP & Laravel Environment ",
-		title_pos = "center",
-	})
-
-	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
-
-	local kopts = { buffer = buf, noremap = true, silent = true }
-	local function close()
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
+	for _, tool in ipairs(M.settings.tools) do
+		if status[tool.key] then
+			local where = status["win_" .. tool.key] and "Windows" or "WSL"
+			table.insert(lines, "  ✅  " .. tool.label .. " is available (" .. where .. ")")
+		else
+			table.insert(lines, "  ❌  " .. tool.label .. " is NOT installed or in PATH")
 		end
 	end
 
-	vim.keymap.set("n", "<Esc>", close, kopts)
-	vim.keymap.set("n", "q", close, kopts)
-	vim.keymap.set("n", "<CR>", close, kopts)
+	table.insert(lines, "")
+	vim.list_extend(lines, M.settings.install_help)
+	vim.list_extend(lines, {
+		"",
+		" ──────────────────────────────────────────────────────────",
+		" Press <Esc> or 'q' to dismiss this window.",
+	})
+
+	local buf, win = ui.float({
+		lines = lines,
+		width = M.settings.modal_width,
+		height = #lines,
+		filetype = "krsphpmodal",
+		title = M.settings.modal_title,
+	})
+	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
+	ui.close_on_keys(buf, win, M.settings.close_keys)
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.PhpToolsModal = M
 
-local plugin_spec = {
-	name = "krs_php_tools_modal",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		-- PHP Tools Modal initialized
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC -- no config(): callers invoke check_tools() directly.
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_php_tools_modal",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+}, { __index = M })

@@ -1,20 +1,56 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: WSL (Windows Subsystem for Linux) Detection & Helpers
+-- KRS PLUGIN: WSL bridge -- detection, distro list, path translation.
 -- ============================================================================
--- 1. Detects WSL availability on Windows hosts.
--- 2. Lists installed distros via `wsl.exe -l -q`.
--- 3. Parses `\\wsl.localhost\<Distro>\...` / `\\wsl$\<Distro>\...` UNC paths.
--- 4. Builds the `wsl.exe -d <Distro> --cd <linux-path>` launch command so the
---    integrated terminal drops into the right distro/dir automatically.
--- 5. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   1. Detects whether WSL exists on this Windows host.
+--   2. Lists installed distros (`wsl.exe -l -q`, UTF-16 output decoded here).
+--   3. Understands `\\wsl.localhost\<Distro>\...` and `\\wsl$\<Distro>\...` UNC
+--      paths, so a project opened over the network share is recognized as Linux.
+--   4. Builds `wsl.exe -d <Distro> --cd <linux-path>` so the integrated terminal
+--      starts inside the right distro and directory.
+--   5. Keeps its own recent-projects list, because project.nvim's history does
+--      not survive UNC paths well.
+--
+-- PURE MODULE
+--   No commands, no keymaps, no autocmds -- other plugins call into it:
+--   terminal.lua (shell command), file_explorer.lua (browse a distro),
+--   dashboard.lua (recent WSL projects).
 -- ============================================================================
+
+local store = require("krs.core.store")
 
 local M = {}
 
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Where WSL projects opened from the explorer are remembered.
+	recent_projects_file = vim.fn.stdpath("data") .. "/wsl_recent_projects.json",
+
+	--- How many recent projects to keep.
+	max_recent_projects = 50,
+
+	--- UNC prefixes that address a distro's filesystem, lowercased for matching.
+	unc_prefixes = { "^//wsl%.localhost/", "^//wsl%$/" },
+
+	--- Prefix used when building a browsable root path for a distro.
+	unc_root = "//wsl.localhost/",
+}
+
+-- ============================================================================
+-- DETECTION
+-- ============================================================================
+
+--- True on a Windows host.
+--- @return boolean
 function M.is_windows()
 	return vim.fn.has("win32") == 1
 end
 
+--- True when WSL can be invoked on this machine.
+--- @return boolean
 function M.available()
 	if not M.is_windows() then
 		return false
@@ -22,11 +58,16 @@ function M.available()
 	return vim.fn.executable("wsl.exe") == 1 or vim.fn.executable("wsl") == 1
 end
 
--- List installed WSL distro names.
+--- Installed distro names.
+--- `wsl.exe -l -q` prints UTF-16LE, which Lua sees as ASCII interleaved with NUL
+--- bytes, so every second byte is dropped before parsing.
+---
+--- @return string[] distros
 function M.list_distros()
 	if not M.available() then
 		return {}
 	end
+
 	local out = vim.fn.system({ "wsl.exe", "-l", "-q" })
 	if vim.v.shell_error ~= 0 then
 		return {}
@@ -34,167 +75,171 @@ function M.list_distros()
 
 	local chars = {}
 	for i = 1, #out, 2 do
-		local b = out:byte(i)
-		if b then
-			table.insert(chars, string.char(b))
+		local byte = out:byte(i)
+		if byte then
+			table.insert(chars, string.char(byte))
 		end
 	end
-	local text = table.concat(chars)
 
 	local distros = {}
-	for line in text:gmatch("[^\r\n]+") do
-		line = line:gsub("^%s+", ""):gsub("%s+$", "")
-		if line ~= "" then
-			table.insert(distros, line)
+	for line in table.concat(chars):gmatch("[^\r\n]+") do
+		local trimmed = vim.trim(line)
+		if trimmed ~= "" then
+			table.insert(distros, trimmed)
 		end
 	end
 	return distros
 end
 
--- Parse a Windows path pointing into a WSL distro's filesystem.
--- Returns distro, linux_path or nil if the path is not a WSL UNC path.
-function M.parse_wsl_path(path)
-	if not path or path == "" then
+-- ============================================================================
+-- PATH TRANSLATION
+-- ============================================================================
+
+--- Splits a WSL UNC path into its distro and Linux path.
+--- @param p string|nil Windows path.
+--- @return string|nil distro nil when `p` is not a WSL path.
+--- @return string|nil linux_path Always starts with `/` when a distro was found.
+function M.parse_wsl_path(p)
+	if not p or p == "" then
 		return nil
 	end
-	local p = path:gsub("\\", "/")
-	local lower_p = p:lower()
-	local distro, rest
 
-	if lower_p:match("^//wsl%.localhost/") or lower_p:match("^//wsl%$/") then
-		distro, rest = p:match("^//[^/]+/([^/]+)(/.*)$")
-		if not distro then
-			distro = p:match("^//[^/]+/([^/]+)$")
-			rest = "/"
+	local normalized = p:gsub("\\", "/")
+	local lowered = normalized:lower()
+
+	local is_wsl_unc = false
+	for _, prefix in ipairs(M.settings.unc_prefixes) do
+		if lowered:match(prefix) then
+			is_wsl_unc = true
+			break
 		end
 	end
-
-	if distro then
-		local linux_path = (rest and rest ~= "") and rest or "/"
-		return distro, linux_path
+	if not is_wsl_unc then
+		return nil
 	end
-	return nil
+
+	local distro, rest = normalized:match("^//[^/]+/([^/]+)(/.*)$")
+	if not distro then
+		-- Bare `\\wsl.localhost\Distro` with no trailing path.
+		distro, rest = normalized:match("^//[^/]+/([^/]+)$"), "/"
+	end
+	if not distro then
+		return nil
+	end
+
+	return distro, (rest and rest ~= "") and rest or "/"
 end
 
-function M.is_wsl_path(path)
-	return M.parse_wsl_path(path) ~= nil
+--- True when the path points inside a WSL distro.
+--- @param p string|nil
+--- @return boolean
+function M.is_wsl_path(p)
+	return M.parse_wsl_path(p) ~= nil
 end
 
--- UNC root path for a distro's filesystem, browsable like any local folder
+--- Browsable UNC root of a distro's filesystem.
+--- @param distro string Distro name.
+--- @return string root
 function M.distro_root(distro)
-	return "//wsl.localhost/" .. distro
+	return M.settings.unc_root .. distro
 end
 
--- Command to launch a WSL shell rooted at the given Windows cwd, or nil if
--- the cwd is not inside a WSL distro.
+--- Command that opens a shell inside the distro owning `cwd`.
+--- @param cwd string Windows working directory.
+--- @return string|nil cmd nil when `cwd` is not a WSL path.
 function M.shell_command_for_cwd(cwd)
 	local distro, linux_path = M.parse_wsl_path(cwd)
 	if not distro then
 		return nil
 	end
-	distro = distro:gsub("^%s+", ""):gsub("%s+$", "")
+
+	distro = vim.trim(distro)
 	linux_path = linux_path:gsub("\\", "/"):gsub("/+$", "")
 	if linux_path == "" then
 		linux_path = "/"
 	end
+
 	return string.format('wsl.exe -d %s --cd "%s"', distro, linux_path:gsub('"', '\\"'))
 end
 
 -- ============================================================================
--- Recent Projects (WSL-safe)
+-- RECENT PROJECTS
 -- ============================================================================
 
-local function recent_projects_file()
-	return vim.fn.stdpath("data") .. "/wsl_recent_projects.json"
+--- Comparison form of a stored path.
+--- @param p string|nil
+--- @return string
+local function recent_key(p)
+	return (p or ""):gsub("\\", "/"):gsub("/$", ""):lower()
 end
 
-local function load_recent_raw()
-	local f = io.open(recent_projects_file(), "r")
-	if not f then
-		return {}
-	end
-	local content = f:read("*a")
-	f:close()
-	if not content or content == "" then
-		return {}
-	end
-	local ok, data = pcall(vim.json.decode, content)
-	return (ok and type(data) == "table") and data or {}
+--- Stored list, newest first.
+--- @return string[]
+local function load_recent()
+	return store.load(M.settings.recent_projects_file, {})
 end
 
-local function save_recent_raw(list)
-	local f = io.open(recent_projects_file(), "w")
-	if not f then
+--- Records a WSL folder as recently opened. No-op for non-WSL paths.
+--- @param p string Folder path.
+function M.add_recent_project(p)
+	if not M.is_wsl_path(p) then
 		return
 	end
-	f:write(vim.json.encode(list))
-	f:close()
-end
 
-local function norm_wsl(p)
-	if not p then
-		return ""
-	end
-	return p:gsub("\\", "/"):gsub("/$", "")
-end
-
--- Record a WSL folder as an opened project (no-op for non-WSL paths)
-function M.add_recent_project(path)
-	if not M.is_wsl_path(path) then
-		return
-	end
-	local target = norm_wsl(path)
+	local target = (p:gsub("\\", "/"):gsub("/$", ""))
 	local list = { target }
-	for _, p in ipairs(load_recent_raw()) do
-		if norm_wsl(p):lower() ~= target:lower() then
-			table.insert(list, p)
+	for _, existing in ipairs(load_recent()) do
+		if recent_key(existing) ~= recent_key(target) then
+			table.insert(list, existing)
 		end
 	end
-	if #list > 50 then
-		list = vim.list_slice(list, 1, 50)
+
+	if #list > M.settings.max_recent_projects then
+		list = vim.list_slice(list, 1, M.settings.max_recent_projects)
 	end
-	save_recent_raw(list)
+	store.save(M.settings.recent_projects_file, list)
 end
 
--- Remove a WSL folder from recent projects
-function M.remove_recent_project(path)
-	local target = norm_wsl(path)
+--- Drops a folder from the recent list.
+--- @param p string Folder path.
+function M.remove_recent_project(p)
 	local list = {}
-	for _, p in ipairs(load_recent_raw()) do
-		if norm_wsl(p):lower() ~= target:lower() then
+	for _, existing in ipairs(load_recent()) do
+		if recent_key(existing) ~= recent_key(p) then
+			table.insert(list, existing)
+		end
+	end
+	store.save(M.settings.recent_projects_file, list)
+end
+
+--- Recent WSL projects.
+--- @param check_exists boolean|nil Filter out missing directories. Off by default:
+---   probing a WSL path boots the distro, which would stall the dashboard.
+--- @return string[] projects
+function M.get_recent_projects(check_exists)
+	local raw = load_recent()
+	if check_exists ~= true then
+		return raw
+	end
+
+	local list = {}
+	for _, p in ipairs(raw) do
+		if vim.fn.isdirectory(p) == 1 then
 			table.insert(list, p)
 		end
 	end
-	save_recent_raw(list)
+	return list
 end
 
--- List recent WSL projects (check_exists=false by default for fast UI loading without booting WSL)
-function M.get_recent_projects(check_exists)
-	local raw = load_recent_raw()
-	if check_exists == true then
-		local list = {}
-		for _, p in ipairs(raw) do
-			if vim.fn.isdirectory(p) == 1 then
-				table.insert(list, p)
-			end
-		end
-		return list
-	end
-	return raw
-end
-
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.Wsl = M
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_wsl",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		-- WSL Helper module initialized
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC -- no config(): this module only reacts to direct calls.
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_wsl",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+}, { __index = M })

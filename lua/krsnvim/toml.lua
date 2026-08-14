@@ -1,4 +1,4 @@
---- @module krsnvim.toml
+--- @module "krsnvim.toml"
 --- Native Pure Lua TOML Parser, Encoder, and File I/O manager for `krsnvimscript`.
 --- Handles TOML tables `[section]`, key-value assignments `key = value`, inline arrays `[1, 2]`, booleans, and strings.
 ---

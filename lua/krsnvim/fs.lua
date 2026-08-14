@@ -1,4 +1,4 @@
---- @module krsnvim.fs
+--- @module "krsnvim.fs"
 --- High-performance File System and Path Manipulation Suite for `krsnvimscript`.
 --- Provides cross-platform file reading, writing, directory creation, listing, and validation.
 ---

@@ -1,477 +1,508 @@
+-- ============================================================================
+-- PLUGIN: project.nvim -- recent projects, with a custom picker (<C-S-r>).
+-- ============================================================================
+-- WHY THE PICKER IS CUSTOM
+--   The stock `Telescope projects` list cannot show WSL projects, favorites, or
+--   per-language icons, and it stats every path on open -- which BOOTS WSL over
+--   SMB and freezes the UI for seconds. This picker:
+--     * merges project.nvim history with the WSL recent list,
+--     * pins favorites (shared with the file explorer) to the top,
+--     * never stats a WSL path until you actually pick it,
+--     * opens a project cleanly: close splits, drop old buffers, cd, show tree.
+--
+-- PICKER KEYS
+--   <CR> open   f favorite   r rename   d remove from the list
+--
+-- COLLABORATORS
+--   krs.projects.favorites   Starred paths, shared with the file explorer.
+--   plugins.krs.wsl          WSL detection and its own recent list.
+-- ============================================================================
+
+local favorites = require("krs.projects.favorites")
+local path_util = require("krs.core.path")
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local settings = {
+	--- Files and directories that mark a project root for project.nvim.
+	root_patterns = {
+		".git",
+		"_darcs",
+		".hg",
+		".bzr",
+		".svn",
+		"Makefile",
+		"package.json",
+		"go.mod",
+		"Cargo.toml",
+		"pyproject.toml",
+		"tsconfig.json",
+		"pom.xml",
+		"build.gradle",
+	},
+
+	--- Picker geometry.
+	picker = { width = 0.85, height = 0.70 },
+
+	--- Icon for a project, chosen by the first marker file that exists.
+	--- `devicon` is looked up in nvim-web-devicons; `fallback` is used without it.
+	--- ADD A LANGUAGE HERE.
+	icons = {
+		{ files = { "Cargo.toml" }, devicon = "Cargo.toml", fallback = "🦀", highlight = "DevIconRs" },
+		{ files = { "package.json" }, devicon = "package.json", fallback = "", highlight = "DevIconJson" },
+		{
+			files = { "pyproject.toml", "requirements.txt", "setup.py" },
+			devicon = "a.py",
+			fallback = "",
+			highlight = "DevIconPy",
+		},
+		{ files = { "go.mod" }, devicon = "go.mod", fallback = "", highlight = "DevIconGo" },
+		{
+			files = { "pom.xml", "build.gradle", "build.gradle.kts" },
+			devicon = "a.java",
+			fallback = "",
+			highlight = "DevIconJava",
+		},
+		{ files = { "CMakeLists.txt", "Makefile" }, devicon = "CMakeLists.txt", fallback = "", highlight = "DevIconC" },
+		{ files = { "init.lua" }, dirs = { "lua" }, devicon = "init.lua", fallback = "", highlight = "DevIconLua" },
+		{ files = { "composer.json" }, devicon = "composer.json", fallback = "🐘", highlight = "DevIconPhp" },
+	},
+
+	--- Icon for a project that matches nothing above, and for WSL projects.
+	default_icon = { icon = "📄", highlight = "Directory" },
+	wsl_icon = { icon = "🐧", highlight = "Directory" },
+
+	--- Bogus entries that a broken history file can contain.
+	invalid_paths = { "c:", "c:/" },
+
+	--- Open the picker.
+	key = "<C-S-r>",
+}
+
 return {
-	'ahmedkhalf/project.nvim',
-	event = 'VeryLazy',
+	"ahmedkhalf/project.nvim",
+	event = "VeryLazy",
 	keys = {
-		{ '<C-S-r>', '<cmd>Telescope projects<CR>', desc = 'Telescope recent projects' },
+		{ settings.key, "<cmd>Telescope projects<CR>", desc = "Telescope recent projects" },
 	},
 	dependencies = {
-		'nvim-telescope/telescope.nvim',
-		'nvim-tree/nvim-web-devicons',
+		"nvim-telescope/telescope.nvim",
+		"nvim-tree/nvim-web-devicons",
 	},
 	config = function()
-		local project_nvim = require('project_nvim')
-		local telescope = require('telescope')
-
-		project_nvim.setup({
+		require("project_nvim").setup({
+			-- Manual mode: the working directory only changes when a project is
+			-- opened deliberately, never by opening a file from somewhere else.
 			manual_mode = true,
 			manual_gc = false,
-			detection_methods = { 'pattern', 'lsp' },
-			patterns = {
-				'.git',
-				'_darcs',
-				'.hg',
-				'.bzr',
-				'.svn',
-				'Makefile',
-				'package.json',
-				'go.mod',
-				'Cargo.toml',
-				'pyproject.toml',
-				'tsconfig.json',
-				'pom.xml',
-				'build.gradle',
-			},
+			detection_methods = { "pattern", "lsp" },
+			patterns = settings.root_patterns,
 			silent_chdir = true,
-			scope_chdir = 'global',
+			scope_chdir = "global",
 		})
-		telescope.load_extension('projects')
+		require("telescope").load_extension("projects")
 
-		local favorites_file = vim.fn.stdpath('data') .. '/project_favorites.json'
+		local history = require("project_nvim.utils.history")
 
-		local function load_favorites()
-			local f = io.open(favorites_file, 'r')
-			if not f then
-				return {}
-			end
-			local content = f:read('*a')
-			f:close()
-			local ok, data = pcall(vim.json.decode, content)
-			if ok and type(data) == 'table' then
-				return data
-			end
-			return {}
+		-- ------------------------------------------------------------------
+		-- Helpers
+		-- ------------------------------------------------------------------
+
+		--- Comparison/storage form of a project path (see krs.projects.favorites).
+		--- @param p string|nil
+		--- @return string
+		local function normalize(p)
+			return favorites.key(p)
 		end
 
-		local function save_favorites(favs)
-			local ok, encoded = pcall(vim.json.encode, favs)
-			if ok then
-				local f = io.open(favorites_file, 'w')
-				if f then
-					f:write(encoded)
-					f:close()
-				end
-			end
-		end
-
-		local function normalize_proj_path(p)
-			if not p or p == '' then
-				return ''
-			end
-			local clean = p:gsub('\\', '/'):gsub('/$', '')
-			if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
-				clean = clean:sub(1, 1):lower() .. clean:sub(2)
-			end
-			return clean
-		end
-
-		local function save_history_to_disk(list)
-			local path_ok, path = pcall(require, 'project_nvim.utils.path')
-			if not path_ok then
+		--- Rewrites project.nvim's history file, dropping duplicates and junk.
+		--- project.nvim only persists on exit, so anything changed here has to be
+		--- written by hand or it is lost.
+		---
+		--- @param list string[] Project paths, oldest first.
+		local function save_history(list)
+			local ok, path_module = pcall(require, "project_nvim.utils.path")
+			if not ok then
 				return
 			end
 
-			local file = io.open(path.historyfile, 'w')
-			if file then
-				local seen = {}
-				for _, p in ipairs(list) do
-					if type(p) == 'string' then
-						local clean_p = normalize_proj_path(p)
-						if clean_p ~= '' and clean_p ~= 'c:' and clean_p ~= 'c:/' and not seen[clean_p:lower()] then
-							seen[clean_p:lower()] = true
-							file:write(clean_p .. '\n')
-						end
-					end
-				end
-				file:close()
+			local file = io.open(path_module.historyfile, "w")
+			if not file then
+				return
 			end
+
+			local seen = {}
+			for _, project in ipairs(list) do
+				local clean = type(project) == "string" and normalize(project) or ""
+				local is_junk = clean == "" or vim.tbl_contains(settings.invalid_paths, clean)
+				if not is_junk and not seen[clean:lower()] then
+					seen[clean:lower()] = true
+					file:write(clean .. "\n")
+				end
+			end
+			file:close()
 		end
 
-		local function get_project_icon(dir)
-			local devicons_ok, devicons = pcall(require, 'nvim-web-devicons')
+		--- Icon and highlight for a project directory.
+		--- @param dir string Project directory.
+		--- @return string icon
+		--- @return string highlight
+		local function project_icon(dir)
+			local devicons_ok, devicons = pcall(require, "nvim-web-devicons")
 
-			if vim.fn.filereadable(dir .. '/Cargo.toml') == 1 then
-				return (devicons_ok and devicons.get_icon('Cargo.toml') or '🦀'), 'DevIconRs'
-			elseif vim.fn.filereadable(dir .. '/package.json') == 1 then
-				return (devicons_ok and devicons.get_icon('package.json') or ''), 'DevIconJson'
-			elseif
-				vim.fn.filereadable(dir .. '/pyproject.toml') == 1
-				or vim.fn.filereadable(dir .. '/requirements.txt') == 1
-				or vim.fn.filereadable(dir .. '/setup.py') == 1
-			then
-				return (devicons_ok and devicons.get_icon('a.py') or ''), 'DevIconPy'
-			elseif vim.fn.filereadable(dir .. '/go.mod') == 1 then
-				return (devicons_ok and devicons.get_icon('go.mod') or ''), 'DevIconGo'
-			elseif
-				vim.fn.filereadable(dir .. '/pom.xml') == 1
-				or vim.fn.filereadable(dir .. '/build.gradle') == 1
-				or vim.fn.filereadable(dir .. '/build.gradle.kts') == 1
-			then
-				return (devicons_ok and devicons.get_icon('a.java') or ''), 'DevIconJava'
-			elseif vim.fn.filereadable(dir .. '/CMakeLists.txt') == 1 or vim.fn.filereadable(dir .. '/Makefile') == 1 then
-				return (devicons_ok and devicons.get_icon('CMakeLists.txt') or ''), 'DevIconC'
-			elseif vim.fn.filereadable(dir .. '/init.lua') == 1 or vim.fn.isdirectory(dir .. '/lua') == 1 then
-				return (devicons_ok and devicons.get_icon('init.lua') or ''), 'DevIconLua'
-			elseif vim.fn.filereadable(dir .. '/composer.json') == 1 then
-				return (devicons_ok and devicons.get_icon('composer.json') or '🐘'), 'DevIconPhp'
+			for _, rule in ipairs(settings.icons) do
+				for _, name in ipairs(rule.files or {}) do
+					if vim.fn.filereadable(dir .. "/" .. name) == 1 then
+						return (devicons_ok and devicons.get_icon(rule.devicon)) or rule.fallback, rule.highlight
+					end
+				end
+				for _, name in ipairs(rule.dirs or {}) do
+					if vim.fn.isdirectory(dir .. "/" .. name) == 1 then
+						return (devicons_ok and devicons.get_icon(rule.devicon)) or rule.fallback, rule.highlight
+					end
+				end
 			end
 
-			-- Default: Blank page symbol as requested
-			return '📄', 'Directory'
+			return settings.default_icon.icon, settings.default_icon.highlight
 		end
 
-		local function open_projects_picker(opts)
-			opts = opts or {}
-			local history = require('project_nvim.utils.history')
-			local tstate = require('telescope.actions.state')
-			local actions = require('telescope.actions')
-			local pickers = require('telescope.pickers')
-			local finders = require('telescope.finders')
-			local conf = require('telescope.config').values
-			local themes = require('telescope.themes')
+		--- WSL helper module, when it is available.
+		--- @return table|nil wsl
+		local function wsl_module()
+			local ok, wsl = pcall(require, "plugins.krs.wsl")
+			return ok and wsl or nil
+		end
 
-			local raw_projects = {}
-			local seen_raw = {}
-			local wsl_ok, wsl = pcall(require, 'plugins.krs.wsl')
+		--- True for a path inside a WSL distribution.
+		--- @param p string
+		--- @return boolean
+		local function is_wsl_path(p)
+			local wsl = wsl_module()
+			if wsl and wsl.is_wsl_path then
+				return wsl.is_wsl_path(p)
+			end
+			return p:gsub("\\", "/"):match("^//wsl") ~= nil
+		end
 
-			-- 1. Gather WSL recent projects (fast, load_recent_raw without disk stat)
-			if wsl_ok and wsl.get_recent_projects then
-				for _, wp in ipairs(wsl.get_recent_projects(false)) do
-					local norm = normalize_proj_path(wp)
-					if norm ~= '' and not seen_raw[norm:lower()] then
-						seen_raw[norm:lower()] = true
-						table.insert(raw_projects, wp)
-					end
+		-- ------------------------------------------------------------------
+		-- Project list
+		-- ------------------------------------------------------------------
+
+		--- Every known project, WSL list first, then project.nvim history, with
+		--- duplicates removed.
+		--- @return string[] paths
+		local function collect_projects()
+			local wsl = wsl_module()
+			local projects, seen = {}, {}
+
+			local function add(p)
+				local key = normalize(p)
+				if key ~= "" and not seen[key:lower()] then
+					seen[key:lower()] = true
+					table.insert(projects, p)
 				end
 			end
 
-			-- 2. Gather standard history projects
-			local proj_history = history.get_recent_projects() or {}
-			for _, p in ipairs(proj_history) do
-				local norm = normalize_proj_path(p)
-				if norm ~= '' and not seen_raw[norm:lower()] then
-					seen_raw[norm:lower()] = true
-					table.insert(raw_projects, p)
+			if wsl and wsl.get_recent_projects then
+				-- `false`: do not stat, which would boot WSL just to draw a list.
+				for _, project in ipairs(wsl.get_recent_projects(false)) do
+					add(project)
 				end
 			end
+			for _, project in ipairs(history.get_recent_projects() or {}) do
+				add(project)
+			end
 
-			local favs = load_favorites()
+			return projects
+		end
 
-			local non_fav_items = {}
-			local fav_items = {}
+		--- Picker rows: favorites first, then the rest, each with its icon.
+		--- Local directories that no longer exist are dropped; WSL paths are kept
+		--- unchecked, because verifying them is what makes the list slow.
+		---
+		--- @return table[] entries
+		local function build_entries()
+			local starred = favorites.load()
+			local favorite_entries, other_entries = {}, {}
 
-			for _, p in ipairs(raw_projects) do
-				local norm = normalize_proj_path(p)
-				local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(p)) or p:gsub('\\', '/'):match('^//wsl') ~= nil
+			for _, project in ipairs(collect_projects()) do
+				local key = normalize(project)
+				local wsl = is_wsl_path(project)
+				local icon, highlight = settings.wsl_icon.icon, settings.wsl_icon.highlight
+				local keep = true
 
-				local is_valid = false
-				local icon, hl
-
-				if is_wsl then
-					-- WSL path: DO NOT call vim.fn.isdirectory() or get_project_icon().
-					-- Statting WSL UNC paths over SMB forces Windows to initialize/boot WSL,
-					-- causing UI lag. We skip disk stat when showing recent projects list.
-					is_valid = true
-					icon = '🐧'
-					hl = 'Directory'
-				else
-					-- Local Windows path: fast filesystem check
-					if vim.fn.isdirectory(p) == 1 then
-						is_valid = true
-						icon, hl = get_project_icon(p)
+				if not wsl then
+					keep = vim.fn.isdirectory(project) == 1
+					if keep then
+						icon, highlight = project_icon(project)
 					end
 				end
 
-				if is_valid then
-					local is_fav = favs[norm] == true
-					local entry_item = {
-						path = p,
-						norm = norm,
-						is_favorite = is_fav,
-						is_wsl = is_wsl,
+				if keep then
+					local entry = {
+						path = project,
+						norm = key,
+						is_favorite = starred[key] == true,
+						is_wsl = wsl,
 						icon = icon,
-						hl = hl,
+						hl = highlight,
 					}
-					if is_fav then
-						table.insert(fav_items, entry_item)
-					else
-						table.insert(non_fav_items, entry_item)
-					end
+					table.insert(entry.is_favorite and favorite_entries or other_entries, entry)
 				end
 			end
 
-			-- Favorites first (at the top), non-favorites below
-			local sorted_entries = {}
-			for _, item in ipairs(fav_items) do
-				table.insert(sorted_entries, item)
-			end
-			for _, item in ipairs(non_fav_items) do
-				table.insert(sorted_entries, item)
-			end
-
-			local function open_project(dir_path)
-				if not dir_path or dir_path == '' then
-					return
-				end
-
-				local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(dir_path)) or dir_path:gsub('\\', '/'):match('^//wsl') ~= nil
-
-				-- Now that the user explicitly clicked/selected this project, check directory existence.
-				-- For WSL paths, this will access WSL now (which is intended since the user clicked it).
-				if vim.fn.isdirectory(dir_path) == 0 then
-					if is_wsl then
-						vim.notify('🐧 WSL project directory is unreachable or does not exist:\n' .. tostring(dir_path), vim.log.levels.ERROR, { title = 'Recent Projects' })
-					else
-						vim.notify('Directory does not exist: ' .. tostring(dir_path), vim.log.levels.ERROR)
-					end
-					return
-				end
-
-				-- Close Neo-tree & all splits to start completely clean
-				pcall(vim.cmd, 'Neotree close')
-				pcall(vim.cmd, 'only')
-
-				-- Create a clean empty buffer
-				vim.cmd('enew')
-				local new_buf = vim.api.nvim_get_current_buf()
-
-				-- Delete ALL old buffers from the previous project
-				for _, b in ipairs(vim.api.nvim_list_bufs()) do
-					if b ~= new_buf and vim.api.nvim_buf_is_valid(b) then
-						pcall(vim.api.nvim_buf_delete, b, { force = true })
-					end
-				end
-
-				pcall(vim.api.nvim_set_current_dir, dir_path)
-
-				-- Add to recent projects
-				if wsl_ok and wsl.add_recent_project and is_wsl then
-					wsl.add_recent_project(dir_path)
-				end
-
-				local norm_path = normalize_proj_path(dir_path)
-				if history.recent_projects then
-					local new_recent = {}
-					for _, p in ipairs(history.recent_projects) do
-						if normalize_proj_path(p):lower() ~= norm_path:lower() then
-							table.insert(new_recent, p)
-						end
-					end
-					table.insert(new_recent, dir_path)
-					history.recent_projects = new_recent
-					save_history_to_disk(history.recent_projects)
-				end
-
-				if _G.AddOpenedFolder then
-					_G.AddOpenedFolder(dir_path)
-				end
-
-				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
-				vim.notify('📁 Switched to project: ' .. dir_path, vim.log.levels.INFO)
-			end
-
-			pickers.new(themes.get_dropdown({
-				prompt_title = ' 📁 Recent Projects | [f] Favorite | [r] Rename | [d] Delete ',
-				width = 0.85,
-				layout_config = {
-					width = 0.85,
-					height = 0.70,
-				},
-				finder = finders.new_table({
-					results = sorted_entries,
-					entry_maker = function(entry)
-						local fav_mark = entry.is_favorite and ' ⭐ [Favorite]' or ''
-						local title = entry.icon .. '  ' .. entry.path .. fav_mark
-						return {
-							value = entry,
-							display = title,
-							ordinal = (entry.is_favorite and '0_' or '1_') .. entry.path,
-						}
-					end,
-				}),
-				sorter = conf.generic_sorter({}),
-				attach_mappings = function(prompt_bufnr, map)
-					actions.select_default:replace(function()
-						local selection = tstate.get_selected_entry()
-						actions.close(prompt_bufnr)
-						if selection and selection.value and selection.value.path then
-							open_project(selection.value.path)
-						end
-					end)
-
-					-- f: Toggle Favorite (Saves to favorites & keeps at top)
-					local function toggle_favorite()
-						local selection = tstate.get_selected_entry()
-						if not selection or not selection.value then
-							return
-						end
-
-						local item = selection.value
-						local norm = item.norm
-						local current_favs = load_favorites()
-
-						if current_favs[norm] then
-							current_favs[norm] = nil
-							vim.notify('Removed project from favorites', vim.log.levels.INFO, { title = 'Recent Projects' })
-						else
-							current_favs[norm] = true
-							vim.notify('⭐ Project saved as favorite (top first)', vim.log.levels.INFO, { title = 'Recent Projects' })
-						end
-
-						save_favorites(current_favs)
-						actions.close(prompt_bufnr)
-						vim.schedule(function()
-							open_projects_picker(opts)
-						end)
-					end
-
-					-- r: Rename Project
-					local function rename_project()
-						local selection = tstate.get_selected_entry()
-						if not selection or not selection.value then
-							return
-						end
-						local old_path = selection.value.path
-						local old_norm = selection.value.norm
-						local old_name = vim.fn.fnamemodify(old_path, ':t')
-
-						actions.close(prompt_bufnr)
-
-						vim.schedule(function()
-							local input_modal = require('plugins.krs.input_modal')
-							input_modal.open({
-								label = 'Rename Project (' .. old_name .. ')',
-								default_value = old_name,
-								relative = 'editor',
-								callback = function(ok, new_name)
-									if not ok or not new_name or new_name == '' or new_name == old_name then
-										open_projects_picker(opts)
-										return
-									end
-
-									local parent_dir = vim.fn.fnamemodify(old_path, ':h')
-									local new_path = parent_dir .. '/' .. new_name
-
-									local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(old_path))
-									if not is_wsl and vim.fn.isdirectory(old_path) == 1 then
-										local renamed, err = os.rename(old_path, new_path)
-										if not renamed then
-											vim.notify('Failed to rename directory: ' .. tostring(err), vim.log.levels.ERROR, { title = 'Recent Projects' })
-											open_projects_picker(opts)
-											return
-										end
-									end
-
-									-- Update history
-									if history.recent_projects then
-										local new_recent = {}
-										for _, p in ipairs(history.recent_projects) do
-											if normalize_proj_path(p) == old_norm then
-												table.insert(new_recent, new_path)
-											else
-												table.insert(new_recent, p)
-											end
-										end
-										history.recent_projects = new_recent
-										save_history_to_disk(history.recent_projects)
-									end
-
-									-- Update WSL recent
-									if is_wsl and wsl_ok then
-										wsl.remove_recent_project(old_path)
-										wsl.add_recent_project(new_path)
-									end
-
-									-- Update favorites
-									local current_favs = load_favorites()
-									if current_favs[old_norm] then
-										current_favs[old_norm] = nil
-										current_favs[normalize_proj_path(new_path)] = true
-										save_favorites(current_favs)
-									end
-
-									vim.notify('✏️ Project renamed to: ' .. new_name, vim.log.levels.INFO, { title = 'Recent Projects' })
-									open_projects_picker(opts)
-								end,
-							})
-						end)
-					end
-
-					-- d: Delete Project from Recent Projects List
-					local function delete_project()
-						local selection = tstate.get_selected_entry()
-						if selection == nil or not selection.value then
-							return
-						end
-
-						local target_val = selection.value.norm
-						local choice = vim.fn.confirm("Delete '" .. selection.value.path .. "' from project list?", "&Yes\n&No", 2)
-						if choice ~= 1 then
-							return
-						end
-
-						if history.recent_projects then
-							local new_recent = {}
-							for _, p in ipairs(history.recent_projects) do
-								if normalize_proj_path(p) ~= target_val then
-									table.insert(new_recent, p)
-								end
-							end
-							history.recent_projects = new_recent
-						end
-
-						if history.session_projects then
-							local new_session = {}
-							for _, p in ipairs(history.session_projects) do
-								if normalize_proj_path(p) ~= target_val then
-									table.insert(new_session, p)
-								end
-							end
-							history.session_projects = new_session
-						end
-
-						save_history_to_disk(history.get_recent_projects())
-
-						if wsl_ok then
-							wsl.remove_recent_project(selection.value.path)
-						end
-
-						local current_favs = load_favorites()
-						if current_favs[target_val] then
-							current_favs[target_val] = nil
-							save_favorites(current_favs)
-						end
-
-						actions.close(prompt_bufnr)
-						vim.schedule(function()
-							open_projects_picker(opts)
-						end)
-					end
-
-					map('n', 'f', toggle_favorite)
-					map('n', 'r', rename_project)
-					map('n', 'd', delete_project)
-
-					return true
-				end,
-			}), {}):find()
+			return vim.list_extend(favorite_entries, other_entries)
 		end
 
-		-- Override Telescope projects extension method to use our custom picker
-		telescope.extensions.projects.projects = open_projects_picker
+		-- ------------------------------------------------------------------
+		-- Opening a project
+		-- ------------------------------------------------------------------
 
-		vim.keymap.set('n', '<C-S-r>', function()
+		--- Switches to a project: clears the previous one, changes directory,
+		--- records it as recent, and reopens the file tree there.
+		--- @param dir string Project directory.
+		local function open_project(dir)
+			if not dir or dir == "" then
+				return
+			end
+
+			-- Deliberate action, so now it is fine to touch a WSL path.
+			if vim.fn.isdirectory(dir) == 0 then
+				local message = is_wsl_path(dir)
+						and ("🐧 WSL project directory is unreachable or does not exist:\n" .. tostring(dir))
+					or ("Directory does not exist: " .. tostring(dir))
+				vim.notify(message, vim.log.levels.ERROR, { title = "Recent Projects" })
+				return
+			end
+
+			pcall(vim.cmd, "Neotree close")
+			pcall(vim.cmd, "only")
+
+			vim.cmd("enew")
+			local new_buf = vim.api.nvim_get_current_buf()
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if buf ~= new_buf and vim.api.nvim_buf_is_valid(buf) then
+					pcall(vim.api.nvim_buf_delete, buf, { force = true })
+				end
+			end
+
+			pcall(vim.api.nvim_set_current_dir, dir)
+
+			local wsl = wsl_module()
+			if wsl and wsl.add_recent_project and is_wsl_path(dir) then
+				wsl.add_recent_project(dir)
+			end
+
+			-- Move the project to the end of the history, which is "most recent".
+			if history.recent_projects then
+				local updated = {}
+				for _, project in ipairs(history.recent_projects) do
+					if not path_util.equals(normalize(project), normalize(dir)) then
+						table.insert(updated, project)
+					end
+				end
+				table.insert(updated, dir)
+				history.recent_projects = updated
+				save_history(updated)
+			end
+
+			if _G.AddOpenedFolder then
+				_G.AddOpenedFolder(dir)
+			end
+
+			pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(dir))
+			vim.notify("📁 Switched to project: " .. dir, vim.log.levels.INFO)
+		end
+
+		-- ------------------------------------------------------------------
+		-- Picker
+		-- ------------------------------------------------------------------
+
+		local open_projects_picker
+
+		--- Removes a project from every list it appears in.
+		--- @param entry table Picker entry.
+		local function forget_project(entry)
+			for _, field in ipairs({ "recent_projects", "session_projects" }) do
+				if history[field] then
+					local kept = {}
+					for _, project in ipairs(history[field]) do
+						if normalize(project) ~= entry.norm then
+							table.insert(kept, project)
+						end
+					end
+					history[field] = kept
+				end
+			end
+			save_history(history.get_recent_projects())
+
+			local wsl = wsl_module()
+			if wsl then
+				wsl.remove_recent_project(entry.path)
+			end
+			favorites.remove(entry.path)
+		end
+
+		--- Renames a project directory and follows it through every list.
+		--- WSL directories are not renamed on disk -- only the entries are updated.
+		--- @param entry table Picker entry.
+		--- @param new_name string New folder name.
+		--- @return boolean ok
+		local function rename_project(entry, new_name)
+			local parent = vim.fn.fnamemodify(entry.path, ":h")
+			local new_path = parent .. "/" .. new_name
+			local wsl = wsl_module()
+			local wsl_path = is_wsl_path(entry.path)
+
+			if not wsl_path and vim.fn.isdirectory(entry.path) == 1 then
+				local renamed, err = os.rename(entry.path, new_path)
+				if not renamed then
+					vim.notify("Failed to rename directory: " .. tostring(err), vim.log.levels.ERROR, {
+						title = "Recent Projects",
+					})
+					return false
+				end
+			end
+
+			if history.recent_projects then
+				local updated = {}
+				for _, project in ipairs(history.recent_projects) do
+					table.insert(updated, normalize(project) == entry.norm and new_path or project)
+				end
+				history.recent_projects = updated
+				save_history(updated)
+			end
+
+			if wsl_path and wsl then
+				wsl.remove_recent_project(entry.path)
+				wsl.add_recent_project(new_path)
+			end
+
+			favorites.move(entry.path, new_path)
+			vim.notify("✏️ Project renamed to: " .. new_name, vim.log.levels.INFO, { title = "Recent Projects" })
+			return true
+		end
+
+		--- Opens the recent projects picker.
+		--- @param opts table|nil Reserved; passed through on refresh.
+		open_projects_picker = function(opts)
+			opts = opts or {}
+
+			local pickers = require("telescope.pickers")
+			local finders = require("telescope.finders")
+			local conf = require("telescope.config").values
+			local actions = require("telescope.actions")
+			local action_state = require("telescope.actions.state")
+			local themes = require("telescope.themes")
+
+			pickers
+				.new(themes.get_dropdown({
+					prompt_title = " 📁 Recent Projects | [f] Favorite | [r] Rename | [d] Delete ",
+					width = settings.picker.width,
+					layout_config = settings.picker,
+					finder = finders.new_table({
+						results = build_entries(),
+						entry_maker = function(entry)
+							return {
+								value = entry,
+								display = entry.icon .. "  " .. entry.path .. (entry.is_favorite and " ⭐ [Favorite]" or ""),
+								ordinal = (entry.is_favorite and "0_" or "1_") .. entry.path,
+							}
+						end,
+					}),
+					sorter = conf.generic_sorter({}),
+					attach_mappings = function(prompt_bufnr, map)
+						--- Selected entry, or nil.
+						local function selected()
+							local selection = action_state.get_selected_entry()
+							return selection and selection.value or nil
+						end
+
+						--- Reopens the picker so it reflects a change.
+						local function reopen()
+							vim.schedule(function()
+								open_projects_picker(opts)
+							end)
+						end
+
+						actions.select_default:replace(function()
+							local entry = selected()
+							actions.close(prompt_bufnr)
+							if entry then
+								open_project(entry.path)
+							end
+						end)
+
+						map("n", "f", function()
+							local entry = selected()
+							if not entry then
+								return
+							end
+
+							if favorites.toggle(entry.path) then
+								vim.notify("⭐ Project saved as favorite (top first)", vim.log.levels.INFO, {
+									title = "Recent Projects",
+								})
+							else
+								vim.notify("Removed project from favorites", vim.log.levels.INFO, {
+									title = "Recent Projects",
+								})
+							end
+
+							actions.close(prompt_bufnr)
+							reopen()
+						end)
+
+						map("n", "r", function()
+							local entry = selected()
+							if not entry then
+								return
+							end
+							local old_name = vim.fn.fnamemodify(entry.path, ":t")
+							actions.close(prompt_bufnr)
+
+							vim.schedule(function()
+								require("plugins.krs.input_modal").open({
+									label = "Rename Project (" .. old_name .. ")",
+									default_value = old_name,
+									relative = "editor",
+									callback = function(ok, new_name)
+										if ok and new_name and new_name ~= "" and new_name ~= old_name then
+											rename_project(entry, new_name)
+										end
+										open_projects_picker(opts)
+									end,
+								})
+							end)
+						end)
+
+						map("n", "d", function()
+							local entry = selected()
+							if not entry then
+								return
+							end
+							if vim.fn.confirm("Delete '" .. entry.path .. "' from project list?", "&Yes\n&No", 2) ~= 1 then
+								return
+							end
+
+							forget_project(entry)
+							actions.close(prompt_bufnr)
+							reopen()
+						end)
+
+						return true
+					end,
+				}), {})
+				:find()
+		end
+
+		-- `Telescope projects` and the dashboard both route here.
+		require("telescope").extensions.projects.projects = open_projects_picker
+
+		vim.keymap.set("n", settings.key, function()
 			open_projects_picker()
-		end, { desc = 'Telescope recent projects' })
+		end, { desc = "Telescope recent projects" })
 	end,
 }
-

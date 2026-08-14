@@ -1,59 +1,105 @@
+-- ============================================================================
+-- PLUGIN: telescope.nvim -- the fuzzy finder, plus a folder-opening picker.
+-- ============================================================================
+-- WHAT THIS FILE ADDS ON TOP OF TELESCOPE
+--   1. Two file finders with a sensible search strategy per project:
+--        <C-k> / <C-/>   respect .gitignore (git ls-files inside a repo)
+--        <C-A-k> / <C-?> ignore it entirely (everything, including hidden)
+--      Both are also exported as `_G.FindFilesGitignore` / `_G.FindFilesNoIgnore`,
+--      which is what the keymaps in lua/config/keymaps/search.lua call.
+--   2. `:TelescopeOpenFolder` -- browse directories and ADOPT one as the project:
+--      close splits, drop the old buffers, cd, record it, reopen the tree.
+--   3. `:TelescopeFindFilesSplit{Left,Below,Above,Right}` -- find a file and open
+--      it in a split.
+--
+-- KEY OWNERSHIP
+--   The <C-S-h/j/k/l> split keys are bound in lua/config/keymaps/search.lua, not
+--   here, because <C-S-j> has to fall through to the DAP repl during a debug
+--   session. This file only provides the commands they drive.
+-- ============================================================================
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local settings = {
+	--- Find files, honouring .gitignore.
+	find_keys = { "<C-k>", "<C-/>", "<C-_>" },
+
+	--- Find files, ignoring .gitignore. Several aliases: Alt/Meta combinations
+	--- arrive differently depending on terminal and GUI.
+	find_all_keys = {
+		"<C-A-k>", "<C-A-K>", "<C-M-k>", "<C-M-K>",
+		"<A-C-k>", "<A-C-K>", "<M-C-k>", "<M-C-K>",
+		"<C-S-/>", "<C-?>", "<leader>fa",
+	},
+
+	grep_key = "<C-f>",
+	help_key = "<leader>fh",
+	open_folder_key = "<C-S-o>",
+	explorer_key = "<C-S-f>",
+
+	--- Directory scan depth for the folder picker, and what it never descends into.
+	folder_scan_depth = 3,
+	folder_excludes = { ".git", "node_modules", ".cache" },
+
+	--- Direction -> Ex command and label, for the split finders.
+	splits = {
+		h = { command = "leftabove vsplit", label = "Left (←)" },
+		j = { command = "rightbelow split", label = "Down (↓)" },
+		k = { command = "leftabove split", label = "Up (↑)" },
+		l = { command = "rightbelow vsplit", label = "Right (→)" },
+	},
+}
+
 return {
-	'nvim-telescope/telescope.nvim',
+	"nvim-telescope/telescope.nvim",
 	cmd = {
-		'Telescope',
-		'TelescopeOpenFolder',
-		'TelescopeFileBrowserDesktop',
-		'TelescopeFindFilesSplitLeft',
-		'TelescopeFindFilesSplitBelow',
-		'TelescopeFindFilesSplitAbove',
-		'TelescopeFindFilesSplitRight',
-		'TelescopeFindFilesNoIgnore',
+		"Telescope",
+		"TelescopeOpenFolder",
+		"TelescopeFileBrowserDesktop",
+		"TelescopeFindFilesSplitLeft",
+		"TelescopeFindFilesSplitBelow",
+		"TelescopeFindFilesSplitAbove",
+		"TelescopeFindFilesSplitRight",
+		"TelescopeFindFilesNoIgnore",
 	},
 	keys = {
-		{ '<C-k>', '<cmd>Telescope find_files<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (excludes .gitignore)' },
-		{ '<C-A-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<C-A-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<C-M-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<C-M-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<A-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<A-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<M-C-k>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<M-C-K>', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'i' }, desc = 'Telescope find files (ignoring .gitignore)' },
-		{ '<leader>fa', '<cmd>TelescopeFindFilesNoIgnore<CR>', mode = { 'n', 'v' }, desc = 'Find all files (no .gitignore)' },
-		{ '<C-f>', '<cmd>Telescope live_grep<CR>', mode = { 'n', 'i' }, desc = 'Telescope live grep' },
-		{ '<leader>fh', '<cmd>Telescope help_tags<CR>', desc = 'Telescope help tags' },
-		{ '<C-S-o>', '<cmd>TelescopeOpenFolder<CR>', mode = { 'n', 'i' }, desc = 'Telescope open folder' },
-		{ '<C-S-f>', '<cmd>TelescopeFileBrowserDesktop<CR>', mode = { 'n', 'i', 'v' }, desc = 'Open Desktop File Explorer' },
-		{ '<C-S-h>', '<cmd>TelescopeFindFilesSplitLeft<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split left' },
-		{ '<C-S-j>', '<cmd>TelescopeFindFilesSplitBelow<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split below' },
-		{ '<C-S-k>', '<cmd>TelescopeFindFilesSplitAbove<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split above' },
-		{ '<C-S-l>', '<cmd>TelescopeFindFilesSplitRight<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split right' },
-		{ '<C-S-H>', '<cmd>TelescopeFindFilesSplitLeft<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split left' },
-		{ '<C-S-J>', '<cmd>TelescopeFindFilesSplitBelow<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split below' },
-		{ '<C-S-K>', '<cmd>TelescopeFindFilesSplitAbove<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split above' },
-		{ '<C-S-L>', '<cmd>TelescopeFindFilesSplitRight<CR>', mode = { 'n', 'i', 'v' }, desc = 'Telescope find files split right' },
+		{ "<C-k>", "<cmd>Telescope find_files<CR>", mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-A-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<C-A-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<C-M-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<C-M-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<A-C-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<A-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<M-C-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<M-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<leader>fa", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "v" }, desc = "Find all files (no .gitignore)" },
+		{ "<C-f>", "<cmd>Telescope live_grep<CR>", mode = { "n", "i" }, desc = "Telescope live grep" },
+		{ "<leader>fh", "<cmd>Telescope help_tags<CR>", desc = "Telescope help tags" },
+		{ "<C-S-o>", "<cmd>TelescopeOpenFolder<CR>", mode = { "n", "i" }, desc = "Telescope open folder" },
+		{ "<C-S-f>", "<cmd>TelescopeFileBrowserDesktop<CR>", mode = { "n", "i", "v" }, desc = "Open Desktop File Explorer" },
 	},
 	dependencies = {
-		'nvim-lua/plenary.nvim',
-		'ahmedkhalf/project.nvim',
-		'nvim-telescope/telescope-file-browser.nvim',
+		"nvim-lua/plenary.nvim",
+		"ahmedkhalf/project.nvim",
+		"nvim-telescope/telescope-file-browser.nvim",
 	},
 	config = function()
-
-		local telescope = require('telescope')
-		local builtin = require('telescope.builtin')
-		local pickers = require('telescope.pickers')
-		local finders = require('telescope.finders')
-		local conf = require('telescope.config').values
-		local actions = require('telescope.actions')
-		local action_state = require('telescope.actions.state')
-		local themes = require('telescope.themes')
+		local telescope = require("telescope")
+		local builtin = require("telescope.builtin")
+		local pickers = require("telescope.pickers")
+		local finders = require("telescope.finders")
+		local conf = require("telescope.config").values
+		local actions = require("telescope.actions")
+		local action_state = require("telescope.actions.state")
+		local themes = require("telescope.themes")
 
 		telescope.setup({
 			defaults = {
 				mappings = {
 					n = {
+						-- `?` shows the context help for whatever picker is open.
 						["?"] = function()
 							require("plugins.krs.context_help").show_help()
 						end,
@@ -62,21 +108,28 @@ return {
 			},
 		})
 
-		local function find_files_gitignore()
-			local is_git = false
+		-- ------------------------------------------------------------------
+		-- File finders
+		-- ------------------------------------------------------------------
+
+		--- True when the working directory is inside a git repository.
+		--- @return boolean
+		local function in_git_repo()
 			local cwd = vim.fn.getcwd()
 			if vim.fn.isdirectory(cwd .. "/.git") == 1 then
-				is_git = true
-			else
-				local obj = vim.system({ "git", "-C", cwd, "rev-parse", "--is-inside-work-tree" }, { text = true }):wait()
-				if obj and obj.code == 0 and obj.stdout and obj.stdout:match("true") then
-					is_git = true
-				end
+				return true
 			end
 
-			if is_git then
-				local ok = pcall(builtin.git_files, { show_untracked = true })
-				if not ok then
+			local result = vim.system({ "git", "-C", cwd, "rev-parse", "--is-inside-work-tree" }, { text = true }):wait()
+			return result and result.code == 0 and result.stdout ~= nil and result.stdout:match("true") ~= nil
+		end
+
+		--- Finds files, respecting .gitignore.
+		--- Inside a repository `git files` is both the fastest and the most correct
+		--- source; outside one, rg/fd apply the ignore rules themselves.
+		local function find_files_gitignore()
+			if in_git_repo() then
+				if not pcall(builtin.git_files, { show_untracked = true }) then
 					builtin.find_files({ no_ignore = false, hidden = true })
 				end
 			elseif vim.fn.executable("rg") == 1 then
@@ -84,14 +137,14 @@ return {
 					find_command = { "rg", "--files", "--color=never", "--hidden", "--glob", "!.git/*" },
 				})
 			elseif vim.fn.executable("fd") == 1 then
-				builtin.find_files({
-					find_command = { "fd", "--type", "f", "--hidden", "--exclude", ".git" },
-				})
+				builtin.find_files({ find_command = { "fd", "--type", "f", "--hidden", "--exclude", ".git" } })
 			else
 				builtin.find_files({ no_ignore = false, hidden = true })
 			end
 		end
 
+		--- Finds every file, ignore rules included -- for build output and vendored
+		--- code you deliberately want to open.
 		local function find_files_no_ignore()
 			if vim.fn.executable("rg") == 1 then
 				builtin.find_files({
@@ -106,259 +159,263 @@ return {
 			end
 		end
 
+		-- Exported for lua/config/keymaps/search.lua, which binds these before
+		-- telescope has loaded.
 		_G.FindFilesGitignore = find_files_gitignore
 		_G.FindFilesNoIgnore = find_files_no_ignore
 
-		vim.api.nvim_create_user_command('TelescopeFindFilesNoIgnore', find_files_no_ignore, { desc = 'Find files ignoring .gitignore' })
+		vim.api.nvim_create_user_command("TelescopeFindFilesNoIgnore", find_files_no_ignore, {
+			desc = "Find files ignoring .gitignore",
+		})
 
-		local gitignore_keys = { '<C-k>', '<C-/>', '<C-_>' }
-		for _, key in ipairs(gitignore_keys) do
-			vim.keymap.set({ 'n', 'i' }, key, find_files_gitignore, { noremap = true, silent = true, desc = 'Telescope find files (excludes .gitignore)' })
+		for _, key in ipairs(settings.find_keys) do
+			vim.keymap.set({ "n", "i" }, key, find_files_gitignore, {
+				noremap = true,
+				silent = true,
+				desc = "Telescope find files (excludes .gitignore)",
+			})
+		end
+		for _, key in ipairs(settings.find_all_keys) do
+			vim.keymap.set({ "n", "i" }, key, find_files_no_ignore, {
+				noremap = true,
+				silent = true,
+				desc = "Telescope find files (ignoring .gitignore)",
+			})
 		end
 
-		local no_ignore_keys = { '<C-A-k>', '<C-A-K>', '<C-M-k>', '<C-M-K>', '<A-C-k>', '<A-C-K>', '<M-C-k>', '<M-C-K>', '<C-S-/>', '<C-?>', '<leader>fa' }
-		for _, key in ipairs(no_ignore_keys) do
-			vim.keymap.set({ 'n', 'i' }, key, find_files_no_ignore, { noremap = true, silent = true, desc = 'Telescope find files (ignoring .gitignore)' })
+		vim.keymap.set({ "n", "i" }, settings.grep_key, builtin.live_grep, { desc = "Telescope live grep" })
+		vim.keymap.set("n", settings.help_key, builtin.help_tags, { desc = "Telescope help tags" })
+
+		-- ------------------------------------------------------------------
+		-- Folder picker
+		-- ------------------------------------------------------------------
+
+		--- Absolute directory path with no trailing separator, except at a root
+		--- (`C:/`, `/`), where the separator is part of the path.
+		--- @param p string|nil
+		--- @return string
+		local function normalize_dir(p)
+			if not p or p == "" then
+				return ""
+			end
+			local full = vim.fn.fnamemodify(p, ":p")
+			if full:match("^[A-Za-z]:[/\\]$") or full == "/" then
+				return full
+			end
+			return (full:gsub("[/\\]$", ""))
 		end
 
+		--- Subdirectories of `dir`, at most `folder_scan_depth` levels deep.
+		--- `fd` when available; plenary's scanner otherwise.
+		--- @param dir string Root directory.
+		--- @return string[] directories Including `dir` itself, first.
+		local function scan_directories(dir)
+			local dirs = { dir }
 
+			if vim.fn.executable("fd") == 1 then
+				local cmd = { "fd", ".", dir, "--type", "d", "--hidden" }
+				for _, exclude in ipairs(settings.folder_excludes) do
+					vim.list_extend(cmd, { "--exclude", exclude })
+				end
+				vim.list_extend(cmd, { "--max-depth", tostring(settings.folder_scan_depth) })
 
-		vim.keymap.set('n', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
-		vim.keymap.set('i', '<C-f>', builtin.live_grep, { desc = 'Telescope live grep' })
-		vim.keymap.set('n', '<leader>fh', builtin.help_tags, { desc = 'Telescope help tags' })
-
-		local function normalize_dir_path(path)
-			if not path or path == '' then
-				return ''
-			end
-			local p = vim.fn.fnamemodify(path, ':p')
-			if p:match('^[A-Za-z]:[/\\]$') or p == '/' then
-				return p
-			end
-			return (p:gsub('[/\\]$', ''))
-		end
-
-		local function open_folder_picker(opts)
-			opts = opts or {}
-			local desktop_path = vim.fn.expand('~/Desktop')
-			if vim.fn.isdirectory(desktop_path) == 0 then
-				desktop_path = vim.fn.expand('~')
-			end
-
-			local curr_dir = opts.cwd or desktop_path
-			curr_dir = normalize_dir_path(curr_dir)
-
-			local dirs = { curr_dir }
-
-			if vim.fn.executable('fd') == 1 then
-				local cmd = { 'fd', '.', curr_dir, '--type', 'd', '--hidden', '--exclude', '.git', '--exclude', 'node_modules', '--exclude', '.cache', '--max-depth', '3' }
 				local output = vim.fn.systemlist(cmd)
 				if vim.v.shell_error == 0 then
 					for _, line in ipairs(output) do
-						if line ~= '' then
-							local full = line:gsub('\\', '/'):gsub('/$', '')
-							table.insert(dirs, full)
+						if line ~= "" then
+							table.insert(dirs, (line:gsub("\\", "/"):gsub("/$", "")))
 						end
 					end
 				end
-			else
-				local scan_ok, scandir = pcall(require, 'plenary.scandir')
-				if scan_ok then
-					local results = scandir.scan_dir(curr_dir, {
-						only_dirs = true,
-						depth = 3,
-						hidden = false,
-					})
-					for _, d in ipairs(results) do
-						table.insert(dirs, (d:gsub('\\', '/'):gsub('/$', '')))
-					end
-				end
+				return dirs
 			end
 
-			local function add_to_recent_projects(dir_path)
-				if not dir_path or dir_path == '' then
-					return
+			local ok, scandir = pcall(require, "plenary.scandir")
+			if ok then
+				for _, found in ipairs(scandir.scan_dir(dir, {
+					only_dirs = true,
+					depth = settings.folder_scan_depth,
+					hidden = false,
+				})) do
+					table.insert(dirs, (found:gsub("\\", "/"):gsub("/$", "")))
 				end
-				local norm_path = normalize_dir_path(dir_path):gsub('\\', '/')
-				if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
-					norm_path = norm_path:sub(1, 1):lower() .. norm_path:sub(2)
-				end
-
-				local history_ok, history = pcall(require, 'project_nvim.utils.history')
-				if history_ok then
-					history.session_projects = history.session_projects or {}
-					local filtered_session = {}
-					for _, p in ipairs(history.session_projects) do
-						local p_norm = p:gsub('\\', '/'):gsub('/$', '')
-						if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
-							p_norm = p_norm:sub(1, 1):lower() .. p_norm:sub(2)
-						end
-						if p_norm:lower() ~= norm_path:lower() then
-							table.insert(filtered_session, p)
-						end
-					end
-					table.insert(filtered_session, norm_path)
-					history.session_projects = filtered_session
-
-					if history.recent_projects ~= nil then
-						local filtered_recent = {}
-						for _, p in ipairs(history.recent_projects) do
-							local p_norm = p:gsub('\\', '/'):gsub('/$', '')
-							if vim.fn.has('win32') == 1 or vim.fn.has('wsl') == 1 then
-								p_norm = p_norm:sub(1, 1):lower() .. p_norm:sub(2)
-							end
-							if p_norm:lower() ~= norm_path:lower() then
-								table.insert(filtered_recent, p)
-							end
-						end
-						table.insert(filtered_recent, norm_path)
-						history.recent_projects = filtered_recent
-					end
-
-					history.write_projects_to_history()
-				end
-
-				pcall(function()
-					require('plugins.krs.wsl').add_recent_project(norm_path)
-				end)
 			end
-
-			local function open_directory(dir_path)
-				dir_path = normalize_dir_path(dir_path)
-				if vim.fn.isdirectory(dir_path) == 0 then
-					vim.notify('Directory does not exist: ' .. dir_path, vim.log.levels.ERROR)
-					return
-				end
-
-				-- Close Neo-tree & all splits to start completely clean
-				pcall(vim.cmd, 'Neotree close')
-				pcall(vim.cmd, 'only')
-
-				-- Create a clean empty buffer
-				vim.cmd('enew')
-				local new_buf = vim.api.nvim_get_current_buf()
-
-				-- Delete ALL old buffers from the previous project
-				for _, b in ipairs(vim.api.nvim_list_bufs()) do
-					if b ~= new_buf and vim.api.nvim_buf_is_valid(b) then
-						pcall(vim.api.nvim_buf_delete, b, { force = true })
-					end
-				end
-
-				pcall(vim.api.nvim_set_current_dir, dir_path)
-				add_to_recent_projects(dir_path)
-				if _G.AddOpenedFolder then
-					_G.AddOpenedFolder(dir_path)
-				end
-
-				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
-				vim.notify('📁 Opened folder: ' .. dir_path, vim.log.levels.INFO)
-			end
-
-			pickers.new(themes.get_dropdown({
-				prompt_title = ' 📁 Open Folder (Root: ' .. vim.fn.fnamemodify(curr_dir, ':t') .. ') ',
-				finder = finders.new_table({
-					results = dirs,
-					entry_maker = function(entry)
-						local norm_entry = entry:gsub('\\', '/'):gsub('/$', '')
-						local norm_curr = curr_dir:gsub('\\', '/'):gsub('/$', '')
-						local rel = norm_entry
-
-						if norm_entry:lower() == norm_curr:lower() then
-							rel = '. (Current Root: ' .. norm_entry .. ')'
-						elseif norm_entry:lower():sub(1, #norm_curr) == norm_curr:lower() then
-							rel = norm_entry:sub(#norm_curr + 2)
-						end
-
-						return {
-							value = norm_entry,
-							display = '📁 ' .. rel,
-							ordinal = rel .. ' ' .. norm_entry,
-						}
-					end,
-				}),
-				sorter = conf.generic_sorter({}),
-				attach_mappings = function(prompt_bufnr, map)
-					actions.select_default:replace(function()
-						local selection = action_state.get_selected_entry()
-						actions.close(prompt_bufnr)
-						if selection and selection.value then
-							open_directory(selection.value)
-						end
-					end)
-
-					local drill_down = function()
-						local selection = action_state.get_selected_entry()
-						if selection and selection.value and vim.fn.isdirectory(selection.value) == 1 then
-							actions.close(prompt_bufnr)
-							vim.schedule(function()
-								open_folder_picker({ cwd = selection.value })
-							end)
-						end
-					end
-					map('i', '<C-l>', drill_down)
-					map('n', '<C-l>', drill_down)
-
-					local go_up = function()
-						local parent = vim.fn.fnamemodify(curr_dir, ':h')
-						if parent and parent ~= curr_dir then
-							actions.close(prompt_bufnr)
-							vim.schedule(function()
-								open_folder_picker({ cwd = parent })
-							end)
-						end
-					end
-					map('i', '<C-h>', go_up)
-					map('n', '<C-h>', go_up)
-
-					return true
-				end,
-			}), {}):find()
+			return dirs
 		end
 
-		pcall(telescope.load_extension, 'file_browser')
+		--- Records a directory as the most recent project, in both project.nvim's
+		--- lists and the WSL one.
+		--- @param dir string Directory path.
+		local function remember_project(dir)
+			if not dir or dir == "" then
+				return
+			end
 
-		vim.api.nvim_create_user_command('TelescopeOpenFolder', function()
+			local favorites = require("krs.projects.favorites")
+			local key = favorites.key(dir)
+
+			local ok, history = pcall(require, "project_nvim.utils.history")
+			if ok then
+				for _, field in ipairs({ "session_projects", "recent_projects" }) do
+					if history[field] ~= nil then
+						local kept = {}
+						for _, project in ipairs(history[field]) do
+							if favorites.key(project):lower() ~= key:lower() then
+								table.insert(kept, project)
+							end
+						end
+						table.insert(kept, key)
+						history[field] = kept
+					end
+				end
+				history.write_projects_to_history()
+			end
+
+			pcall(function()
+				require("plugins.krs.wsl").add_recent_project(key)
+			end)
+		end
+
+		--- Adopts a directory as the active project.
+		--- @param dir string Directory path.
+		local function open_directory(dir)
+			dir = normalize_dir(dir)
+			if vim.fn.isdirectory(dir) == 0 then
+				vim.notify("Directory does not exist: " .. dir, vim.log.levels.ERROR)
+				return
+			end
+
+			pcall(vim.cmd, "Neotree close")
+			pcall(vim.cmd, "only")
+
+			vim.cmd("enew")
+			local new_buf = vim.api.nvim_get_current_buf()
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if buf ~= new_buf and vim.api.nvim_buf_is_valid(buf) then
+					pcall(vim.api.nvim_buf_delete, buf, { force = true })
+				end
+			end
+
+			pcall(vim.api.nvim_set_current_dir, dir)
+			remember_project(dir)
+			if _G.AddOpenedFolder then
+				_G.AddOpenedFolder(dir)
+			end
+
+			pcall(vim.cmd, "Neotree show dir=" .. vim.fn.fnameescape(dir))
+			vim.notify("📁 Opened folder: " .. dir, vim.log.levels.INFO)
+		end
+
+		local open_folder_picker
+
+		--- Browses directories; <CR> adopts one, <C-l> descends, <C-h> goes up.
+		--- @param opts table|nil `{ cwd = string }` Directory to browse.
+		open_folder_picker = function(opts)
+			opts = opts or {}
+
+			local desktop = vim.fn.expand("~/Desktop")
+			if vim.fn.isdirectory(desktop) == 0 then
+				desktop = vim.fn.expand("~")
+			end
+
+			local curr_dir = normalize_dir(opts.cwd or desktop)
+
+			pickers
+				.new(themes.get_dropdown({
+					prompt_title = " 📁 Open Folder (Root: " .. vim.fn.fnamemodify(curr_dir, ":t") .. ") ",
+					finder = finders.new_table({
+						results = scan_directories(curr_dir),
+						entry_maker = function(entry)
+							local normalized = entry:gsub("\\", "/"):gsub("/$", "")
+							local root = curr_dir:gsub("\\", "/"):gsub("/$", "")
+							local label = normalized
+
+							-- Show paths relative to the browsed root; it is shorter
+							-- and makes the depth obvious.
+							if normalized:lower() == root:lower() then
+								label = ". (Current Root: " .. normalized .. ")"
+							elseif normalized:lower():sub(1, #root) == root:lower() then
+								label = normalized:sub(#root + 2)
+							end
+
+							return { value = normalized, display = "📁 " .. label, ordinal = label .. " " .. normalized }
+						end,
+					}),
+					sorter = conf.generic_sorter({}),
+					attach_mappings = function(prompt_bufnr, map)
+						actions.select_default:replace(function()
+							local selection = action_state.get_selected_entry()
+							actions.close(prompt_bufnr)
+							if selection and selection.value then
+								open_directory(selection.value)
+							end
+						end)
+
+						local function drill_down()
+							local selection = action_state.get_selected_entry()
+							if selection and selection.value and vim.fn.isdirectory(selection.value) == 1 then
+								actions.close(prompt_bufnr)
+								vim.schedule(function()
+									open_folder_picker({ cwd = selection.value })
+								end)
+							end
+						end
+						map("i", "<C-l>", drill_down)
+						map("n", "<C-l>", drill_down)
+
+						local function go_up()
+							local parent = vim.fn.fnamemodify(curr_dir, ":h")
+							if parent and parent ~= curr_dir then
+								actions.close(prompt_bufnr)
+								vim.schedule(function()
+									open_folder_picker({ cwd = parent })
+								end)
+							end
+						end
+						map("i", "<C-h>", go_up)
+						map("n", "<C-h>", go_up)
+
+						return true
+					end,
+				}), {})
+				:find()
+		end
+
+		pcall(telescope.load_extension, "file_browser")
+
+		vim.api.nvim_create_user_command("TelescopeOpenFolder", function()
 			open_folder_picker()
-		end, {})
-		vim.keymap.set({ 'n', 'i' }, '<C-S-o>', open_folder_picker, { desc = 'Telescope open folder' })
+		end, { desc = "Browse folders and open one as the active project" })
+		vim.keymap.set({ "n", "i" }, settings.open_folder_key, function()
+			open_folder_picker()
+		end, { desc = "Telescope open folder" })
 
-		vim.api.nvim_create_user_command('TelescopeFileBrowserDesktop', function()
-			require('plugins.krs.file_explorer').open_desktop_explorer()
-		end, {})
-		vim.keymap.set({ 'n', 'i' }, '<C-S-f>', function()
-			require('plugins.krs.file_explorer').open_desktop_explorer()
-		end, { desc = 'Open Desktop File Explorer' })
+		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
+			require("plugins.krs.file_explorer").open_desktop_explorer()
+		end, { desc = "Open the floating desktop file explorer" })
+		vim.keymap.set({ "n", "i" }, settings.explorer_key, function()
+			require("plugins.krs.file_explorer").open_desktop_explorer()
+		end, { desc = "Open Desktop File Explorer" })
 
+		-- ------------------------------------------------------------------
+		-- Split finders
+		-- ------------------------------------------------------------------
+
+		--- Finds a file and opens it in a split in `direction`.
+		--- @param direction "h"|"j"|"k"|"l"
 		local function open_find_files_split(direction)
-			local dir_names = {
-				h = 'Left (←)',
-				j = 'Down (↓)',
-				k = 'Up (↑)',
-				l = 'Right (→)',
-			}
+			local split = settings.splits[direction]
 
 			builtin.find_files({
-				prompt_title = ' 🔍 Find & Open File ' .. (dir_names[direction] or direction) .. ' ',
-				attach_mappings = function(prompt_bufnr, map)
+				prompt_title = " 🔍 Find & Open File " .. (split and split.label or direction) .. " ",
+				attach_mappings = function(prompt_bufnr)
 					actions.select_default:replace(function()
 						local selection = action_state.get_selected_entry()
 						actions.close(prompt_bufnr)
-						if selection and (selection.value or selection[1]) then
-							local filepath = selection.value or selection[1]
-							local cmd
-							if direction == 'h' then
-								cmd = 'leftabove vsplit '
-							elseif direction == 'l' then
-								cmd = 'rightbelow vsplit '
-							elseif direction == 'k' then
-								cmd = 'leftabove split '
-							elseif direction == 'j' then
-								cmd = 'rightbelow split '
-							end
-							if cmd then
-								vim.cmd(cmd .. vim.fn.fnameescape(filepath))
-							end
+
+						local filepath = selection and (selection.value or selection[1])
+						if filepath and split then
+							vim.cmd(split.command .. " " .. vim.fn.fnameescape(filepath))
 						end
 					end)
 					return true
@@ -366,26 +423,17 @@ return {
 			})
 		end
 
-		vim.api.nvim_create_user_command('TelescopeFindFilesSplitLeft', function() open_find_files_split('h') end, {})
-		vim.api.nvim_create_user_command('TelescopeFindFilesSplitBelow', function() open_find_files_split('j') end, {})
-		vim.api.nvim_create_user_command('TelescopeFindFilesSplitAbove', function() open_find_files_split('k') end, {})
-		vim.api.nvim_create_user_command('TelescopeFindFilesSplitRight', function() open_find_files_split('l') end, {})
-
-		local split_key_modes = { 'n', 'i', 'v' }
-		local split_keymaps = {
-			h = { '<C-S-h>', '<C-S-H>' },
-			j = { '<C-S-j>', '<C-S-J>' },
-			k = { '<C-S-k>', '<C-S-K>' },
-			l = { '<C-S-l>', '<C-S-L>' },
+		-- Keys for these live in lua/config/keymaps/search.lua (see the header).
+		local split_commands = {
+			TelescopeFindFilesSplitLeft = "h",
+			TelescopeFindFilesSplitBelow = "j",
+			TelescopeFindFilesSplitAbove = "k",
+			TelescopeFindFilesSplitRight = "l",
 		}
-
-		for dir, keys_list in pairs(split_keymaps) do
-			for _, k in ipairs(keys_list) do
-				vim.keymap.set(split_key_modes, k, function()
-					open_find_files_split(dir)
-				end, { noremap = true, silent = true, desc = 'Find file and open in split (' .. dir .. ')' })
-			end
+		for name, direction in pairs(split_commands) do
+			vim.api.nvim_create_user_command(name, function()
+				open_find_files_split(direction)
+			end, { desc = "Find a file and open it in a split (" .. direction .. ")" })
 		end
 	end,
 }
-

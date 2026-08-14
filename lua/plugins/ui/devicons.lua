@@ -1,3 +1,13 @@
+-- ============================================================================
+-- PLUGIN: nvim-web-devicons -- filetype icons for every list in the editor.
+-- ============================================================================
+-- Loaded eagerly because neo-tree, telescope, the bufferline and the dashboard
+-- all ask for icons during startup.
+--
+-- The `.krsnvim` icon is registered three ways (extension, direct, filetype),
+-- because each consumer looks it up differently.
+-- ============================================================================
+
 return {
   {
     "nvim-tree/nvim-web-devicons",

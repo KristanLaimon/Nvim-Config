@@ -1,174 +1,231 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Media & Image Viewer (OS Default Program & Chafa Terminal)
+-- KRS PLUGIN: Media Viewer -- open media outside nvim, or preview it inside.
 -- ============================================================================
--- 1. Press <Ctrl + Shift + Enter> to open current image/video in OS default application.
--- 2. Press <leader>i to preview images directly inside terminal using Chafa.
--- 3. Supports all image formats (png, jpg, gif, webp, svg, etc.) and video formats.
--- 4. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   <C-S-CR>   Opens the current file (or the project root) with the OS default
+--              application -- the reliable way to view images and video.
+--   <leader>i  Renders the image inside a floating terminal with `chafa`, for a
+--              quick look without leaving the editor.
+--   Opening a media file also notifies you that <C-S-CR> exists.
+--
+-- PLATFORMS
+--   Windows `cmd /c start`, WSL `explorer.exe` (with a UNC path rewrite),
+--   macOS `open`, everything else `xdg-open`.
+--
+-- REQUIREMENTS
+--   `chafa` on PATH, for the in-terminal preview only.
 -- ============================================================================
+
+local ui = require("krs.core.ui")
+local path = require("krs.core.path")
 
 local M = {}
 
-local media_exts = {
-	-- Images
-	png = true, jpg = true, jpeg = true, gif = true, webp = true,
-	bmp = true, ico = true, svg = true, tiff = true, avif = true, heic = true,
-	-- Videos
-	mp4 = true, mkv = true, avi = true, mov = true, wmv = true,
-	flv = true, webm = true, m4v = true, ["3gp"] = true, ogv = true,
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Extensions that count as media, used for the "press <C-S-CR>" hint.
+	--- ADD FORMATS HERE.
+	media_extensions = {
+		-- Images
+		"png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "tiff", "avif", "heic",
+		-- Video
+		"mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv",
+	},
+
+	--- Size of the chafa preview float, as a fraction of the editor.
+	preview_width_ratio = 0.8,
+	preview_height_ratio = 0.8,
+
+	--- Renderer used by the in-editor preview. `%dx%d` receives width and height.
+	preview_command = "chafa --size=%dx%d %s",
+
+	--- Notification titles.
+	notify_title = "Media Viewer",
+	preview_notify_title = "KRS Image Viewer",
+
+	keys = {
+		--- Open with the OS default application, from any mode.
+		open_external = { "<C-S-CR>", "<C-S-Enter>", "<C-S-Return>" },
+		--- Render the image inside the editor.
+		preview = "<leader>i",
+		--- Dismiss the preview float.
+		close_preview = { "q", "<Esc>" },
+	},
 }
 
-local function is_media_file(path)
-	if not path or path == "" then return false end
-	local ext = vim.fn.fnamemodify(path, ":e"):lower()
-	return media_exts[ext] == true
+--- Extension lookup built once from `M.settings.media_extensions`.
+local media_exts = {}
+for _, ext in ipairs(M.settings.media_extensions) do
+	media_exts[ext] = true
 end
 
+-- ============================================================================
+-- HELPERS
+-- ============================================================================
+
+--- True when the path has a media extension.
+--- @param filepath string|nil
+--- @return boolean
+local function is_media_file(filepath)
+	if not filepath or filepath == "" then
+		return false
+	end
+	return media_exts[vim.fn.fnamemodify(filepath, ":e"):lower()] == true
+end
+
+--- True when the path exists as a file or a directory.
+--- @param p string|nil
+--- @return boolean
 local function path_exists(p)
-	return p ~= nil and p ~= "" and (vim.fn.filereadable(p) == 1 or vim.fn.isdirectory(p) == 1)
+	return p ~= nil and p ~= "" and (path.is_file(p) or path.is_dir(p))
 end
 
+--- First real file shown in the current tab, skipping neo-tree and scratch
+--- buffers. Used when the active buffer is not a file itself.
+--- @return string filepath Empty string when nothing suitable is open.
+local function first_visible_file()
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		local buf = vim.api.nvim_win_get_buf(win)
+		if vim.bo[buf].filetype ~= "neo-tree" and vim.bo[buf].buftype == "" then
+			local name = vim.api.nvim_buf_get_name(buf)
+			if path_exists(name) then
+				return name
+			end
+		end
+	end
+	return ""
+end
+
+--- Translates a WSL path into the Windows UNC path explorer.exe understands.
+--- @param linux_path string
+--- @return string|nil unc_path nil when not running inside WSL.
 local function windows_path_for_wsl(linux_path)
 	local distro = os.getenv("WSL_DISTRO_NAME")
 	if not distro then
 		return nil
 	end
-	local rel = linux_path:gsub("^/", ""):gsub("/", "\\")
-	return "\\\\wsl.localhost\\" .. distro .. "\\" .. rel
+	return "\\\\wsl.localhost\\" .. distro .. "\\" .. linux_path:gsub("^/", ""):gsub("/", "\\")
 end
 
+--- The platform's "open this with whatever handles it" command.
+--- @param filepath string
+--- @return string[] cmd
+local function system_open_command(filepath)
+	if vim.fn.has("win32") == 1 then
+		return { "cmd.exe", "/c", "start", '""', filepath }
+	end
+	if vim.fn.has("wsl") == 1 then
+		return { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
+	end
+	if vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1 then
+		return { "open", filepath }
+	end
+	return { "xdg-open", filepath }
+end
+
+-- ============================================================================
+-- API
+-- ============================================================================
+
+--- Opens a file or directory with the OS default application.
+--- @param filepath string|nil Defaults to the current buffer, then any open file.
 function M.open_with_system_app(filepath)
 	local ok, err = pcall(function()
 		if not filepath or filepath == "" then
 			filepath = vim.api.nvim_buf_get_name(0)
 		end
-
 		if not path_exists(filepath) then
-			for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-				local b = vim.api.nvim_win_get_buf(win)
-				if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
-					local name = vim.api.nvim_buf_get_name(b)
-					if path_exists(name) then
-						filepath = name
-						break
-					end
-				end
-			end
+			filepath = first_visible_file()
 		end
-
 		if not path_exists(filepath) then
-			vim.notify("No valid file or folder found to open", vim.log.levels.WARN, { title = "Media Viewer" })
+			vim.notify("No valid file or folder found to open", vim.log.levels.WARN, {
+				title = M.settings.notify_title,
+			})
 			return
 		end
 
 		filepath = filepath:gsub("[/\\]+$", "")
-
-		local is_win = vim.fn.has("win32") == 1
-		local is_wsl = vim.fn.has("wsl") == 1
-		local is_mac = vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1
-
-		local cmd
-		if is_win then
-			cmd = { "cmd.exe", "/c", "start", '""', filepath }
-		elseif is_wsl then
-			cmd = { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
-		elseif is_mac then
-			cmd = { "open", filepath }
-		else
-			cmd = { "xdg-open", filepath }
-		end
+		local cmd = system_open_command(filepath)
 
 		vim.system(cmd, { detach = true }, function(result)
+			-- The Windows launchers return non-zero for reasons that are not
+			-- failures (start returns as soon as it hands off), so only report
+			-- errors from the POSIX openers.
 			if result.code ~= 0 and cmd[1] ~= "cmd.exe" and cmd[1] ~= "explorer.exe" then
 				vim.schedule(function()
 					vim.notify(
-						"Failed to open: " .. (result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
+						"Failed to open: "
+							.. (result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
 						vim.log.levels.ERROR,
-						{ title = "Media Viewer" }
+						{ title = M.settings.notify_title }
 					)
 				end)
 			end
 		end)
 
-		local filename = vim.fn.fnamemodify(filepath, ":t")
-		vim.notify("🎬 Opening with OS default program: " .. filename, vim.log.levels.INFO, { title = "Media Viewer" })
+		vim.notify("🎬 Opening with OS default program: " .. vim.fn.fnamemodify(filepath, ":t"), vim.log.levels.INFO, {
+			title = M.settings.notify_title,
+		})
 	end)
 
 	if not ok then
-		vim.notify("Reveal in system explorer failed: " .. tostring(err), vim.log.levels.ERROR, { title = "Media Viewer" })
+		vim.notify("Reveal in system explorer failed: " .. tostring(err), vim.log.levels.ERROR, {
+			title = M.settings.notify_title,
+		})
 	end
 end
 
+--- Renders the current image inside a floating terminal using chafa.
 function M.view_current_image()
-	local path = vim.api.nvim_buf_get_name(0)
-
-	if path == "" or vim.fn.filereadable(path) == 0 or vim.bo.filetype == "neo-tree" then
-		path = ""
-		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-			local b = vim.api.nvim_win_get_buf(win)
-			if vim.bo[b].filetype ~= "neo-tree" and vim.bo[b].buftype == "" then
-				local name = vim.api.nvim_buf_get_name(b)
-				if name ~= "" and vim.fn.filereadable(name) == 1 then
-					path = name
-					break
-				end
-			end
-		end
+	local filepath = vim.api.nvim_buf_get_name(0)
+	if filepath == "" or not path.is_file(filepath) or vim.bo.filetype == "neo-tree" then
+		filepath = first_visible_file()
 	end
 
-	if path == "" then
-		vim.notify("No valid file to display", vim.log.levels.WARN, { title = "KRS Image Viewer" })
+	if filepath == "" then
+		vim.notify("No valid file to display", vim.log.levels.WARN, { title = M.settings.preview_notify_title })
 		return
 	end
 
-	local width = math.floor(vim.o.columns * 0.8)
-	local height = math.floor(vim.o.lines * 0.8)
+	local width = ui.resolve_size(M.settings.preview_width_ratio, vim.o.columns)
+	local height = ui.resolve_size(M.settings.preview_height_ratio, vim.o.lines)
+	local buf, win = ui.float({ width = width, height = height, modifiable = true })
 
-	local buf = vim.api.nvim_create_buf(false, true)
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = math.floor((vim.o.lines - height) / 2),
-		col = math.floor((vim.o.columns - width) / 2),
-		style = "minimal",
-		border = "rounded",
-	})
-
-	vim.fn.termopen(string.format("chafa --size=%dx%d %s", width, height, vim.fn.shellescape(path)))
-
-	vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = buf, silent = true })
-	vim.keymap.set("n", "<Esc>", "<Cmd>close<CR>", { buffer = buf, silent = true })
+	vim.fn.termopen(string.format(M.settings.preview_command, width, height, vim.fn.shellescape(filepath)))
+	ui.close_on_keys(buf, win, M.settings.keys.close_preview)
 end
 
+--- Opens the project root in the OS file explorer.
 function M.open_project_root_in_explorer()
 	M.open_with_system_app(vim.fn.getcwd())
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Registers `:OpenRootInExplorer`, the keymaps, and the media-file hint.
 function M.setup()
 	vim.api.nvim_create_user_command("OpenRootInExplorer", function()
 		M.open_project_root_in_explorer()
 	end, { desc = "Open current project root in the OS file explorer" })
 
-	vim.keymap.set(
-		"n",
-		"<leader>i",
-		M.view_current_image,
-		{ noremap = true, silent = true, desc = "View image with Chafa" }
-	)
+	vim.keymap.set("n", M.settings.keys.preview, M.view_current_image, {
+		noremap = true,
+		silent = true,
+		desc = "View image with Chafa",
+	})
 
-	local cr_keys = { "<C-S-CR>", "<C-S-Enter>", "<C-S-Return>" }
-	local modes = { "n", "i", "v", "t" }
-
-	for _, mode in ipairs(modes) do
-		for _, key in ipairs(cr_keys) do
-			vim.keymap.set(mode, key, function()
-				if vim.fn.mode() == "t" then
-					vim.cmd("stopinsert")
-				end
-				M.open_with_system_app()
-			end, { noremap = true, silent = true, desc = "Open Media with OS Default App" })
-		end
+	for _, key in ipairs(M.settings.keys.open_external) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, function()
+			if vim.fn.mode() == "t" then
+				vim.cmd("stopinsert")
+			end
+			M.open_with_system_app()
+		end, { noremap = true, silent = true, desc = "Open Media with OS Default App" })
 	end
 
 	vim.api.nvim_create_autocmd("BufReadPost", {
@@ -176,29 +233,28 @@ function M.setup()
 		callback = function(ev)
 			local name = vim.api.nvim_buf_get_name(ev.buf)
 			if is_media_file(name) then
-				local filename = vim.fn.fnamemodify(name, ":t")
 				vim.notify(
-					"🖼️ Media file opened: " .. filename .. "\nPress <Ctrl + Shift + Enter> to open with OS default program.",
+					"🖼️ Media file opened: "
+						.. vim.fn.fnamemodify(name, ":t")
+						.. "\nPress <Ctrl + Shift + Enter> to open with OS default program.",
 					vim.log.levels.INFO,
-					{ title = "Media Viewer" }
+					{ title = M.settings.notify_title }
 				)
 			end
 		end,
 	})
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.ImageViewer = M
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "image_viewer",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "image_viewer",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

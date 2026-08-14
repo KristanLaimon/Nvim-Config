@@ -1,3 +1,17 @@
+-- ============================================================================
+-- PLUGIN: nvim-treesitter -- syntax trees for highlighting and text objects.
+-- ============================================================================
+-- ADD A LANGUAGE by adding its parser to the list below; `:TSUpdate` installs it.
+-- The `.krsnvim` filetype has no parser of its own: it is registered as an alias
+-- of Lua in lua/config/options.lua.
+--
+-- NOTE ON THE `main` BRANCH
+--   It dropped the old `highlight.enable` option, so highlighting is started per
+--   buffer by the autocmd at the bottom. Parser names do not always match
+--   filetype names (tsx -> typescriptreact, vimdoc -> help), which is why it
+--   matches every filetype and lets pcall skip the ones with no parser.
+-- ============================================================================
+
 local parsers = {
 	-- Core / Editor
 	"lua",

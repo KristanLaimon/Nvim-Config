@@ -1,4 +1,4 @@
---- @module krsnvim.krsnvimtranspiler
+--- @module "krsnvim.krsnvimtranspiler"
 --- Comprehensive Transpiler suite for `krsnvimscript` (*.krsnvim).
 --- Programmatically converts `.krsnvim` scripts into 100% equivalent `.sh` (Bash) and `.ps1` (PowerShell) scripts
 --- using native OS CLI tools (`curl`, `mkdir`, `jq`, `Invoke-RestMethod`, `New-Item`, `Get-Content`, etc.).

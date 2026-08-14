@@ -1,3 +1,22 @@
+-- ============================================================================
+-- PLUGIN: nvim-dap -- the debugger, wired for every language this config knows.
+-- ============================================================================
+-- WHAT THIS FILE OWNS
+--   1. mason-nvim-dap: which adapters get installed automatically.
+--   2. The per-language modules in lua/plugins/krs/debuggers/, loaded in the
+--      order they appear in the picker. ADD A LANGUAGE by adding one file there
+--      and its name to the list below.
+--   3. `.vscode/launch.json` support: the `type` -> filetype table nvim-dap needs
+--      to know which configurations apply to the file you are in.
+--   4. dap-ui layout, ANSI colour in the repl, inline variable values, and the
+--      breakpoint/stopped signs.
+--   5. Several workarounds for js-debug and nvim 0.12 behaviour -- each is
+--      commented in place with the exact reason.
+--
+-- KEYS
+--   Bound in lua/config/keymaps/debug.lua, not here.
+-- ============================================================================
+
 return {
 	{
 		"mfussenegger/nvim-dap",

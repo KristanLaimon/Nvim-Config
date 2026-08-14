@@ -1,279 +1,354 @@
---- @module plugins.krs.tasks
---- Per-Project Task Manager, Task Chain Executor & Terminal Output Manager.
---- Automatically scans Makefile, package.json, Cargo.toml, go.mod, and `.krsnvim/tasks.json`.
----
---- @example
---- local tasks = require("plugins.krs.tasks")
---- tasks.open_task_menu()
---- tasks.run_default_or_menu()
+-- ============================================================================
+-- KRS PLUGIN: Task Runner -- per-project tasks, chains and output slots.
+-- ============================================================================
+-- WHAT IT DOES
+--   1. Discovers tasks from the project itself (Makefile, package.json, Cargo.toml,
+--      go.mod) and merges them with custom tasks from `.krsnvim/tasks.json`.
+--   2. Runs a task as a CHAIN of steps in a terminal buffer; a failing step halts
+--      the chain and pops an alert instead of silently continuing.
+--   3. Keeps up to `M.settings.max_slots` task outputs alive at once, each toggleable
+--      without losing its scrollback.
+--
+-- KEYBINDS (see M.settings.keys to change them)
+--   <C-S-t>          Task menu (Telescope)          <F5>  Run default task
+--   <F6>             Task menu                      <C-o> Toggle last task output
+--   <C-A-S-1..4>     Toggle task output slot 1..4
+--
+-- PROJECT FILE -- `.krsnvim/tasks.json`
+--   {
+--     "default_task": { "name": "Dev", "cmd": "npm run dev" },
+--     "custom_tasks": [
+--       { "name": "Dev", "cmd": "npm run dev" },
+--       { "name": "Ship", "chain": ["npm run build", "npm test"] },
+--       { "name": "Deploy", "depends_on": ["Ship"], "cmd": "npm run deploy" }
+--     ]
+--   }
+--
+-- PUBLIC API (also used by launch_profiles and the command palette)
+--   M.get_project_root()                      Project root for the current buffer.
+--   M.run_task_item(item, root, opts)         Run a task table/string; opts.on_done(code).
+--   M.run_custom_command(cmd, env, cb, name)  Run one command with env + callback.
+--   M.open_task_menu()                        Telescope picker over every task.
+--   M.stop_task(slot) / M.restart_task(slot)  Control a running slot.
+--
+-- COLLABORATORS
+--   krs.core.store / project / path -- persistence and root resolution.
+--   telescope -- picker UI only; nothing else here depends on it.
+-- ============================================================================
+
+local store = require("krs.core.store")
+local project = require("krs.core.project")
+local path = require("krs.core.path")
+local ui = require("krs.core.ui")
+local dock = require("krs.core.dock")
+
 local M = {}
 
-local legacy_store_file = vim.fn.stdpath("data") .. "/project_tasks.json"
+-- ============================================================================
+-- CONFIGURATION -- everything tunable lives here
+-- ============================================================================
 
-local function load_legacy_data()
-	local f = io.open(legacy_store_file, "r")
-	if not f then
-		return {}
-	end
-	local content = f:read("*a")
-	f:close()
-	local ok, data = pcall(vim.json.decode, content)
-	return ok and type(data) == "table" and data or {}
+M.settings = {
+	--- How many task outputs can live at once. Slot toggles are bound for each.
+	max_slots = 4,
+
+	--- Height, in lines, of a freshly opened task output split.
+	output_height = 12,
+
+	--- Title used by every notification from this module.
+	notify_title = "KRS Task Runner",
+
+	--- Pre-`.krsnvim` global store, still read so old projects keep their tasks.
+	legacy_store_file = vim.fn.stdpath("data") .. "/project_tasks.json",
+
+	--- Name of the per-project config file inside `.krsnvim/`.
+	config_file = "tasks.json",
+
+	--- Legacy single-file config at the project root, read when no `.krsnvim` exists.
+	legacy_project_file = ".nvimkrs",
+
+	--- Environment forced on every task process, so output is UTF-8 on Windows too.
+	--- A task's own env (opts.env) wins over these defaults.
+	forced_env = {
+		PYTHONIOENCODING = "utf-8",
+		NODE_IO_ENCODING = "utf-8",
+		LANG = "en_US.UTF-8",
+		LC_ALL = "en_US.UTF-8",
+	},
+
+	keys = {
+		--- Open the task menu. Bound in normal, insert, visual and terminal mode.
+		menu = { "<C-S-t>", "<C-S-T>" },
+		--- Run the default task, falling back to the menu.
+		run_default = "<F5>",
+		--- Open the task menu (function-key alternative).
+		menu_fkey = "<F6>",
+		--- Toggle the most recently used task output.
+		toggle_last = { "<C-o>", "<C-O>", "<C-`>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>" },
+		--- Toggle the output of the slot you are currently inside.
+		toggle_from_output = { "<C-o>", "<C-O>", "<C-`>", "<C-~>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>", "<C-[>" },
+		--- Dismiss a finished task window / the failure alert.
+		dismiss = { "<CR>", "<Esc>", "q", "<Space>" },
+		--- Prefix for per-slot toggles; the slot number is appended (`<C-A-S-1>`).
+		slot_prefix = "<C-A-S-",
+		--- Mappings deleted on setup because they collide with <Esc> in terminals.
+		unbind = { "<C-[>", "<C-S-[>", "<C-{>" },
+	},
+
+	--- Task discovery rules, applied in order. `tasks` is either a fixed list of
+	--- commands or a function(filepath) -> string[] for files that need parsing.
+	--- ADD A NEW ECOSYSTEM HERE -- nothing else needs to change.
+	discovery = {
+		{
+			file = "Makefile",
+			tasks = function(filepath)
+				local out = {}
+				for _, line in ipairs(vim.fn.readfile(filepath)) do
+					local target = line:match("^([a-zA-Z0-9_%-.]+):")
+					if target and target ~= ".PHONY" and target ~= "all" and not target:find("^%.") then
+						table.insert(out, "make " .. target)
+					end
+				end
+				return out
+			end,
+		},
+		{
+			file = "package.json",
+			tasks = function(filepath)
+				local out = {}
+				local pkg = store.load(filepath, {})
+				for script_name, _ in pairs(pkg.scripts or {}) do
+					table.insert(out, "npm run " .. script_name)
+				end
+				return out
+			end,
+		},
+		{ file = "Cargo.toml", tasks = { "cargo run", "cargo build", "cargo test" } },
+		{ file = "go.mod", tasks = { "go run .", "go test ./..." } },
+	},
+}
+
+-- ============================================================================
+-- RUNTIME STATE
+-- ============================================================================
+
+--- Task output slots, keyed 1..max_slots.
+--- @class TaskSlot
+--- @field win integer|nil Window showing the output, nil when hidden.
+--- @field buf integer|nil Terminal buffer holding the scrollback.
+--- @field job_id integer|nil Running job, nil when the task finished.
+--- @field name string Task name, shown in notifications.
+--- @field task_item table|string|nil Definition, kept so the slot can restart.
+--- @field root string|nil Working directory the task ran in.
+M.slots = {}
+
+--- Slot targeted by "toggle last output".
+M.last_slot = nil
+
+--- Window to return focus to when a task output closes.
+M.origin_win = nil
+
+--- Convenience wrapper so every message carries the same title.
+--- @param msg string
+--- @param level integer|nil Defaults to INFO.
+local function notify(msg, level)
+	vim.notify(msg, level or vim.log.levels.INFO, { title = M.settings.notify_title })
 end
 
-local function get_krs_filepath(root)
-	local norm_root = root:gsub("\\", "/")
-	local krs_dir = norm_root .. "/.krsnvim"
-	local krs_tasks_file = krs_dir .. "/tasks.json"
+-- ============================================================================
+-- PERSISTENCE -- `.krsnvim/tasks.json` plus the two legacy fallbacks
+-- ============================================================================
 
-	if vim.fn.filereadable(krs_tasks_file) == 1 then
-		return krs_tasks_file
-	end
-
-	local nvimkrs_file = norm_root .. "/.nvimkrs"
-	if vim.fn.filereadable(nvimkrs_file) == 1 then
-		return nvimkrs_file
-	end
-
-	return krs_tasks_file
-end
-
+--- Resolves the project root for the current buffer.
+--- @return string root
 function M.get_project_root()
-	local current = vim.fn.expand("%:p:h")
-	if current == "" then
-		current = vim.fn.getcwd()
-	end
-	local root_files = { ".krsnvim", ".nvimkrs", "Makefile", "package.json", "Cargo.toml", ".git", "go.mod", "pyproject.toml" }
-	local match = vim.fs.find(root_files, { upward = true, path = current })
-	if match and #match > 0 then
-		return vim.fs.dirname(match[1])
-	end
-	return vim.fn.getcwd()
+	return project.root()
 end
 
-function M.discover_tasks(root)
-	local discovered = {}
-	local norm_root = root:gsub("\\", "/")
-
-	local makefile = norm_root .. "/Makefile"
-	if vim.fn.filereadable(makefile) == 1 then
-		local lines = vim.fn.readfile(makefile)
-		for _, line in ipairs(lines) do
-			local target = line:match("^([a-zA-Z0-9_%-.]+):")
-			if target and target ~= ".PHONY" and target ~= "all" and not target:find("^%.") then
-				table.insert(discovered, { name = "make " .. target, cmd = "make " .. target, source = "Makefile" })
-			end
-		end
+--- Resolves the tasks file for `root`.
+--- Order: `.krsnvim/tasks.json`, then the legacy `.nvimkrs` file at the root.
+--- When neither exists the `.krsnvim` path is returned so writers create it.
+---
+--- @param root string Project root.
+--- @return string filepath
+local function tasks_filepath(root)
+	local norm_root = path.normalize(root)
+	local krs_file = path.join(norm_root, ".krsnvim", M.settings.config_file)
+	if path.is_file(krs_file) then
+		return krs_file
 	end
 
-	local pkg_json = norm_root .. "/package.json"
-	if vim.fn.filereadable(pkg_json) == 1 then
-		local content = table.concat(vim.fn.readfile(pkg_json), "\n")
-		local ok, parsed = pcall(vim.json.decode, content)
-		if ok and parsed and parsed.scripts then
-			for script_name, _ in pairs(parsed.scripts) do
-				table.insert(discovered, { name = "npm run " .. script_name, cmd = "npm run " .. script_name, source = "package.json" })
-			end
-		end
+	local legacy = path.join(norm_root, M.settings.legacy_project_file)
+	if path.is_file(legacy) then
+		return legacy
 	end
 
-	local cargo = norm_root .. "/Cargo.toml"
-	if vim.fn.filereadable(cargo) == 1 then
-		table.insert(discovered, { name = "cargo run", cmd = "cargo run", source = "Cargo.toml" })
-		table.insert(discovered, { name = "cargo build", cmd = "cargo build", source = "Cargo.toml" })
-		table.insert(discovered, { name = "cargo test", cmd = "cargo test", source = "Cargo.toml" })
-	end
-
-	local gomod = norm_root .. "/go.mod"
-	if vim.fn.filereadable(gomod) == 1 then
-		table.insert(discovered, { name = "go run .", cmd = "go run .", source = "go.mod" })
-		table.insert(discovered, { name = "go test ./...", cmd = "go test ./...", source = "go.mod" })
-	end
-
-	return discovered
+	return krs_file
 end
 
+--- Loads the task configuration for a project.
+--- Falls back to the pre-`.krsnvim` global store keyed by lowercased root path.
+---
+--- @param root string Project root.
+--- @return table pdata `{ default_task = ..., custom_tasks = {...} }`
 function M.get_project_data(root)
-	local filepath = get_krs_filepath(root)
-	local f = io.open(filepath, "r")
-	if f then
-		local content = f:read("*a")
-		f:close()
-		local ok, data = pcall(vim.json.decode, content)
-		if ok and type(data) == "table" then
-			return {
-				default_task = data.default_task,
-				custom_tasks = type(data.custom_tasks) == "table" and data.custom_tasks or {},
-			}
-		end
+	local data = store.load(tasks_filepath(root), nil)
+	if data then
+		return {
+			default_task = data.default_task,
+			custom_tasks = type(data.custom_tasks) == "table" and data.custom_tasks or {},
+		}
 	end
 
-	local key = root:gsub("\\", "/"):lower()
-	local legacy_all = load_legacy_data()
-	local legacy_data = legacy_all[key]
-	if legacy_data then
-		return legacy_data
+	local legacy = store.load(M.settings.legacy_store_file, {})[path.normalize(root):lower()]
+	if legacy then
+		return legacy
 	end
 
 	return { default_task = nil, custom_tasks = {} }
 end
 
+--- Writes the task configuration to `.krsnvim/tasks.json`, creating the directory.
+---
+--- @param root string Project root.
+--- @param pdata table `{ default_task = ..., custom_tasks = {...} }`
 function M.save_project_data(root, pdata)
-	local norm_root = root:gsub("\\", "/")
-	local krs_dir = norm_root .. "/.krsnvim"
-	if vim.fn.isdirectory(krs_dir) == 0 then
-		vim.fn.mkdir(krs_dir, "p")
-	end
-	local filepath = krs_dir .. "/tasks.json"
-	local data_to_save = {
+	store.save(path.join(project.config_dir(root), M.settings.config_file), {
 		default_task = pdata.default_task,
 		custom_tasks = pdata.custom_tasks or {},
-	}
-	local ok, encoded = pcall(vim.json.encode, data_to_save)
-	if ok then
-		local f = io.open(filepath, "w")
-		if f then
-			f:write(encoded)
-			f:close()
-		end
-	end
+	})
 end
 
+-- ============================================================================
+-- DISCOVERY & CHAIN RESOLUTION
+-- ============================================================================
+
+--- Scans the project for tasks it can infer, following `M.settings.discovery`.
+---
+--- @param root string Project root.
+--- @return table[] discovered `{ name, cmd, source }` entries.
+function M.discover_tasks(root)
+	local norm_root = path.normalize(root)
+	local discovered = {}
+
+	for _, rule in ipairs(M.settings.discovery) do
+		local filepath = path.join(norm_root, rule.file)
+		if path.is_file(filepath) then
+			local cmds = type(rule.tasks) == "function" and rule.tasks(filepath) or rule.tasks
+			for _, cmd in ipairs(cmds) do
+				table.insert(discovered, { name = cmd, cmd = cmd, source = rule.file })
+			end
+		end
+	end
+
+	return discovered
+end
+
+--- Flattens a task definition into the ordered list of shell commands to run.
+--- Resolves `depends_on` first (recursively), then `chain`, then a plain `cmd`.
+---
+--- @param task_item table|string|nil Task definition or bare command string.
+--- @param pdata table Project data, used to look up `depends_on` names.
+--- @return string[] steps Commands in execution order.
 function M.resolve_steps(task_item, pdata)
 	if not task_item then
+		return {}
+	end
+	if type(task_item) == "string" then
+		return { task_item }
+	end
+	if type(task_item) ~= "table" then
 		return {}
 	end
 
 	local steps = {}
 
-	if type(task_item) == "string" then
-		return { task_item }
-	end
-
-	if type(task_item) ~= "table" then
-		return {}
-	end
-
-	if task_item.depends_on and type(task_item.depends_on) == "table" then
+	if type(task_item.depends_on) == "table" then
 		for _, dep_name in ipairs(task_item.depends_on) do
 			for _, ct in ipairs(pdata.custom_tasks or {}) do
 				if (ct.name and ct.name == dep_name) or (ct.cmd and ct.cmd == dep_name) then
-					local sub_steps = M.resolve_steps(ct, pdata)
-					for _, s in ipairs(sub_steps) do
-						table.insert(steps, s)
-					end
+					vim.list_extend(steps, M.resolve_steps(ct, pdata))
 				end
 			end
 		end
 	end
 
-	if task_item.chain and type(task_item.chain) == "table" then
+	if type(task_item.chain) == "table" then
 		for _, step in ipairs(task_item.chain) do
 			if type(step) == "string" then
 				table.insert(steps, step)
 			end
 		end
-	elseif task_item.cmd and type(task_item.cmd) == "string" and task_item.cmd ~= "" then
+	elseif type(task_item.cmd) == "string" and task_item.cmd ~= "" then
 		table.insert(steps, task_item.cmd)
 	end
 
 	return steps
 end
 
-local function show_failure_alert(step_idx, total_steps, failed_cmd, exit_code, remaining_count)
-	local width = math.floor(vim.o.columns * 0.70)
-	local lines = {
-		" ❌ TASK CHAIN EXECUTION FAILED",
-		string.rep("═", width - 4),
-		string.format("  • Step %d of %d failed!", step_idx, total_steps),
-		string.format("  • Failed Command: %s", failed_cmd),
-		string.format("  • Exit Code: %d", exit_code),
-		"",
-		string.format(" ⛔ Execution HALTED. %d remaining task(s) CANCELLED.", remaining_count),
-		"",
-		" Press <Enter>, <Esc> or 'q' to close this alert and inspect logs below.",
-	}
-	local height = #lines + 2
-	local row = math.floor((vim.o.lines - height) / 2)
-	local col = math.floor((vim.o.columns - width) / 2)
+-- ============================================================================
+-- WINDOW LAYOUT -- task outputs live in the shared bottom dock
+-- ============================================================================
 
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+--- Re-exported so older callers (and the keybinds file) keep working.
+M.enforce_bottom_layout = dock.enforce_order
 
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = width,
-		height = height,
-		row = row,
-		col = col,
-		style = "minimal",
-		border = "rounded",
-		title = " 🚨 ALERT: Task Chain Interrupted ",
-		title_pos = "center",
-	})
+-- ============================================================================
+-- SLOT MANAGEMENT
+-- ============================================================================
 
-	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
-
-	local function close_alert()
-		if vim.api.nvim_win_is_valid(win) then
-			pcall(vim.api.nvim_win_close, win, true)
-		end
-	end
-
-	local kopts = { buffer = buf, noremap = true, silent = true }
-	vim.keymap.set({ "n", "v", "i" }, "<CR>", close_alert, kopts)
-	vim.keymap.set({ "n", "v", "i" }, "<Esc>", close_alert, kopts)
-	vim.keymap.set({ "n", "v", "i" }, "q", close_alert, kopts)
-	vim.keymap.set({ "n", "v", "i" }, "<Space>", close_alert, kopts)
-end
-
-M.slots = {}
-M.last_slot = nil
-M.origin_win = nil
-
+--- Re-attaches task buffers that survived a config reload (or were restored from a
+--- session) to their slot, so toggles keep working without re-running the task.
 function M.sync_task_slots()
-	for _, b in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(b) then
-			local ft = vim.bo[b].filetype
-			local is_task = vim.b[b].krs_is_task or ft == "TaskRunner"
-			if is_task then
-				local slot = vim.b[b].krs_task_slot
-				local tname = vim.b[b].krs_task_name or "Task Output"
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		local is_task = vim.api.nvim_buf_is_valid(buf)
+			and (vim.b[buf].krs_is_task or vim.bo[buf].filetype == "TaskRunner")
 
-				if not slot or slot < 1 or slot > 4 then
-					for i = 1, 4 do
-						if not M.slots[i] or not M.slots[i].buf or not vim.api.nvim_buf_is_valid(M.slots[i].buf) then
-							slot = i
-							break
-						end
+		if is_task then
+			local slot = vim.b[buf].krs_task_slot
+			if not slot or slot < 1 or slot > M.settings.max_slots then
+				slot = nil
+				for i = 1, M.settings.max_slots do
+					local s = M.slots[i]
+					if not s or not s.buf or not vim.api.nvim_buf_is_valid(s.buf) then
+						slot = i
+						break
+					end
+				end
+			end
+
+			local occupant = slot and M.slots[slot]
+			local slot_is_free = slot
+				and (not occupant or not occupant.buf or not vim.api.nvim_buf_is_valid(occupant.buf))
+
+			if slot_is_free then
+				local win
+				for _, w in ipairs(vim.api.nvim_list_wins()) do
+					if vim.api.nvim_win_is_valid(w) and vim.api.nvim_win_get_buf(w) == buf then
+						win = w
+						break
 					end
 				end
 
-				if slot and slot >= 1 and slot <= 4 then
-					if not M.slots[slot] or not M.slots[slot].buf or not vim.api.nvim_buf_is_valid(M.slots[slot].buf) then
-						local win = nil
-						for _, w in ipairs(vim.api.nvim_list_wins()) do
-							if vim.api.nvim_win_is_valid(w) and vim.api.nvim_win_get_buf(w) == b then
-								win = w
-								break
-							end
-						end
-						M.slots[slot] = { win = win, buf = b, job_id = nil, name = tname }
-						vim.b[b].krs_is_task = true
-						vim.b[b].krs_task_slot = slot
-						if not M.last_slot then
-							M.last_slot = slot
-						end
-					end
-				end
+				M.slots[slot] = {
+					win = win,
+					buf = buf,
+					job_id = nil,
+					name = vim.b[buf].krs_task_name or "Task Output",
+				}
+				vim.b[buf].krs_is_task = true
+				vim.b[buf].krs_task_slot = slot
+				M.last_slot = M.last_slot or slot
 			end
 		end
 	end
 end
 
+--- First slot with no running job.
+--- @return integer|nil slot
 local function get_free_slot()
 	M.sync_task_slots()
-	for i = 1, 4 do
+	for i = 1, M.settings.max_slots do
 		local s = M.slots[i]
 		if not s or not s.job_id then
 			return i
@@ -282,89 +357,52 @@ local function get_free_slot()
 	return nil
 end
 
-local function enforce_bottom_layout()
-	local term_win = nil
-	local task_win = nil
+--- The slot the cursor is in, else the last used one, else any populated slot.
+--- @return integer|nil slot
+function M.get_active_or_last_slot()
+	M.sync_task_slots()
 
-	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if vim.api.nvim_win_is_valid(win) then
-			local buf = vim.api.nvim_win_get_buf(win)
-			if vim.api.nvim_buf_is_valid(buf) then
-				local bt = vim.bo[buf].buftype
-				local ft = vim.bo[buf].filetype
-				local is_task = vim.b[buf].krs_is_task or ft == "TaskRunner"
-				local is_term = (bt == "terminal" and not is_task) or vim.b[buf].krs_is_multi_term
-				if is_term and not term_win then
-					term_win = win
-				elseif is_task and not task_win then
-					task_win = win
-				end
-			end
+	local cur_slot = vim.b[vim.api.nvim_get_current_buf()].krs_task_slot
+	if cur_slot and M.slots[cur_slot] then
+		return cur_slot
+	end
+	if M.last_slot and M.slots[M.last_slot] then
+		return M.last_slot
+	end
+	for i = 1, M.settings.max_slots do
+		if M.slots[i] then
+			return i
 		end
 	end
-
-	if term_win and task_win then
-		local term_pos = vim.api.nvim_win_get_position(term_win)
-		local task_pos = vim.api.nvim_win_get_position(task_win)
-
-		if term_pos[2] > task_pos[2] then
-			local cur_win = vim.api.nvim_get_current_win()
-			vim.api.nvim_set_current_win(task_win)
-			vim.cmd("wincmd x")
-			if vim.api.nvim_win_is_valid(cur_win) then
-				pcall(vim.api.nvim_set_current_win, cur_win)
-			end
-		end
-	end
-end
-M.enforce_bottom_layout = enforce_bottom_layout
-
-local function open_or_attach_bottom_win(height)
-	local existing_task_win = nil
-	local existing_term_win = nil
-
-	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if vim.api.nvim_win_is_valid(win) then
-			local buf = vim.api.nvim_win_get_buf(win)
-			if vim.api.nvim_buf_is_valid(buf) then
-				local bt = vim.bo[buf].buftype
-				local ft = vim.bo[buf].filetype
-				local is_task = vim.b[buf].krs_is_task or ft == "TaskRunner"
-				local is_term = (bt == "terminal" and not is_task) or vim.b[buf].krs_is_multi_term
-				if is_task and not existing_task_win then
-					existing_task_win = win
-				elseif is_term and not existing_term_win then
-					existing_term_win = win
-				end
-			end
-		end
-	end
-
-	local new_win
-	if existing_task_win then
-		vim.api.nvim_set_current_win(existing_task_win)
-		vim.cmd("rightbelow vsplit")
-		new_win = vim.api.nvim_get_current_win()
-	elseif existing_term_win then
-		vim.api.nvim_set_current_win(existing_term_win)
-		vim.cmd("rightbelow vsplit")
-		new_win = vim.api.nvim_get_current_win()
-	else
-		vim.cmd("botright " .. height .. "split")
-		new_win = vim.api.nvim_get_current_win()
-	end
-
-	enforce_bottom_layout()
-	return new_win
+	return nil
 end
 
+-- ============================================================================
+-- TASK BUFFER KEYMAPS
+-- ============================================================================
+
+--- Pastes the OS clipboard into a terminal buffer (`"+`, falling back to `"*`).
+local function paste_clipboard()
+	local clip = vim.fn.getreg("+")
+	if not clip or clip == "" then
+		clip = vim.fn.getreg("*")
+	end
+	if clip and clip ~= "" then
+		vim.api.nvim_paste(clip, true, -1)
+	end
+end
+
+--- Binds toggle, escape-to-editor and clipboard keys inside a task output buffer.
+---
+--- @param buf integer Task terminal buffer.
+--- @param slot integer Slot the buffer belongs to.
 local function bind_task_buffer_keys(buf, slot)
 	if not buf or not vim.api.nvim_buf_is_valid(buf) then
 		return
 	end
-	local task_toggle_keys = { "<C-o>", "<C-O>", "<C-`>", "<C-~>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>", "<C-[>" }
-	for _, tk in ipairs(task_toggle_keys) do
-		vim.keymap.set({ "n", "t", "i", "v" }, tk, function()
+
+	for _, key in ipairs(M.settings.keys.toggle_from_output) do
+		vim.keymap.set({ "n", "t", "i", "v" }, key, function()
 			if vim.fn.mode() == "t" then
 				pcall(vim.cmd, "stopinsert")
 			end
@@ -379,27 +417,51 @@ local function bind_task_buffer_keys(buf, slot)
 		end
 	end, { noremap = true, silent = true, buffer = buf, desc = "Return to Code Editor" })
 
-	local function paste_clipboard()
-		local clip = vim.fn.getreg("+")
-		if not clip or clip == "" then
-			clip = vim.fn.getreg("*")
+	local opts = { noremap = true, silent = true, buffer = buf, desc = "Paste OS Clipboard" }
+	vim.keymap.set({ "n", "t", "i" }, "<C-v>", paste_clipboard, opts)
+	vim.keymap.set({ "n", "t", "i" }, "<C-S-v>", paste_clipboard, opts)
+
+	local copy_opts = { noremap = true, silent = true, buffer = buf, desc = "Copy selection to OS Clipboard" }
+	vim.keymap.set("v", "<C-c>", '"+y', copy_opts)
+	vim.keymap.set("v", "<C-S-c>", '"+y', copy_opts)
+end
+
+--- Binds the dismiss keys of a FINISHED task window: leave the output, return to
+--- the window the task was launched from, and free the slot's window handle.
+---
+--- @param buf integer Task buffer.
+--- @param win integer Task window.
+--- @param slot integer Slot index.
+--- @param origin_win integer|nil Window to focus after closing.
+local function bind_dismiss_keys(buf, win, slot, origin_win)
+	local function close_task_window()
+		if origin_win and vim.api.nvim_win_is_valid(origin_win) then
+			pcall(vim.api.nvim_set_current_win, origin_win)
+		else
+			pcall(vim.cmd, "wincmd p")
 		end
-		if clip and clip ~= "" then
-			vim.api.nvim_paste(clip, true, -1)
+		if vim.api.nvim_win_is_valid(win) then
+			pcall(vim.api.nvim_win_close, win, true)
+		end
+		if M.slots[slot] and M.slots[slot].win == win then
+			M.slots[slot].win = nil
 		end
 	end
 
-	vim.keymap.set({ "n", "t", "i" }, "<C-v>", paste_clipboard, { noremap = true, silent = true, buffer = buf, desc = "Paste OS Clipboard" })
-	vim.keymap.set({ "n", "t", "i" }, "<C-S-v>", paste_clipboard, { noremap = true, silent = true, buffer = buf, desc = "Paste OS Clipboard" })
-	vim.keymap.set("v", "<C-c>", '"+y', { noremap = true, silent = true, buffer = buf, desc = "Copy selection to OS Clipboard" })
-	vim.keymap.set("v", "<C-S-c>", '"+y', { noremap = true, silent = true, buffer = buf, desc = "Copy selection to OS Clipboard" })
+	local opts = { noremap = true, silent = true, nowait = true, buffer = buf }
+	for _, key in ipairs(M.settings.keys.dismiss) do
+		vim.keymap.set({ "n", "t", "i", "v" }, key, close_task_window, opts)
+	end
 end
 
+--- Shows or hides the output window of a slot.
+--- @param n integer Slot index.
 function M.toggle_slot_window(n)
 	M.sync_task_slots()
+
 	local s = M.slots[n]
 	if not s or not s.buf or not vim.api.nvim_buf_is_valid(s.buf) then
-		vim.notify("No task in slot " .. n, vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("No task in slot " .. n, vim.log.levels.WARN)
 		return
 	end
 
@@ -413,8 +475,9 @@ function M.toggle_slot_window(n)
 			pcall(vim.cmd, "wincmd p")
 		end
 	else
+		-- Remember where we came from, unless we are already inside a task output.
 		local current = vim.api.nvim_get_current_win()
-		local active_slot_win = nil
+		local active_slot_win
 		for _, slot in pairs(M.slots) do
 			if slot.win and vim.api.nvim_win_is_valid(slot.win) then
 				active_slot_win = slot.win
@@ -425,220 +488,248 @@ function M.toggle_slot_window(n)
 			M.origin_win = current
 		end
 
-		s.win = open_or_attach_bottom_win(12)
+		s.win = dock.open({ prefer = "task", height = M.settings.output_height })
 		vim.api.nvim_win_set_buf(s.win, s.buf)
-		vim.wo[s.win].number = false
-		vim.wo[s.win].relativenumber = false
-		vim.wo[s.win].signcolumn = "no"
+		dock.style(s.win)
 		bind_task_buffer_keys(s.buf, n)
 	end
+
 	M.last_slot = n
 end
 
+--- Toggles the most recently used slot.
 function M.toggle_last_slot_window()
 	M.sync_task_slots()
 	if not M.last_slot then
-		vim.notify("No task has been run yet", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("No task has been run yet", vim.log.levels.WARN)
 		return
 	end
 	M.toggle_slot_window(M.last_slot)
 end
 
--- opts (optional): { env = <dict passed to the shell>, on_done = function(exit_code) }
--- on_done fires once per chain: 0 when every step succeeded, the failing step's exit
--- code otherwise. Callers that gate further work on the result (launch profiles'
--- pre-launch tasks) need this; nothing else passes opts.
+-- ============================================================================
+-- EXECUTION
+-- ============================================================================
+
+--- Modal alert shown when a chain step fails, listing what was cancelled.
+---
+--- @param step_idx integer Failing step number (1-based).
+--- @param total_steps integer Steps in the chain.
+--- @param failed_cmd string The command that failed.
+--- @param exit_code integer Process exit code.
+--- @param remaining_count integer Steps that were cancelled.
+local function show_failure_alert(step_idx, total_steps, failed_cmd, exit_code, remaining_count)
+	local width = math.floor(vim.o.columns * 0.70)
+	local lines = {
+		" ❌ TASK CHAIN EXECUTION FAILED",
+		string.rep("═", width - 4),
+		string.format("  • Step %d of %d failed!", step_idx, total_steps),
+		string.format("  • Failed Command: %s", failed_cmd),
+		string.format("  • Exit Code: %d", exit_code),
+		"",
+		string.format(" ⛔ Execution HALTED. %d remaining task(s) CANCELLED.", remaining_count),
+		"",
+		" Press <Enter>, <Esc> or 'q' to close this alert and inspect logs below.",
+	}
+
+	local buf, win = ui.float({
+		lines = lines,
+		width = width,
+		height = #lines + 2,
+		title = " 🚨 ALERT: Task Chain Interrupted ",
+	})
+	pcall(vim.api.nvim_set_option_value, "cursorline", false, { win = win })
+
+	local opts = { buffer = buf, noremap = true, silent = true }
+	for _, key in ipairs(M.settings.keys.dismiss) do
+		vim.keymap.set({ "n", "v", "i" }, key, function()
+			ui.close(win)
+		end, opts)
+	end
+end
+
+--- Builds the process environment: caller values first, UTF-8 defaults filled in.
+---
+--- @param env table|nil Caller-supplied environment.
+--- @return table<string,string> env
+local function build_env(env)
+	local out = {}
+	for k, v in pairs(env or {}) do
+		if v ~= nil then
+			out[tostring(k)] = tostring(v)
+		end
+	end
+	for k, v in pairs(M.settings.forced_env) do
+		out[k] = out[k] or v
+	end
+	return out
+end
+
+--- Splits a simple command into argv so it runs without a shell.
+--- Commands containing shell metacharacters (`| & > < ;`) are handed to the shell
+--- untouched, because splitting them would change their meaning.
+---
+--- @param cmd string Command line.
+--- @return string|string[] target Argv list, or the original string.
+local function to_exec_target(cmd)
+	if type(cmd) ~= "string" or cmd == "" or cmd:find("[|&><;]") then
+		return cmd
+	end
+
+	local argv = {}
+	for quoted, word in cmd:gmatch([=[["'](.-)["']|(%S+)]=]) do
+		table.insert(argv, quoted or word)
+	end
+	return #argv > 0 and argv or cmd
+end
+
+--- Prepares a slot for a new run: kills the previous job, drops its window/buffer,
+--- and opens a fresh terminal buffer wired to the slot.
+---
+--- @param slot integer Slot index.
+--- @param task_name string Display name.
+--- @param task_item table|string Definition, kept for restart.
+--- @param root string Working directory.
+--- @param steps string[] Resolved chain.
+local function reset_slot(slot, task_name, task_item, root, steps)
+	local prev = M.slots[slot]
+	if prev then
+		if prev.job_id and prev.job_id > 0 then
+			prev.is_killing_for_restart = true
+			pcall(vim.fn.jobstop, prev.job_id)
+		end
+		if prev.win and vim.api.nvim_win_is_valid(prev.win) then
+			pcall(vim.api.nvim_win_close, prev.win, true)
+		end
+		if prev.buf and vim.api.nvim_buf_is_valid(prev.buf) then
+			pcall(vim.api.nvim_buf_delete, prev.buf, { force = true })
+		end
+	end
+
+	local win = dock.open({ prefer = "task", height = M.settings.output_height })
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_win_set_buf(win, buf)
+
+	vim.bo[buf].bufhidden = "hide"
+	vim.bo[buf].buflisted = false
+	vim.bo[buf].filetype = "TaskRunner"
+	vim.b[buf].krs_is_task = true
+	vim.b[buf].krs_task_slot = slot
+	vim.b[buf].krs_task_name = task_name
+
+	dock.style(win)
+	bind_task_buffer_keys(buf, slot)
+
+	M.slots[slot] = {
+		win = win,
+		buf = buf,
+		job_id = nil,
+		name = task_name,
+		task_item = task_item,
+		root = root,
+		steps = steps,
+		is_killing_for_restart = false,
+		is_killing = false,
+	}
+	M.last_slot = slot
+end
+
+--- Runs step `step_idx` of a chain, recursing into the next step on success.
+---
+--- @param step_idx integer 1-based step index.
+--- @param steps string[] All steps in the chain.
+--- @param root string Working directory.
+--- @param origin_win integer|nil Window to restore focus to.
+--- @param task_name string Display name.
+--- @param slot integer Slot index.
+--- @param task_item table|string Definition, kept for restart.
+--- @param opts table|nil `{ env = table, on_done = function(exit_code) }`.
+---
+--- `on_done` fires once per CHAIN: 0 when every step succeeded, the failing step's
+--- exit code otherwise. Callers that gate further work on the result (launch
+--- profiles' pre-launch tasks) depend on it; nothing else passes opts.
 local function run_step_sequence(step_idx, steps, root, origin_win, task_name, slot, task_item, opts)
 	opts = opts or {}
 	local total = #steps
 	local current_cmd = steps[step_idx]
 
 	if step_idx == 1 then
-		local prev = M.slots[slot]
-		if prev then
-			if prev.job_id and prev.job_id > 0 then
-				prev.is_killing_for_restart = true
-				pcall(vim.fn.jobstop, prev.job_id)
-			end
-			if prev.win and vim.api.nvim_win_is_valid(prev.win) then
-				pcall(vim.api.nvim_win_close, prev.win, true)
-			end
-			if prev.buf and vim.api.nvim_buf_is_valid(prev.buf) then
-				pcall(vim.api.nvim_buf_delete, prev.buf, { force = true })
-			end
-		end
-
-		local win = open_or_attach_bottom_win(12)
-		local buf = vim.api.nvim_create_buf(false, true)
-		vim.api.nvim_win_set_buf(win, buf)
-
-		vim.bo[buf].bufhidden = "hide"
-		vim.bo[buf].buflisted = false
-		vim.bo[buf].filetype = "TaskRunner"
-		vim.b[buf].krs_is_task = true
-		vim.b[buf].krs_task_slot = slot
-		vim.b[buf].krs_task_name = task_name
-
-		vim.wo[win].number = false
-		vim.wo[win].relativenumber = false
-		vim.wo[win].signcolumn = "no"
-		bind_task_buffer_keys(buf, slot)
-
-		M.slots[slot] = {
-			win = win,
-			buf = buf,
-			job_id = nil,
-			name = task_name,
-			task_item = task_item,
-			root = root,
-			steps = steps,
-			is_killing_for_restart = false,
-			is_killing = false,
-		}
-		M.last_slot = slot
+		reset_slot(slot, task_name, task_item, root, steps)
 	end
 
 	local s = M.slots[slot]
-	local win = s.win
-	local buf = s.buf
+	local win, buf = s.win, s.buf
 
-	vim.notify(
-		string.format("🚀 Running Step %d/%d: %s", step_idx, total, task_name or "Task"),
-		vim.log.levels.INFO,
-		{ title = "KRS Task Runner" }
-	)
+	notify(string.format("🚀 Running Step %d/%d: %s", step_idx, total, task_name or "Task"))
 
-	local term_opts = {
-		cwd = root,
-		on_exit = function(_, exit_code, _)
-			vim.schedule(function()
-				if not vim.api.nvim_buf_is_valid(buf) then
-					if opts.on_done then
-						opts.on_done(exit_code)
-					end
-					return
+	--- Focuses the output window and lets the dismiss keys close it.
+	local function finish_and_arm_dismiss()
+		if M.slots[slot] then
+			M.slots[slot].job_id = nil
+		end
+		pcall(vim.cmd, "stopinsert")
+		if vim.api.nvim_win_is_valid(win) then
+			pcall(vim.api.nvim_set_current_win, win)
+		end
+		bind_dismiss_keys(buf, win, slot, origin_win)
+	end
+
+	local function on_exit(_, exit_code)
+		vim.schedule(function()
+			if not vim.api.nvim_buf_is_valid(buf) then
+				if opts.on_done then
+					opts.on_done(exit_code)
 				end
-
-				local cur_s = M.slots[slot]
-				if cur_s and (cur_s.is_killing_for_restart or cur_s.is_killing) then
-					-- Stopped or restarted by hand: never report success, or a waiting
-					-- caller would treat a cancelled build as a passing one.
-					if opts.on_done then
-						opts.on_done(exit_code == 0 and 1 or exit_code)
-					end
-					return
-				end
-
-				if exit_code == 0 then
-					if step_idx < total then
-						vim.notify(
-							string.format("✅ Step %d/%d completed. Starting Step %d/%d...", step_idx, total, step_idx + 1, total),
-							vim.log.levels.INFO,
-							{ title = "KRS Task Runner" }
-						)
-						run_step_sequence(step_idx + 1, steps, root, origin_win, task_name, slot, task_item, opts)
-					else
-						if M.slots[slot] then M.slots[slot].job_id = nil end
-						pcall(vim.cmd, "stopinsert")
-						if vim.api.nvim_win_is_valid(win) then
-							pcall(vim.api.nvim_set_current_win, win)
-						end
-
-						local function close_task_window()
-							if origin_win and vim.api.nvim_win_is_valid(origin_win) then
-								pcall(vim.api.nvim_set_current_win, origin_win)
-							else
-								pcall(vim.cmd, "wincmd p")
-							end
-							if vim.api.nvim_win_is_valid(win) then
-								pcall(vim.api.nvim_win_close, win, true)
-							end
-							if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
-						end
-
-						local map_opts = { noremap = true, silent = true, nowait = true, buffer = buf }
-						vim.keymap.set({ "n", "t", "i", "v" }, "<CR>", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t", "i", "v" }, "<Esc>", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t", "i", "v" }, "q", close_task_window, map_opts)
-						vim.keymap.set({ "n", "t", "i", "v" }, "<Space>", close_task_window, map_opts)
-
-						vim.notify(
-							string.format("✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.", task_name or "Chain", total, total),
-							vim.log.levels.INFO,
-							{ title = "KRS Task Runner" }
-						)
-
-						if opts.on_done then
-							opts.on_done(0)
-						end
-					end
-				else
-					if M.slots[slot] then M.slots[slot].job_id = nil end
-					pcall(vim.cmd, "stopinsert")
-					if vim.api.nvim_win_is_valid(win) then
-						pcall(vim.api.nvim_set_current_win, win)
-					end
-
-					local function close_task_window()
-						if origin_win and vim.api.nvim_win_is_valid(origin_win) then
-							pcall(vim.api.nvim_set_current_win, origin_win)
-						else
-							pcall(vim.cmd, "wincmd p")
-						end
-						if vim.api.nvim_win_is_valid(win) then
-							pcall(vim.api.nvim_win_close, win, true)
-						end
-						if M.slots[slot] and M.slots[slot].win == win then M.slots[slot].win = nil end
-					end
-
-					local map_opts = { noremap = true, silent = true, nowait = true, buffer = buf }
-					vim.keymap.set({ "n", "t", "i", "v" }, "<CR>", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t", "i", "v" }, "<Esc>", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t", "i", "v" }, "q", close_task_window, map_opts)
-					vim.keymap.set({ "n", "t", "i", "v" }, "<Space>", close_task_window, map_opts)
-
-					local remaining = total - step_idx
-					show_failure_alert(step_idx, total, current_cmd, exit_code, remaining)
-
-					if opts.on_done then
-						opts.on_done(exit_code)
-					end
-				end
-			end)
-		end,
-	}
-
-	local sanitized_env = {}
-	if opts.env and type(opts.env) == "table" then
-		for k, v in pairs(opts.env) do
-			if v ~= nil then
-				sanitized_env[tostring(k)] = tostring(v)
+				return
 			end
-		end
+
+			local cur = M.slots[slot]
+			if cur and (cur.is_killing_for_restart or cur.is_killing) then
+				-- Stopped or restarted by hand: never report success, or a waiting
+				-- caller would treat a cancelled build as a passing one.
+				if opts.on_done then
+					opts.on_done(exit_code == 0 and 1 or exit_code)
+				end
+				return
+			end
+
+			if exit_code ~= 0 then
+				finish_and_arm_dismiss()
+				show_failure_alert(step_idx, total, current_cmd, exit_code, total - step_idx)
+				if opts.on_done then
+					opts.on_done(exit_code)
+				end
+				return
+			end
+
+			if step_idx < total then
+				notify(string.format(
+					"✅ Step %d/%d completed. Starting Step %d/%d...",
+					step_idx, total, step_idx + 1, total
+				))
+				run_step_sequence(step_idx + 1, steps, root, origin_win, task_name, slot, task_item, opts)
+				return
+			end
+
+			finish_and_arm_dismiss()
+			notify(string.format(
+				"✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.",
+				task_name or "Chain", total, total
+			))
+			if opts.on_done then
+				opts.on_done(0)
+			end
+		end)
 	end
 
-	-- Enforce UTF-8 encoding across process environments (Python, Node, Go, Rust, System)
-	sanitized_env["PYTHONIOENCODING"] = sanitized_env["PYTHONIOENCODING"] or "utf-8"
-	sanitized_env["NODE_IO_ENCODING"] = sanitized_env["NODE_IO_ENCODING"] or "utf-8"
-	sanitized_env["LANG"] = sanitized_env["LANG"] or "en_US.UTF-8"
-	sanitized_env["LC_ALL"] = sanitized_env["LC_ALL"] or "en_US.UTF-8"
-	term_opts.env = sanitized_env
-
-	local exec_target = current_cmd
-	if type(current_cmd) == "string" and current_cmd ~= "" and not current_cmd:find("[|&><;]") then
-		local argv = {}
-		for q, word in current_cmd:gmatch([=[["'](.-)["']|(%S+)]=]) do
-			table.insert(argv, q or word)
-		end
-		if #argv > 0 then
-			exec_target = argv
-		end
-	end
-
-	local job_id = vim.fn.termopen(exec_target, term_opts)
+	local job_id = vim.fn.termopen(to_exec_target(current_cmd), {
+		cwd = root,
+		env = build_env(opts.env),
+		on_exit = on_exit,
+	})
 
 	if job_id <= 0 then
-		vim.notify("Error starting command: " .. current_cmd, vim.log.levels.ERROR, { title = "KRS Task Runner" })
+		notify("Error starting command: " .. current_cmd, vim.log.levels.ERROR)
 		if opts.on_done then
 			opts.on_done(1)
 		end
@@ -649,16 +740,22 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 	vim.cmd("startinsert")
 end
 
+--- Runs a task definition, reusing the slot of a same-named running task.
+---
+--- @param task_item table|string Task definition or bare command.
+--- @param root string|nil Working directory. Defaults to the project root.
+--- @param opts table|nil `{ env = table, on_done = function(exit_code) }`.
 function M.run_task_item(task_item, root, opts)
 	opts = opts or {}
 	root = root or M.get_project_root()
+
 	local pdata = M.get_project_data(root)
 	local steps = M.resolve_steps(task_item, pdata)
 
-	-- Every bail-out below has to report failure too, or a caller waiting on on_done
-	-- (launch profiles) would sit there forever instead of aborting.
+	-- Every bail-out reports failure too, or a caller waiting on on_done (launch
+	-- profiles) would sit there forever instead of aborting.
 	local function abort(msg)
-		vim.notify(msg, vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify(msg, vim.log.levels.WARN)
 		if opts.on_done then
 			opts.on_done(1)
 		end
@@ -672,13 +769,17 @@ function M.run_task_item(task_item, root, opts)
 
 	local task_name = (type(task_item) == "table" and (task_item.name or task_item.cmd)) or tostring(task_item)
 
-	-- Check if a task with the same name/definition is ALREADY running in any slot
-	local running_slot = nil
-	for i = 1, 4 do
+	-- Re-running a task that is already running restarts it in place, instead of
+	-- filling a second slot with the same output.
+	local running_slot
+	for i = 1, M.settings.max_slots do
 		local s = M.slots[i]
 		if s and s.job_id and s.job_id > 0 then
-			local s_name = s.name or ""
-			if s_name == task_name or (s.task_item and (s.task_item == task_item or (type(s.task_item) == "table" and type(task_item) == "table" and s.task_item.name == task_item.name))) then
+			local same_name = (s.name or "") == task_name
+			local same_item = s.task_item
+				and (s.task_item == task_item
+					or (type(s.task_item) == "table" and type(task_item) == "table" and s.task_item.name == task_item.name))
+			if same_name or same_item then
 				running_slot = i
 				break
 			end
@@ -687,7 +788,10 @@ function M.run_task_item(task_item, root, opts)
 
 	local slot = running_slot or get_free_slot()
 	if not slot then
-		return abort("All 4 task slots are busy. Stop one first (Ctrl+Shift+Alt+1..4 to view, q/<CR> in it once done).")
+		return abort(string.format(
+			"All %d task slots are busy. Stop one first (Ctrl+Shift+Alt+1..%d to view, q/<CR> in it once done).",
+			M.settings.max_slots, M.settings.max_slots
+		))
 	end
 
 	if running_slot then
@@ -695,7 +799,7 @@ function M.run_task_item(task_item, root, opts)
 		s.is_killing_for_restart = true
 		pcall(vim.fn.jobstop, s.job_id)
 		s.job_id = nil
-		vim.notify(string.format("🔄 Killed old running task '%s' (Slot #%d). Rerunning...", task_name, slot), vim.log.levels.INFO, { title = "KRS Task Runner" })
+		notify(string.format("🔄 Killed old running task '%s' (Slot #%d). Rerunning...", task_name, slot))
 	end
 
 	local origin_win = vim.api.nvim_get_current_win()
@@ -704,94 +808,83 @@ function M.run_task_item(task_item, root, opts)
 	run_step_sequence(1, steps, root, origin_win, task_name, slot, task_item, opts)
 end
 
+--- Runs a bare command string as a task.
+--- @param cmd string Shell command.
+--- @param root string|nil Working directory.
 function M.run_task_cmd(cmd, root)
 	M.run_task_item(cmd, root)
 end
 
--- Run one shell command in a task slot, with an environment and a completion
--- callback. This is what launch_profiles calls for pre-launch tasks and for run-mode
--- profiles; before it existed both paths errored on a nil value.
+--- Runs one command in a task slot with a custom environment and completion
+--- callback. This is the entry point launch_profiles uses for pre-launch tasks
+--- and for run-mode profiles.
+---
+--- @param cmd string Shell command.
+--- @param env table|nil Extra environment variables.
+--- @param on_exit function|nil Called with the exit code when the task ends.
+--- @param task_name string|nil Display name; derived from `cmd` when omitted.
 function M.run_custom_command(cmd, env, on_exit, task_name)
 	local name = task_name
 	if not name and type(cmd) == "string" then
 		name = cmd:match("(%S+%.krsnvim)") or cmd:match("(%S+%.%w+)$") or vim.fn.fnamemodify(cmd, ":t")
 	end
-	local item = { name = name or "Custom Task", cmd = cmd }
-	M.run_task_item(item, nil, { env = env, on_done = on_exit })
+	M.run_task_item({ name = name or "Custom Task", cmd = cmd }, nil, { env = env, on_done = on_exit })
 end
 
-function M.get_active_or_last_slot()
-	M.sync_task_slots()
-	local cur_buf = vim.api.nvim_get_current_buf()
-	local cur_slot = vim.b[cur_buf] and vim.b[cur_buf].krs_task_slot
-	if cur_slot and M.slots[cur_slot] then
-		return cur_slot
-	end
-
-	if M.last_slot and M.slots[M.last_slot] then
-		return M.last_slot
-	end
-
-	for i = 1, 4 do
-		if M.slots[i] then
-			return i
-		end
-	end
-
-	return nil
-end
-
+--- Stops the job in a slot, if any.
+--- @param slot integer|nil Defaults to the active or last slot.
+--- @return boolean stopped
 function M.stop_task(slot)
 	slot = slot or M.get_active_or_last_slot()
 	if not slot or not M.slots[slot] then
-		vim.notify("No task found to stop", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("No task found to stop", vim.log.levels.WARN)
 		return false
 	end
 
 	local s = M.slots[slot]
-	if s.job_id and s.job_id > 0 then
-		s.is_killing = true
-		pcall(vim.fn.jobstop, s.job_id)
-		s.job_id = nil
-		vim.notify(string.format("🛑 Stopped task '%s' (Slot #%d)", s.name or "Task", slot), vim.log.levels.INFO, { title = "KRS Task Runner" })
-		return true
-	else
-		vim.notify(string.format("Task '%s' (Slot #%d) is not currently running", s.name or "Task", slot), vim.log.levels.WARN, { title = "KRS Task Runner" })
+	if not (s.job_id and s.job_id > 0) then
+		notify(string.format("Task '%s' (Slot #%d) is not currently running", s.name or "Task", slot), vim.log.levels.WARN)
 		return false
 	end
+
+	s.is_killing = true
+	pcall(vim.fn.jobstop, s.job_id)
+	s.job_id = nil
+	notify(string.format("🛑 Stopped task '%s' (Slot #%d)", s.name or "Task", slot))
+	return true
 end
 
+--- Re-runs the task stored in a slot, killing it first when still running.
+--- @param slot integer|nil Defaults to the active or last slot.
 function M.restart_task(slot)
 	slot = slot or M.get_active_or_last_slot()
 	if not slot or not M.slots[slot] then
-		vim.notify("No active task found to restart. Run a task first (<C-S-t> or Command Palette).", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("No active task found to restart. Run a task first (<C-S-t> or Command Palette).", vim.log.levels.WARN)
 		return
 	end
 
 	local s = M.slots[slot]
 	local task_item = s.task_item
-	local root = s.root or M.get_project_root()
-	local task_name = s.name or "Task"
-
 	if not task_item then
-		vim.notify("Cannot restart task: no stored task definition found for slot #" .. slot, vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("Cannot restart task: no stored task definition found for slot #" .. slot, vim.log.levels.WARN)
 		return
 	end
 
-	local was_running = s.job_id and s.job_id > 0
-	if was_running then
+	local root = s.root or M.get_project_root()
+	local task_name = s.name or "Task"
+
+	if s.job_id and s.job_id > 0 then
 		s.is_killing_for_restart = true
 		pcall(vim.fn.jobstop, s.job_id)
 		s.job_id = nil
-		vim.notify(string.format("🔄 Killed running task '%s' (Slot #%d). Restarting...", task_name, slot), vim.log.levels.INFO, { title = "KRS Task Runner" })
+		notify(string.format("🔄 Killed running task '%s' (Slot #%d). Restarting...", task_name, slot))
 	else
-		vim.notify(string.format("🔄 Restarting task '%s' (Slot #%d)...", task_name, slot), vim.log.levels.INFO, { title = "KRS Task Runner" })
+		notify(string.format("🔄 Restarting task '%s' (Slot #%d)...", task_name, slot))
 	end
 
-	local pdata = M.get_project_data(root)
-	local steps = M.resolve_steps(task_item, pdata)
+	local steps = M.resolve_steps(task_item, M.get_project_data(root))
 	if #steps == 0 then
-		vim.notify("No executable steps found for task", vim.log.levels.WARN, { title = "KRS Task Runner" })
+		notify("No executable steps found for task", vim.log.levels.WARN)
 		return
 	end
 
@@ -801,6 +894,7 @@ function M.restart_task(slot)
 	run_step_sequence(1, steps, root, origin_win, task_name, slot, task_item)
 end
 
+--- Runs the project's default task, or opens the menu when none is set.
 function M.run_default_or_menu()
 	local root = M.get_project_root()
 	local pdata = M.get_project_data(root)
@@ -812,20 +906,23 @@ function M.run_default_or_menu()
 	end
 end
 
-function M.open_task_menu()
-	local root = M.get_project_root()
-	local pdata = M.get_project_data(root)
-	local discovered = M.discover_tasks(root)
+-- ============================================================================
+-- TASK MENU (Telescope)
+-- ============================================================================
 
-	local tasks = {}
+--- Merges custom tasks with discovered ones, dropping discovered duplicates.
+---
+--- @param pdata table Project data.
+--- @param discovered table[] Result of `M.discover_tasks`.
+--- @return table[] entries `{ name, item, steps_count, source, is_custom }`
+local function build_menu_entries(pdata, discovered)
+	local entries = {}
 
 	for _, ct in ipairs(pdata.custom_tasks or {}) do
-		local steps = M.resolve_steps(ct, pdata)
-		local name = ct.name or (type(ct.cmd) == "string" and ct.cmd) or "Chained Task"
-		table.insert(tasks, {
-			name = name,
+		table.insert(entries, {
+			name = ct.name or (type(ct.cmd) == "string" and ct.cmd) or "Chained Task",
 			item = ct,
-			steps_count = #steps,
+			steps_count = #M.resolve_steps(ct, pdata),
 			source = "custom",
 			is_custom = true,
 		})
@@ -833,34 +930,52 @@ function M.open_task_menu()
 
 	for _, dt in ipairs(discovered) do
 		local exists = false
-		for _, t in ipairs(tasks) do
-			if type(t.item) == "string" and t.item == dt.cmd then
-				exists = true
-				break
-			elseif type(t.item) == "table" and t.item.cmd == dt.cmd then
+		for _, entry in ipairs(entries) do
+			local item = entry.item
+			if (type(item) == "string" and item == dt.cmd) or (type(item) == "table" and item.cmd == dt.cmd) then
 				exists = true
 				break
 			end
 		end
 		if not exists then
-			table.insert(tasks, {
-				name = dt.name,
-				item = dt.cmd,
-				steps_count = 1,
-				source = dt.source,
-			})
+			table.insert(entries, { name = dt.name, item = dt.cmd, steps_count = 1, source = dt.source })
 		end
 	end
 
-	if #tasks == 0 then
+	return entries
+end
+
+--- True when `entry` is the project's default task.
+--- @param entry table Menu entry.
+--- @param default_task table|string|nil Stored default.
+--- @return boolean
+local function is_default_entry(entry, default_task)
+	if not default_task then
+		return false
+	end
+	if type(default_task) == "string" then
+		return entry.name == default_task or entry.item == default_task
+	end
+	return type(entry.item) == "table"
+		and (default_task.name == entry.item.name or default_task.cmd == entry.item.cmd)
+end
+
+--- Opens the task picker: <CR> runs, `d` sets default, `a` adds, `c` chains,
+--- `x` deletes. With no tasks at all it prompts for a first command.
+function M.open_task_menu()
+	local root = M.get_project_root()
+	local pdata = M.get_project_data(root)
+	local entries = build_menu_entries(pdata, M.discover_tasks(root))
+
+	if #entries == 0 then
 		vim.ui.input({ prompt = "No tasks detected. Enter command to execute: " }, function(cmd)
 			if cmd and cmd ~= "" then
+				local new_task = { name = cmd, cmd = cmd }
 				pdata.custom_tasks = pdata.custom_tasks or {}
-				local new_t = { name = cmd, cmd = cmd }
-				table.insert(pdata.custom_tasks, new_t)
-				pdata.default_task = new_t
+				table.insert(pdata.custom_tasks, new_task)
+				pdata.default_task = new_task
 				M.save_project_data(root, pdata)
-				M.run_task_item(new_t, root)
+				M.run_task_item(new_task, root)
 			end
 		end)
 		return
@@ -878,53 +993,54 @@ function M.open_task_menu()
 	pickers.new(themes.get_dropdown({
 		prompt_title = " 🛠️ Tasks (" .. vim.fn.fnamemodify(root, ":t") .. ") | [d]=Default [a]=Add [c]=Chain [x]=Delete ",
 		finder = finders.new_table({
-			results = tasks,
+			results = entries,
 			entry_maker = function(entry)
-				local is_def = false
-				if default_task then
-					if type(default_task) == "string" and (entry.name == default_task or entry.item == default_task) then
-						is_def = true
-					elseif type(default_task) == "table" and type(entry.item) == "table" and (default_task.name == entry.item.name or default_task.cmd == entry.item.cmd) then
-						is_def = true
-					end
-				end
-
 				local chain_tag = entry.steps_count > 1 and string.format(" 🔗 [%d steps]", entry.steps_count) or ""
-				local tag = is_def and " ⭐ [DEFAULT]" or (" [" .. entry.source .. "]" .. chain_tag)
+				local tag = is_default_entry(entry, default_task) and " ⭐ [DEFAULT]"
+					or (" [" .. entry.source .. "]" .. chain_tag)
 				local display = entry.name .. tag
-				return {
-					value = entry,
-					display = display,
-					ordinal = display .. " " .. entry.name,
-				}
+				return { value = entry, display = display, ordinal = display .. " " .. entry.name }
 			end,
 		}),
 		sorter = conf.generic_sorter({}),
 		attach_mappings = function(prompt_bufnr, map)
-			actions.select_default:replace(function()
+			--- Selection under the cursor, or nil.
+			local function selected()
 				local selection = action_state.get_selected_entry()
+				return selection and selection.value or nil
+			end
+
+			--- Persists `pdata` and reopens the menu so it shows the new state.
+			local function save_and_reopen()
+				M.save_project_data(root, pdata)
 				actions.close(prompt_bufnr)
-				if selection and selection.value then
-					M.run_task_item(selection.value.item, root)
+				vim.schedule(M.open_task_menu)
+			end
+
+			--- Binds a picker action in both insert and normal mode.
+			local function map_both(key, fn)
+				map("i", key, fn)
+				map("n", key, fn)
+			end
+
+			actions.select_default:replace(function()
+				local value = selected()
+				actions.close(prompt_bufnr)
+				if value then
+					M.run_task_item(value.item, root)
 				end
 			end)
 
-			local set_default = function()
-				local selection = action_state.get_selected_entry()
-				if selection and selection.value then
-					pdata.default_task = selection.value.item
-					M.save_project_data(root, pdata)
-					actions.close(prompt_bufnr)
-					vim.notify("⭐ Default task saved", vim.log.levels.INFO, { title = "KRS Task Runner" })
-					vim.schedule(function()
-						M.open_task_menu()
-					end)
+			map_both("d", function()
+				local value = selected()
+				if value then
+					pdata.default_task = value.item
+					save_and_reopen()
+					notify("⭐ Default task saved")
 				end
-			end
-			map("i", "d", set_default)
-			map("n", "d", set_default)
+			end)
 
-			local add_custom = function()
+			map_both("a", function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "New Task Command: " }, function(cmd)
@@ -936,158 +1052,151 @@ function M.open_task_menu()
 						end
 					end)
 				end)
-			end
-			map("i", "a", add_custom)
-			map("n", "a", add_custom)
+			end)
 
-			local add_chain = function()
+			map_both("c", function()
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Chain Name (e.g. Build & Test): " }, function(chain_name)
-						if not chain_name or chain_name == "" then return end
+						if not chain_name or chain_name == "" then
+							return
+						end
 						vim.ui.input({ prompt = "Chained steps (separated by '&&' or ','): " }, function(raw_steps)
-							if not raw_steps or raw_steps == "" then return end
+							if not raw_steps or raw_steps == "" then
+								return
+							end
+
 							local steps = {}
 							for step in raw_steps:gmatch("[^&,]+") do
-								local clean = step:gsub("^%s*", ""):gsub("%s*$", "")
+								local clean = vim.trim(step)
 								if clean ~= "" then
 									table.insert(steps, clean)
 								end
 							end
+
 							if #steps > 0 then
 								pdata.custom_tasks = pdata.custom_tasks or {}
 								table.insert(pdata.custom_tasks, { name = chain_name, chain = steps })
 								M.save_project_data(root, pdata)
-								vim.notify("🔗 Task chain saved: " .. chain_name .. " (" .. #steps .. " steps)", vim.log.levels.INFO, { title = "KRS Task Runner" })
+								notify("🔗 Task chain saved: " .. chain_name .. " (" .. #steps .. " steps)")
 							end
 							M.open_task_menu()
 						end)
 					end)
 				end)
-			end
-			map("i", "c", add_chain)
-			map("n", "c", add_chain)
+			end)
 
-			local delete_task = function()
-				local selection = action_state.get_selected_entry()
-				if selection and selection.value then
-					local sel_item = selection.value.item
-					if pdata.default_task == sel_item then
-						pdata.default_task = nil
-					end
-					if pdata.custom_tasks then
-						local new_custom = {}
-						for _, ct in ipairs(pdata.custom_tasks) do
-							if ct ~= sel_item and ct.name ~= selection.value.name then
-								table.insert(new_custom, ct)
-							end
-						end
-						pdata.custom_tasks = new_custom
-					end
-					M.save_project_data(root, pdata)
-					actions.close(prompt_bufnr)
-					vim.schedule(function()
-						M.open_task_menu()
-					end)
+			map_both("x", function()
+				local value = selected()
+				if not value then
+					return
 				end
-			end
-			map("i", "x", delete_task)
-			map("n", "x", delete_task)
+
+				if pdata.default_task == value.item then
+					pdata.default_task = nil
+				end
+				if pdata.custom_tasks then
+					local kept = {}
+					for _, ct in ipairs(pdata.custom_tasks) do
+						if ct ~= value.item and ct.name ~= value.name then
+							table.insert(kept, ct)
+						end
+					end
+					pdata.custom_tasks = kept
+				end
+				save_and_reopen()
+			end)
 
 			return true
 		end,
 	}), {}):find()
 end
 
+-- ============================================================================
+-- SETUP -- user commands and keymaps
+-- ============================================================================
+
+--- Registers `:TaskRunner`, `:TaskMenu`, `:TaskRestart`, `:TaskKill`,
+--- `:TaskRunDefault` and every keymap from `M.settings.keys`.
 function M.setup()
-	vim.api.nvim_create_user_command("TaskRunner", function()
-		M.open_task_menu()
-	end, { desc = "Open KRS Project Task Runner" })
-
-	vim.api.nvim_create_user_command("TaskMenu", function()
-		M.open_task_menu()
-	end, { desc = "Open KRS Project Task Runner" })
-
-	vim.api.nvim_create_user_command("TaskRestart", function()
-		M.restart_task()
-	end, { desc = "Kill and restart active project task" })
-
-	vim.api.nvim_create_user_command("TaskKill", function()
-		M.stop_task()
-	end, { desc = "Kill active project task" })
-
-	vim.api.nvim_create_user_command("TaskRunDefault", function()
-		M.run_default_or_menu()
-	end, { desc = "Run default project task" })
-
-	local modes = { "n", "i", "v", "t" }
-	for _, mode in ipairs(modes) do
-		vim.keymap.set(mode, "<C-S-t>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.open_task_menu()
-		end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
-
-		vim.keymap.set(mode, "<C-S-T>", function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
-			end
-			M.open_task_menu()
-		end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
+	local commands = {
+		TaskRunner = { M.open_task_menu, "Open KRS Project Task Runner" },
+		TaskMenu = { M.open_task_menu, "Open KRS Project Task Runner" },
+		TaskRestart = { function() M.restart_task() end, "Kill and restart active project task" },
+		TaskKill = { function() M.stop_task() end, "Kill active project task" },
+		TaskRunDefault = { M.run_default_or_menu, "Run default project task" },
+	}
+	for name, spec in pairs(commands) do
+		vim.api.nvim_create_user_command(name, spec[1], { desc = spec[2] })
 	end
 
-	vim.keymap.set("n", "<F5>", function()
-		M.run_default_or_menu()
-	end, { noremap = true, silent = true, desc = "Run Default Project Task" })
-
-	vim.keymap.set("n", "<F6>", function()
-		M.open_task_menu()
-	end, { noremap = true, silent = true, desc = "Open Project Task Menu" })
-
-	for i = 1, 4 do
-		vim.keymap.set({ "n", "i", "t" }, "<C-A-S-" .. i .. ">", function()
+	--- Leaves terminal mode first, so the mapping works from inside a task output.
+	local function from_any_mode(fn)
+		return function()
 			if vim.fn.mode() == "t" then
 				pcall(vim.cmd, "stopinsert")
 			end
+			fn()
+		end
+	end
+
+	for _, key in ipairs(M.settings.keys.menu) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(M.open_task_menu), {
+			noremap = true,
+			silent = true,
+			desc = "Open Project Task Menu",
+		})
+	end
+
+	vim.keymap.set("n", M.settings.keys.run_default, M.run_default_or_menu, {
+		noremap = true,
+		silent = true,
+		desc = "Run Default Project Task",
+	})
+	vim.keymap.set("n", M.settings.keys.menu_fkey, M.open_task_menu, {
+		noremap = true,
+		silent = true,
+		desc = "Open Project Task Menu",
+	})
+
+	for i = 1, M.settings.max_slots do
+		vim.keymap.set({ "n", "i", "t" }, M.settings.keys.slot_prefix .. i .. ">", from_any_mode(function()
 			M.toggle_slot_window(i)
-		end, { noremap = true, silent = true, desc = "Toggle Task Slot #" .. i })
+		end), { noremap = true, silent = true, desc = "Toggle Task Slot #" .. i })
 	end
 
-	for _, m in ipairs({ "n", "i", "v", "t" }) do
-		pcall(vim.keymap.del, m, "<C-[>")
-		pcall(vim.keymap.del, m, "<C-S-[>")
-		pcall(vim.keymap.del, m, "<C-{>")
+	-- These collide with <Esc> in terminal buffers, so they are dropped globally
+	-- and re-bound per task buffer instead (see bind_task_buffer_keys).
+	for _, mode in ipairs({ "n", "i", "v", "t" }) do
+		for _, key in ipairs(M.settings.keys.unbind) do
+			pcall(vim.keymap.del, mode, key)
+		end
 	end
 
-	local toggle_last_keys = { "<C-o>", "<C-O>", "<C-`>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>" }
-	for _, k in ipairs(toggle_last_keys) do
-		vim.keymap.set({ "n", "i", "v", "t" }, k, function()
-			if vim.fn.mode() == "t" then
-				pcall(vim.cmd, "stopinsert")
-			end
-			M.toggle_last_slot_window()
-		end, { noremap = true, silent = true, desc = "Toggle Last Task Slot Window" })
+	for _, key in ipairs(M.settings.keys.toggle_last) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(M.toggle_last_slot_window), {
+			noremap = true,
+			silent = true,
+			desc = "Toggle Last Task Slot Window",
+		})
 	end
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.ProjectTasks = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
+-- ============================================================================
+-- LAZY.NVIM SPEC -- `__index` exposes the module through `require`
+-- ============================================================================
+
+return setmetatable({
 	name = "krs_tasks",
-	dir = require("lazyscripts.lazydir").for_module(),
+	dir = require("krs.core.lazyspec").for_module(),
 	lazy = false,
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-	},
+	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = function()
 		M.setup()
 	end,
-}
-
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+}, { __index = M })

@@ -1,3 +1,11 @@
+-- ============================================================================
+-- PLUGIN: render-markdown -- readable markdown inside the editor.
+-- ============================================================================
+-- Renders headings, code blocks, tables, checkboxes and callouts in place, so
+-- docs/*.md and the in-editor wiki read like a document rather than raw text.
+-- Loads only for markdown buffers.
+-- ============================================================================
+
 return {
 	{
 		"MeanderingProgrammer/render-markdown.nvim",

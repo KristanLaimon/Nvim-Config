@@ -1,34 +1,100 @@
 -- ============================================================================
--- 🦊 KRS PLUGIN: Buffer Cleaner & Smart Quit Manager
+-- KRS PLUGIN: Buffer Cleaner & Smart Quit.
 -- ============================================================================
--- HOW THIS PLUGIN WORKS:
--- 1. `Neotree_Smart_Quit`: Smartly closes current buffer/tab:
---      - If multiple tabs/buffers are open, closes only current tab and moves to previous.
---      - If screen is split, closes only the current split window.
---      - If it is the last open file, deletes buffer and returns to Alpha Dashboard.
---      - If already on Alpha Dashboard, `:q` quits Neovim completely.
--- 2. `CleanNoNameBuffers`: Autocommand detecting and clearing empty unmodified [No Name] buffers when real files open.
--- 3. `AddOpenedFolder`: Keeps record of recently opened folders/projects for Telescope.
--- 4. Command aliases `:q` and `:q!`: Overrides `:q` to dynamically trigger smart quit.
--- 5. Portable lazy plugin spec exportable across Neovim configs.
+-- WHAT IT DOES
+--   1. Smart quit (`<C-q>`, `<leader>q`, and `:q`): closes the smallest sensible
+--      thing instead of the whole editor.
+--        in the dashboard   -> quit Neovim
+--        in neo-tree        -> close the sidebar
+--        in a terminal      -> close that window
+--        with splits open   -> close the current split
+--        last file buffer   -> delete it and land on the dashboard
+--   2. Removes empty `[No Name]` buffers once a real file is open.
+--   3. Tracks directories that have been opened, for the pickers to offer.
+--
+-- WHY GLOBAL FUNCTIONS
+--   `_G.Neotree_Smart_Quit` / `_G.Smart_Close_Buffer` / `_G.AddOpenedFolder` are
+--   called from `cnoreabbrev` (Vimscript, no `require`), from bufferline's close
+--   command, and from the terminal plugin. Keep the names.
 -- ============================================================================
 
 local M = {}
 
--- Global table for tracking opened folders
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+M.settings = {
+	--- Filetypes that are UI, not files: they never count as "open work".
+	ui_filetypes = { "alpha", "neo-tree" },
+
+	--- Dashboard filetype and the command that opens it.
+	dashboard_filetype = "alpha",
+	dashboard_command = "Alpha",
+
+	keys = {
+		--- Smart quit.
+		quit = { "<C-q>", "<leader>q" },
+	},
+
+	--- Command-line abbreviations rerouted to smart quit. `force` picks the
+	--- `qa!`/`close!` variants.
+	abbreviations = {
+		{ lhs = "q", force = false },
+		{ lhs = "q!", force = true },
+		{ lhs = "bd", force = false },
+		{ lhs = "bd!", force = true },
+		{ lhs = "bdelete", force = false },
+		{ lhs = "bdelete!", force = true },
+	},
+}
+
+--- Directories opened this session, keyed by lowercase path.
 _G.OpenedFolders = _G.OpenedFolders or {}
 
+-- ============================================================================
+-- HELPERS
+-- ============================================================================
+
+--- True when the buffer holds UI rather than a file.
+--- @param buf integer
+--- @return boolean
+local function is_ui_buffer(buf)
+	return vim.tbl_contains(M.settings.ui_filetypes, vim.bo[buf].filetype)
+end
+
+--- Listed buffers that hold actual work.
+--- @return integer[] buffers
+local function real_buffers()
+	local out = {}
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf) and vim.fn.buflisted(buf) == 1 and not is_ui_buffer(buf) then
+			table.insert(out, buf)
+		end
+	end
+	return out
+end
+
+-- ============================================================================
+-- GLOBAL API (called from Vimscript and other plugins)
+-- ============================================================================
+
+--- Records a directory as opened, so pickers can offer it later.
+--- @param dir_path string|nil
 function _G.AddOpenedFolder(dir_path)
 	if not dir_path or dir_path == "" then
 		return
 	end
-	local clean = vim.fn.fnamemodify(dir_path, ":p"):gsub("[/\\]$", "")
+
+	local clean = (vim.fn.fnamemodify(dir_path, ":p"):gsub("[/\\]$", ""))
 	if vim.fn.isdirectory(clean) == 1 then
 		_G.OpenedFolders[clean:lower()] = clean
 	end
 end
 
--- Smart Buffer Close Function (target buffer by bufnr or current)
+--- Closes one buffer, keeping the editor in a usable state.
+--- @param target_buf integer|nil Buffer to close. Defaults to the current one.
+--- @param force boolean|nil Discard unsaved changes.
 function _G.Smart_Close_Buffer(target_buf, force)
 	local cur_buf = vim.api.nvim_get_current_buf()
 	target_buf = target_buf or cur_buf
@@ -38,83 +104,54 @@ function _G.Smart_Close_Buffer(target_buf, force)
 	end
 
 	local ft = vim.bo[target_buf].filetype
-	if ft == "alpha" then
+	if ft == M.settings.dashboard_filetype then
 		vim.cmd(force and "qa!" or "qa")
 		return
 	end
-
 	if ft == "neo-tree" then
 		pcall(vim.cmd, "Neotree close")
 		return
 	end
 
-	-- Count how many real file buffers are open in total
-	local bufs = vim.api.nvim_list_bufs()
-	local real_bufs = {}
-	for _, b in ipairs(bufs) do
-		if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-			local bft = vim.bo[b].filetype
-			if bft ~= "alpha" and bft ~= "neo-tree" then
-				table.insert(real_bufs, b)
-			end
+	-- Closing the last real buffer would leave an empty editor, so land on the
+	-- dashboard first and only then delete it.
+	if #real_buffers() <= 1 then
+		if target_buf == cur_buf and not pcall(vim.cmd, M.settings.dashboard_command) then
+			pcall(vim.cmd, "enew")
 		end
+	elseif target_buf == cur_buf then
+		pcall(vim.cmd, "BufferLineCyclePrev")
 	end
 
-	-- If closing the last real file buffer:
-	if #real_bufs <= 1 then
-		if target_buf == cur_buf then
-			local ok_alpha = pcall(vim.cmd, "Alpha")
-			if not ok_alpha then
-				pcall(vim.cmd, "enew")
-			end
-		end
-		pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
-	else
-		-- Multiple file buffers open:
-		if target_buf == cur_buf then
-			pcall(vim.cmd, "BufferLineCyclePrev")
-		end
-		pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
-	end
+	pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
 end
 
--- Smart Buffer & Tab Manager Quit Function (for window splits & :q)
+--- Smart quit: closes the smallest sensible thing (see the header for the ladder).
+--- @param force boolean|nil Discard unsaved changes.
 function _G.Neotree_Smart_Quit(force)
 	local cur_buf = vim.api.nvim_get_current_buf()
 	local ft = vim.bo[cur_buf].filetype
-	local bt = vim.bo[cur_buf].buftype
 
-	-- 1. If in Alpha (Dashboard), :q quits Neovim completely
-	if ft == "alpha" then
+	if ft == M.settings.dashboard_filetype then
 		vim.cmd(force and "qa!" or "qa")
 		return
 	end
-
-	-- 2. If focused on Neo-tree, close Neo-tree sidebar
 	if ft == "neo-tree" then
 		pcall(vim.cmd, "Neotree close")
 		return
 	end
-
-	-- 3. If in a terminal window, close that window
-	if bt == "terminal" then
+	if vim.bo[cur_buf].buftype == "terminal" then
 		pcall(vim.cmd, force and "close!" or "close")
 		return
 	end
 
-	-- Count how many real code windows (excluding Neo-tree) are in the current tabpage
+	-- More than one code window in this tab: close just that split.
 	local code_wins = 0
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-		if vim.api.nvim_win_is_valid(win) then
-			local b = vim.api.nvim_win_get_buf(win)
-			local bft = vim.bo[b].filetype
-			if bft ~= "neo-tree" and bft ~= "alpha" then
-				code_wins = code_wins + 1
-			end
+		if vim.api.nvim_win_is_valid(win) and not is_ui_buffer(vim.api.nvim_win_get_buf(win)) then
+			code_wins = code_wins + 1
 		end
 	end
-
-	-- If multiple window splits exist, close only the current split window
 	if code_wins > 1 then
 		pcall(vim.cmd, force and "close!" or "close")
 		return
@@ -123,100 +160,97 @@ function _G.Neotree_Smart_Quit(force)
 	_G.Smart_Close_Buffer(cur_buf, force)
 end
 
+-- ============================================================================
+-- CLEANUP
+-- ============================================================================
+
+--- Deletes empty, unmodified, invisible `[No Name]` buffers, but only once a real
+--- file is open -- otherwise the very first empty buffer would be removed too.
 function M.clean_buffers()
-	local bufs = vim.api.nvim_list_bufs()
-	local real_files = 0
-	for _, b in ipairs(bufs) do
-		if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-			local bname = vim.api.nvim_buf_get_name(b)
-			local btype = vim.bo[b].buftype
-			local ftype = vim.bo[b].filetype
-			if bname ~= "" and btype == "" and ftype ~= "alpha" and ftype ~= "neo-tree" then
-				real_files = real_files + 1
-			end
+	local open_files = 0
+	for _, buf in ipairs(real_buffers()) do
+		if vim.api.nvim_buf_get_name(buf) ~= "" and vim.bo[buf].buftype == "" then
+			open_files = open_files + 1
+		end
+	end
+	if open_files == 0 then
+		return
+	end
+
+	local visible = {}
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_is_valid(win) then
+			visible[vim.api.nvim_win_get_buf(win)] = true
 		end
 	end
 
-	if real_files > 0 then
-		local visible_bufs = {}
-		for _, win in ipairs(vim.api.nvim_list_wins()) do
-			if vim.api.nvim_win_is_valid(win) then
-				visible_bufs[vim.api.nvim_win_get_buf(win)] = true
-			end
-		end
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		local is_candidate = vim.api.nvim_buf_is_valid(buf)
+			and vim.fn.buflisted(buf) == 1
+			and vim.api.nvim_buf_get_name(buf) == ""
+			and vim.bo[buf].buftype == ""
+			and not vim.bo[buf].modified
+			and not visible[buf]
 
-		for _, b in ipairs(bufs) do
-			if vim.api.nvim_buf_is_valid(b) and vim.fn.buflisted(b) == 1 then
-				local bname = vim.api.nvim_buf_get_name(b)
-				local btype = vim.bo[b].buftype
-				local modified = vim.bo[b].modified
-				if bname == "" and btype == "" and not modified and not visible_bufs[b] then
-					pcall(vim.api.nvim_buf_delete, b, { force = true })
-				end
-			end
+		if is_candidate then
+			pcall(vim.api.nvim_buf_delete, buf, { force = true })
 		end
 	end
 end
 
+-- ============================================================================
+-- SETUP
+-- ============================================================================
+
+--- Binds the quit keys, the `:q` abbreviations, and the cleanup autocmds.
 function M.setup()
-	-- Initialize working directory in OpenedFolders
 	_G.AddOpenedFolder(vim.fn.getcwd())
 
-	-- Autocmd: Track directory changes (:cd / Telescope projects)
-	local group_track = vim.api.nvim_create_augroup("KRSTrackOpenedFolders", { clear = true })
 	vim.api.nvim_create_autocmd("DirChanged", {
-		group = group_track,
+		group = vim.api.nvim_create_augroup("KRSTrackOpenedFolders", { clear = true }),
 		callback = function(ctx)
-			local dir = (ctx.file and ctx.file ~= "") and ctx.file or vim.fn.getcwd()
-			_G.AddOpenedFolder(dir)
+			_G.AddOpenedFolder((ctx.file and ctx.file ~= "") and ctx.file or vim.fn.getcwd())
 		end,
 	})
 
-	-- Autocmd: Automatic cleanup of empty [No Name] buffers when real files are open
-	local group_clean = vim.api.nvim_create_augroup("KRSCleanNoNameBuffers", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
-		group = group_clean,
+		group = vim.api.nvim_create_augroup("KRSCleanNoNameBuffers", { clear = true }),
 		callback = function()
-			vim.schedule(function()
-				M.clean_buffers()
-			end)
+			vim.schedule(M.clean_buffers)
 		end,
 	})
 
-	-- Keybindings for smart buffer quit (Ctrl+Q & Leader+q)
-	vim.keymap.set("n", "<C-q>", function()
-		_G.Neotree_Smart_Quit(false)
-	end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
+	for _, key in ipairs(M.settings.keys.quit) do
+		vim.keymap.set("n", key, function()
+			_G.Neotree_Smart_Quit(false)
+		end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
+	end
 
-	vim.keymap.set("n", "<leader>q", function()
-		_G.Neotree_Smart_Quit(false)
-	end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
-
-	-- Override :q, :q!, :bd, :bd!, :bdelete to trigger smart quit
-	vim.cmd([[
-		cnoreabbrev <expr> q (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'lua _G.Neotree_Smart_Quit(false)' : 'q'
-		cnoreabbrev <expr> q! (getcmdtype() == ':' && getcmdline() ==# 'q!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'q!'
-		cnoreabbrev <expr> bd (getcmdtype() == ':' && getcmdline() ==# 'bd') ? 'lua _G.Neotree_Smart_Quit(false)' : 'bd'
-		cnoreabbrev <expr> bd! (getcmdtype() == ':' && getcmdline() ==# 'bd!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'bd!'
-		cnoreabbrev <expr> bdelete (getcmdtype() == ':' && getcmdline() ==# 'bdelete') ? 'lua _G.Neotree_Smart_Quit(false)' : 'bdelete'
-		cnoreabbrev <expr> bdelete! (getcmdtype() == ':' && getcmdline() ==# 'bdelete!') ? 'lua _G.Neotree_Smart_Quit(true)' : 'bdelete!'
-	]])
+	-- `cnoreabbrev` with a guard, so the reroute only fires for the bare command
+	-- (`:q`), never inside something longer like `:qall` or a search for "q".
+	for _, abbrev in ipairs(M.settings.abbreviations) do
+		vim.cmd(string.format(
+			"cnoreabbrev <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? 'lua _G.Neotree_Smart_Quit(%s)' : '%s'",
+			abbrev.lhs,
+			abbrev.lhs,
+			tostring(abbrev.force),
+			abbrev.lhs
+		))
+	end
 end
 
+-- Legacy global kept for user scripts and older keybinds that reference it.
 _G.BufferCleaner = M
 
 M.setup()
 
--- Plugin specification for Lazy.nvim
-local plugin_spec = {
-	name = "krs_buffer_cleaner",
-	dir = require("lazyscripts.lazydir").for_module(),
-	lazy = false,
-	config = function()
-		M.setup()
-	end,
-}
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
 
-return setmetatable(plugin_spec, {
-	__index = M,
-})
+return setmetatable({
+	name = "krs_buffer_cleaner",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
+	config = M.setup,
+}, { __index = M })

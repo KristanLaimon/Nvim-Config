@@ -34,12 +34,22 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **WSL Helpers** | `wsl.lua` | Distro detection and path translation; also decides whether the dashboard shows the WSL button. | internal |
 | **launch.json IntelliSense** | `launch_cmp.lua` | blink.cmp source for `launch.json` — tasks, runtimes, modes. | automatic |
 
-Plus two helpers outside the spec tree, in `lua/lazyscripts/`:
+Plus the shared libraries outside the spec tree, in `lua/krs/`:
 
-| Helper | What it does |
+| Library | What it does |
 |---|---|
-| `lazydir.lua` | Unique lazy.nvim `dir` per local spec — see [Module Architecture](module-architecture.md#-lazydir--why-every-spec-needs-its-own-directory) |
-| `dap_repl_source.lua` | blink.cmp source that completes from the debug adapter's stopped frame |
+| `krs.core.path` | Cross-platform path normalize / join / compare |
+| `krs.core.store` | JSON load & save that never throws |
+| `krs.core.project` | Project root and `.krsnvim/` config resolution |
+| `krs.core.ui` | Floating window and scratch buffer factory |
+| `krs.core.dock` | The bottom dock shared by terminals and task outputs |
+| `krs.core.lazyspec` | Unique lazy.nvim `dir` per local spec — see [Module Architecture](module-architecture.md#-lazydir--why-every-spec-needs-its-own-directory) |
+| `krs.git.cmd` / `status` / `diff` | Running git, parsing status, formatting diffs |
+| `krs.launch.runtimes` | How each language is run and debugged |
+| `krs.lsp.code_action_menu` | The `<C-.>` dropdown at the caret |
+| `krs.lsp.editorconfig` | `.editorconfig` knowledge base and completion source |
+| `krs.lsp.dap_repl_source` | blink.cmp source that completes from the debug adapter's stopped frame |
+| `krs.projects.favorites` | Starred paths, shared by the explorer and the project picker |
 
 And the per-language debugger modules in `lua/plugins/krs/debuggers/`: `_shared.lua`, `bun.lua`, `node.lua`, `browsers.lua`, `python.lua`, `csharp.lua`, `php.lua`, `go.lua` — documented in [Debug Adapters](debug-adapters.md).
 

@@ -1,3 +1,11 @@
+-- ============================================================================
+-- PLUGIN: cord.nvim -- Discord rich presence.
+-- ============================================================================
+-- Shows what you are editing on your Discord profile: file, repository and
+-- elapsed time, idle after five minutes. Purely cosmetic; toggle it at runtime
+-- with `:Cord toggle` (also in the command palette under "Discord").
+-- ============================================================================
+
 return {
   "vyfor/cord.nvim",
   build = ":Cord update",
