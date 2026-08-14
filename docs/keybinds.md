@@ -92,7 +92,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<C-S-t>` / `<leader>ta` | n, i, v | Task menu (select, run, set default `[d]`, add `[a]`, delete `[x]`) |
 | `<C-S-a>` | n, i, v | Run the project's default task |
 | `<C-1>`..`<C-4>` | n, i, v, t | Toggle the output window for background task slot 1-4 |
-| `` <C-`> `` / `<C-S-o>` / `<C-[>` | n, i, v, t | Toggle the last-focused task output window |
+| `` <C-`> `` / `<C-[>` | n, i, v, t | Toggle the last-focused task output window |
 | `:TaskRestart` / `:TaskKill` | Cmd | Restart / kill the active task |
 | `<A-1>`..`<A-9>` | n, i, t | Select & switch to terminal #1-#9 (spawned on first use) |
 | `<C-;>` / `<C-S-;>` / `<C-S-:>` / `<A-;>` / `<C-A-;>` | n, i, t | Toggle the selected terminal panel |

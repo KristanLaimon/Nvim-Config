@@ -34,8 +34,6 @@ M.settings = {
 		close = "<C-w>",
 		--- Move focus between windows.
 		window_left = "<C-h>",
-		window_down = "<C-j>",
-		window_up = "<C-k>",
 		window_right = "<C-l>",
 		--- Cycle buffers.
 		buffer_prev = { "<A-h>", "<A-Left>" },
@@ -131,10 +129,12 @@ end
 
 -- Window focus. `<Cmd>wincmd` rather than `<C-w>h`, because <C-w> itself is
 -- remapped below to "close this thing".
-vim.keymap.set("n", M.settings.keys.window_left, "<Cmd>wincmd h<CR>", opts("Move to left window"))
-vim.keymap.set("n", M.settings.keys.window_down, "<Cmd>wincmd j<CR>", opts("Move to down window"))
-vim.keymap.set("n", M.settings.keys.window_up, "<Cmd>wincmd k<CR>", opts("Move to up window"))
-vim.keymap.set("n", M.settings.keys.window_right, "<Cmd>wincmd l<CR>", opts("Move to right window"))
+if M.settings.keys.window_left then
+	vim.keymap.set("n", M.settings.keys.window_left, "<Cmd>wincmd h<CR>", opts("Move to left window"))
+end
+if M.settings.keys.window_right then
+	vim.keymap.set("n", M.settings.keys.window_right, "<Cmd>wincmd l<CR>", opts("Move to right window"))
+end
 
 -- Ctrl+W closes the smallest sensible thing. The handler lives in the buffer
 -- cleaner plugin; this falls back to `:bdelete` if that has not loaded yet.

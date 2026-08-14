@@ -18,7 +18,7 @@ The **KRS Task Runner** provides automatic project build detection, custom task 
 - `<C-S-t>`: Open Task Manager (Telescope)
 - `<C-S-a>`: Run Default Task or Open Task Menu
 - `<C-1..4>`: Toggle Background Task Slot 1..4
-- `<C-`>` / `<C-S-o>`: Toggle Last Active Task Output Terminal
+- `<C-`>`: Toggle Last Active Task Output Terminal
 - `:TaskRestart`: Kill and restart the active task (or via Command Palette `<C-S-p>` -> `🔄 Restart Current Task (Kill & Rerun)`)
 - `:TaskKill`: Stop/kill the currently running task process
 - `:TaskRunDefault`: Execute the default task directly

@@ -24,7 +24,7 @@ local M = {}
 M.settings = {
 	keys = {
 		--- Fuzzy find, honouring .gitignore.
-		find_files = { "<C-/>" },
+		find_files = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
 		--- Fuzzy find everything, ignored and hidden files included.
 		find_all_files = { "<C-S-/>", "<C-?>" },
 		--- Find a file and open it in a split. Direction follows hjkl.

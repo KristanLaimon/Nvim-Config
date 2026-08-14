@@ -11,7 +11,7 @@
 --
 -- KEYBINDS (see M.settings.keys to change them)
 --   <C-S-t>          Task menu (Telescope)          <F5>  Run default task
---   <F6>             Task menu                      <C-o> Toggle last task output
+--   <F6>             Task menu                      <C-i> Toggle last task output
 --   <C-A-S-1..4>     Toggle task output slot 1..4
 --
 -- PROJECT FILE -- `.krsnvim/tasks.json`
@@ -84,9 +84,9 @@ M.settings = {
 		--- Open the task menu (function-key alternative).
 		menu_fkey = "<F6>",
 		--- Toggle the most recently used task output.
-		toggle_last = { "<C-o>", "<C-O>", "<C-`>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>" },
+		toggle_last = { "<C-`>", "<C-~>", "<C-S-i>", "<C-S-I>", "<C-A-S-j>" },
 		--- Toggle the output of the slot you are currently inside.
-		toggle_from_output = { "<C-o>", "<C-O>", "<C-`>", "<C-~>", "<C-S-o>", "<C-S-O>", "<C-A-S-j>", "<C-[>" },
+		toggle_from_output = { "<C-i>", "<C-I>", "<C-`>", "<C-~>", "<C-S-i>", "<C-S-I>", "<C-A-S-j>", "<C-[>" },
 		--- Dismiss a finished task window / the failure alert.
 		dismiss = { "<CR>", "<Esc>", "q", "<Space>" },
 		--- Prefix for per-slot toggles; the slot number is appended (`<C-A-S-1>`).
@@ -301,8 +301,7 @@ M.enforce_bottom_layout = dock.enforce_order
 --- session) to their slot, so toggles keep working without re-running the task.
 function M.sync_task_slots()
 	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-		local is_task = vim.api.nvim_buf_is_valid(buf)
-			and (vim.b[buf].krs_is_task or vim.bo[buf].filetype == "TaskRunner")
+		local is_task = vim.api.nvim_buf_is_valid(buf) and (vim.b[buf].krs_is_task or vim.bo[buf].filetype == "TaskRunner")
 
 		if is_task then
 			local slot = vim.b[buf].krs_task_slot
@@ -318,8 +317,7 @@ function M.sync_task_slots()
 			end
 
 			local occupant = slot and M.slots[slot]
-			local slot_is_free = slot
-				and (not occupant or not occupant.buf or not vim.api.nvim_buf_is_valid(occupant.buf))
+			local slot_is_free = slot and (not occupant or not occupant.buf or not vim.api.nvim_buf_is_valid(occupant.buf))
 
 			if slot_is_free then
 				local win
@@ -703,19 +701,20 @@ local function run_step_sequence(step_idx, steps, root, origin_win, task_name, s
 			end
 
 			if step_idx < total then
-				notify(string.format(
-					"✅ Step %d/%d completed. Starting Step %d/%d...",
-					step_idx, total, step_idx + 1, total
-				))
+				notify(string.format("✅ Step %d/%d completed. Starting Step %d/%d...", step_idx, total, step_idx + 1, total))
 				run_step_sequence(step_idx + 1, steps, root, origin_win, task_name, slot, task_item, opts)
 				return
 			end
 
 			finish_and_arm_dismiss()
-			notify(string.format(
-				"✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.",
-				task_name or "Chain", total, total
-			))
+			notify(
+				string.format(
+					"✅ Task chain '%s' (%d/%d steps) finished successfully. Press <Enter> to close.",
+					task_name or "Chain",
+					total,
+					total
+				)
+			)
 			if opts.on_done then
 				opts.on_done(0)
 			end
@@ -777,8 +776,10 @@ function M.run_task_item(task_item, root, opts)
 		if s and s.job_id and s.job_id > 0 then
 			local same_name = (s.name or "") == task_name
 			local same_item = s.task_item
-				and (s.task_item == task_item
-					or (type(s.task_item) == "table" and type(task_item) == "table" and s.task_item.name == task_item.name))
+				and (
+					s.task_item == task_item
+					or (type(s.task_item) == "table" and type(task_item) == "table" and s.task_item.name == task_item.name)
+				)
 			if same_name or same_item then
 				running_slot = i
 				break
@@ -788,10 +789,13 @@ function M.run_task_item(task_item, root, opts)
 
 	local slot = running_slot or get_free_slot()
 	if not slot then
-		return abort(string.format(
-			"All %d task slots are busy. Stop one first (Ctrl+Shift+Alt+1..%d to view, q/<CR> in it once done).",
-			M.settings.max_slots, M.settings.max_slots
-		))
+		return abort(
+			string.format(
+				"All %d task slots are busy. Stop one first (Ctrl+Shift+Alt+1..%d to view, q/<CR> in it once done).",
+				M.settings.max_slots,
+				M.settings.max_slots
+			)
+		)
 	end
 
 	if running_slot then
@@ -956,8 +960,7 @@ local function is_default_entry(entry, default_task)
 	if type(default_task) == "string" then
 		return entry.name == default_task or entry.item == default_task
 	end
-	return type(entry.item) == "table"
-		and (default_task.name == entry.item.name or default_task.cmd == entry.item.cmd)
+	return type(entry.item) == "table" and (default_task.name == entry.item.name or default_task.cmd == entry.item.cmd)
 end
 
 --- Opens the task picker: <CR> runs, `d` sets default, `a` adds, `c` chains,
@@ -990,126 +993,133 @@ function M.open_task_menu()
 
 	local default_task = pdata.default_task
 
-	pickers.new(themes.get_dropdown({
-		prompt_title = " 🛠️ Tasks (" .. vim.fn.fnamemodify(root, ":t") .. ") | [d]=Default [a]=Add [c]=Chain [x]=Delete ",
-		finder = finders.new_table({
-			results = entries,
-			entry_maker = function(entry)
-				local chain_tag = entry.steps_count > 1 and string.format(" 🔗 [%d steps]", entry.steps_count) or ""
-				local tag = is_default_entry(entry, default_task) and " ⭐ [DEFAULT]"
-					or (" [" .. entry.source .. "]" .. chain_tag)
-				local display = entry.name .. tag
-				return { value = entry, display = display, ordinal = display .. " " .. entry.name }
-			end,
-		}),
-		sorter = conf.generic_sorter({}),
-		attach_mappings = function(prompt_bufnr, map)
-			--- Selection under the cursor, or nil.
-			local function selected()
-				local selection = action_state.get_selected_entry()
-				return selection and selection.value or nil
-			end
+	pickers
+		.new(
+			themes.get_dropdown({
+				prompt_title = " 🛠️ Tasks ("
+					.. vim.fn.fnamemodify(root, ":t")
+					.. ") | [d]=Default [a]=Add [c]=Chain [x]=Delete ",
+				finder = finders.new_table({
+					results = entries,
+					entry_maker = function(entry)
+						local chain_tag = entry.steps_count > 1 and string.format(" 🔗 [%d steps]", entry.steps_count) or ""
+						local tag = is_default_entry(entry, default_task) and " ⭐ [DEFAULT]"
+							or (" [" .. entry.source .. "]" .. chain_tag)
+						local display = entry.name .. tag
+						return { value = entry, display = display, ordinal = display .. " " .. entry.name }
+					end,
+				}),
+				sorter = conf.generic_sorter({}),
+				attach_mappings = function(prompt_bufnr, map)
+					--- Selection under the cursor, or nil.
+					local function selected()
+						local selection = action_state.get_selected_entry()
+						return selection and selection.value or nil
+					end
 
-			--- Persists `pdata` and reopens the menu so it shows the new state.
-			local function save_and_reopen()
-				M.save_project_data(root, pdata)
-				actions.close(prompt_bufnr)
-				vim.schedule(M.open_task_menu)
-			end
+					--- Persists `pdata` and reopens the menu so it shows the new state.
+					local function save_and_reopen()
+						M.save_project_data(root, pdata)
+						actions.close(prompt_bufnr)
+						vim.schedule(M.open_task_menu)
+					end
 
-			--- Binds a picker action in both insert and normal mode.
-			local function map_both(key, fn)
-				map("i", key, fn)
-				map("n", key, fn)
-			end
+					--- Binds a picker action in both insert and normal mode.
+					local function map_both(key, fn)
+						map("i", key, fn)
+						map("n", key, fn)
+					end
 
-			actions.select_default:replace(function()
-				local value = selected()
-				actions.close(prompt_bufnr)
-				if value then
-					M.run_task_item(value.item, root)
-				end
-			end)
-
-			map_both("d", function()
-				local value = selected()
-				if value then
-					pdata.default_task = value.item
-					save_and_reopen()
-					notify("⭐ Default task saved")
-				end
-			end)
-
-			map_both("a", function()
-				actions.close(prompt_bufnr)
-				vim.schedule(function()
-					vim.ui.input({ prompt = "New Task Command: " }, function(cmd)
-						if cmd and cmd ~= "" then
-							pdata.custom_tasks = pdata.custom_tasks or {}
-							table.insert(pdata.custom_tasks, { name = cmd, cmd = cmd })
-							M.save_project_data(root, pdata)
-							M.open_task_menu()
+					actions.select_default:replace(function()
+						local value = selected()
+						actions.close(prompt_bufnr)
+						if value then
+							M.run_task_item(value.item, root)
 						end
 					end)
-				end)
-			end)
 
-			map_both("c", function()
-				actions.close(prompt_bufnr)
-				vim.schedule(function()
-					vim.ui.input({ prompt = "Chain Name (e.g. Build & Test): " }, function(chain_name)
-						if not chain_name or chain_name == "" then
-							return
+					map_both("d", function()
+						local value = selected()
+						if value then
+							pdata.default_task = value.item
+							save_and_reopen()
+							notify("⭐ Default task saved")
 						end
-						vim.ui.input({ prompt = "Chained steps (separated by '&&' or ','): " }, function(raw_steps)
-							if not raw_steps or raw_steps == "" then
-								return
-							end
+					end)
 
-							local steps = {}
-							for step in raw_steps:gmatch("[^&,]+") do
-								local clean = vim.trim(step)
-								if clean ~= "" then
-									table.insert(steps, clean)
+					map_both("a", function()
+						actions.close(prompt_bufnr)
+						vim.schedule(function()
+							vim.ui.input({ prompt = "New Task Command: " }, function(cmd)
+								if cmd and cmd ~= "" then
+									pdata.custom_tasks = pdata.custom_tasks or {}
+									table.insert(pdata.custom_tasks, { name = cmd, cmd = cmd })
+									M.save_project_data(root, pdata)
+									M.open_task_menu()
 								end
-							end
-
-							if #steps > 0 then
-								pdata.custom_tasks = pdata.custom_tasks or {}
-								table.insert(pdata.custom_tasks, { name = chain_name, chain = steps })
-								M.save_project_data(root, pdata)
-								notify("🔗 Task chain saved: " .. chain_name .. " (" .. #steps .. " steps)")
-							end
-							M.open_task_menu()
+							end)
 						end)
 					end)
-				end)
-			end)
 
-			map_both("x", function()
-				local value = selected()
-				if not value then
-					return
-				end
+					map_both("c", function()
+						actions.close(prompt_bufnr)
+						vim.schedule(function()
+							vim.ui.input({ prompt = "Chain Name (e.g. Build & Test): " }, function(chain_name)
+								if not chain_name or chain_name == "" then
+									return
+								end
+								vim.ui.input({ prompt = "Chained steps (separated by '&&' or ','): " }, function(raw_steps)
+									if not raw_steps or raw_steps == "" then
+										return
+									end
 
-				if pdata.default_task == value.item then
-					pdata.default_task = nil
-				end
-				if pdata.custom_tasks then
-					local kept = {}
-					for _, ct in ipairs(pdata.custom_tasks) do
-						if ct ~= value.item and ct.name ~= value.name then
-							table.insert(kept, ct)
+									local steps = {}
+									for step in raw_steps:gmatch("[^&,]+") do
+										local clean = vim.trim(step)
+										if clean ~= "" then
+											table.insert(steps, clean)
+										end
+									end
+
+									if #steps > 0 then
+										pdata.custom_tasks = pdata.custom_tasks or {}
+										table.insert(pdata.custom_tasks, { name = chain_name, chain = steps })
+										M.save_project_data(root, pdata)
+										notify("🔗 Task chain saved: " .. chain_name .. " (" .. #steps .. " steps)")
+									end
+									M.open_task_menu()
+								end)
+							end)
+						end)
+					end)
+
+					map_both("x", function()
+						local value = selected()
+						if not value then
+							return
 						end
-					end
-					pdata.custom_tasks = kept
-				end
-				save_and_reopen()
-			end)
 
-			return true
-		end,
-	}), {}):find()
+						if pdata.default_task == value.item then
+							pdata.default_task = nil
+						end
+						if pdata.custom_tasks then
+							local kept = {}
+							for _, ct in ipairs(pdata.custom_tasks) do
+								if ct ~= value.item and ct.name ~= value.name then
+									table.insert(kept, ct)
+								end
+							end
+							pdata.custom_tasks = kept
+						end
+						save_and_reopen()
+					end)
+
+					return true
+				end,
+			}),
+			{}
+		)
+		:find()
 end
 
 -- ============================================================================
@@ -1122,8 +1132,18 @@ function M.setup()
 	local commands = {
 		TaskRunner = { M.open_task_menu, "Open KRS Project Task Runner" },
 		TaskMenu = { M.open_task_menu, "Open KRS Project Task Runner" },
-		TaskRestart = { function() M.restart_task() end, "Kill and restart active project task" },
-		TaskKill = { function() M.stop_task() end, "Kill active project task" },
+		TaskRestart = {
+			function()
+				M.restart_task()
+			end,
+			"Kill and restart active project task",
+		},
+		TaskKill = {
+			function()
+				M.stop_task()
+			end,
+			"Kill active project task",
+		},
 		TaskRunDefault = { M.run_default_or_menu, "Run default project task" },
 	}
 	for name, spec in pairs(commands) do
@@ -1160,9 +1180,14 @@ function M.setup()
 	})
 
 	for i = 1, M.settings.max_slots do
-		vim.keymap.set({ "n", "i", "t" }, M.settings.keys.slot_prefix .. i .. ">", from_any_mode(function()
-			M.toggle_slot_window(i)
-		end), { noremap = true, silent = true, desc = "Toggle Task Slot #" .. i })
+		vim.keymap.set(
+			{ "n", "i", "t" },
+			M.settings.keys.slot_prefix .. i .. ">",
+			from_any_mode(function()
+				M.toggle_slot_window(i)
+			end),
+			{ noremap = true, silent = true, desc = "Toggle Task Slot #" .. i }
+		)
 	end
 
 	-- These collide with <Esc> in terminal buffers, so they are dropped globally

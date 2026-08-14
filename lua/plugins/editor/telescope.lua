@@ -24,7 +24,7 @@
 
 local settings = {
 	--- Find files, honouring .gitignore.
-	find_keys = { "<C-k>", "<C-/>", "<C-_>" },
+	find_keys = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
 
 	--- Find files, ignoring .gitignore. Several aliases: Alt/Meta combinations
 	--- arrive differently depending on terminal and GUI.
@@ -33,11 +33,11 @@ local settings = {
 		"<A-C-k>", "<A-C-K>", "<M-C-k>", "<M-C-K>",
 		"<C-S-/>", "<C-?>", "<leader>fa",
 	},
-
-	grep_key = "<C-f>",
-	help_key = "<leader>fh",
+	live_grep_key = "<C-f>",
+	help_tags_key = "<leader>fh",
 	open_folder_key = "<C-S-o>",
-	explorer_key = "<C-S-f>",
+	desktop_explorer_key = "<C-S-f>",
+	wsl_explorer_key = "<leader>fw",
 
 	--- Directory scan depth for the folder picker, and what it never descends into.
 	folder_scan_depth = 3,
@@ -52,8 +52,13 @@ local settings = {
 	},
 }
 
+-- ============================================================================
+-- LAZY.NVIM SPEC
+-- ============================================================================
+
 return {
 	"nvim-telescope/telescope.nvim",
+	branch = "master",
 	cmd = {
 		"Telescope",
 		"TelescopeOpenFolder",
@@ -66,6 +71,7 @@ return {
 	},
 	keys = {
 		{ "<C-k>", "<cmd>Telescope find_files<CR>", mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-K>", "<cmd>Telescope find_files<CR>", mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
 		{ "<C-A-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-A-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-M-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
