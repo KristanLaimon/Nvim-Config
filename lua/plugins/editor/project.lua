@@ -277,6 +277,11 @@ return {
 				return
 			end
 
+			-- Stop all LSP clients from previous project to free memory and avoid cross-project pollution
+			for _, client in ipairs(vim.lsp.get_clients()) do
+				client:stop()
+			end
+
 			pcall(vim.cmd, "Neotree close")
 			pcall(vim.cmd, "only")
 

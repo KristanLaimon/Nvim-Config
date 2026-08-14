@@ -384,6 +384,17 @@ return {
 				end,
 			})
 
+			-- Stop all active LSP clients whenever the working directory/project changes.
+			-- When you open a file in the new project, Neovim will automatically launch only the needed LSP.
+			vim.api.nvim_create_autocmd("DirChanged", {
+				group = vim.api.nvim_create_augroup("LspProjectAutoStop", { clear = true }),
+				callback = function()
+					for _, client in ipairs(vim.lsp.get_clients()) do
+						client:stop()
+					end
+				end,
+			})
+
 			for server, config in pairs(opts.servers) do
 				if server ~= "vtsls" and server ~= "ts_ls" and server ~= "tsserver" then
 					if config and config.enabled ~= false then

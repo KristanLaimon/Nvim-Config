@@ -189,8 +189,8 @@ return {
 			})
 		end
 
-		vim.keymap.set({ "n", "i" }, settings.grep_key, builtin.live_grep, { desc = "Telescope live grep" })
-		vim.keymap.set("n", settings.help_key, builtin.help_tags, { desc = "Telescope help tags" })
+		vim.keymap.set({ "n", "i" }, settings.live_grep_key, builtin.live_grep, { desc = "Telescope live grep" })
+		vim.keymap.set("n", settings.help_tags_key, builtin.help_tags, { desc = "Telescope help tags" })
 
 		-- ------------------------------------------------------------------
 		-- Folder picker
@@ -399,7 +399,7 @@ return {
 		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
 			require("plugins.krs.file_explorer").open_desktop_explorer()
 		end, { desc = "Open the floating desktop file explorer" })
-		vim.keymap.set({ "n", "i" }, settings.explorer_key, function()
+		vim.keymap.set({ "n", "i" }, settings.desktop_explorer_key, function()
 			require("plugins.krs.file_explorer").open_desktop_explorer()
 		end, { desc = "Open Desktop File Explorer" })
 
