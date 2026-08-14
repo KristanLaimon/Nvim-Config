@@ -77,6 +77,9 @@ describe("user commands", function()
 
 	it("registers the remaining feature commands", function()
 		for _, name in ipairs({
+			"GitCenter",
+			"GitStageAll",
+			"GitCenterReload",
 			"CommandPalette",
 			"TelescopeFileBrowserDesktop",
 			"TelescopeFileBrowserWSL",
@@ -97,7 +100,7 @@ end)
 
 describe("keymaps", function()
 	it("binds the KRS panels", function()
-		for _, key in ipairs({ "<C-S-t>", "<C-S-w>", "<C-S-p>", "<C-S-f>", "<C-S-s>", "<C-S-q>" }) do
+		for _, key in ipairs({ "<C-S-g>", "<C-S-t>", "<C-S-w>", "<C-S-p>", "<C-S-f>", "<C-S-s>", "<C-S-q>" }) do
 			expect({ key, has_keymap(key, { "n", "i", "v", "t" }) }).toEqual({ key, true })
 		end
 	end)

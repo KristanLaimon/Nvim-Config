@@ -60,7 +60,7 @@ M.settings = {
 
 	keys = {
 		--- Toggle the Git Center from anywhere.
-		toggle = { "<C-S-g>", "<C-S-G>" },
+		toggle = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
 		--- Stage everything from anywhere. Many aliases because terminals and GUIs
 		--- disagree about how Alt/Meta combinations arrive.
 		stage_all = {
@@ -77,7 +77,7 @@ M.settings = {
 		--- Refresh the panel.
 		refresh = { "<F5>", "<C-r>" },
 		--- Close the diff modal.
-		modal_close = { "q", "<Esc>", "<C-c>" },
+		modal_close = { "q", "<Esc>", "<C-c>", "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
 	},
 }
 
@@ -113,17 +113,28 @@ end
 --- True when the Git Center is on screen.
 --- @return boolean
 function M.is_open()
-	return M.main_win ~= nil and vim.api.nvim_win_is_valid(M.main_win)
+	return (M.main_win ~= nil and vim.api.nvim_win_is_valid(M.main_win))
+		or (M.preview_win ~= nil and vim.api.nvim_win_is_valid(M.preview_win))
+		or (M.diff_modal_win ~= nil and vim.api.nvim_win_is_valid(M.diff_modal_win))
 end
+
+local is_closing = false
 
 --- Closes every window this module owns and forgets their handles.
 function M.close_git_center()
-	for _, win in ipairs({ M.diff_modal_win, M.preview_win, M.main_win }) do
-		ui.close(win)
+	if is_closing then
+		return
 	end
+	is_closing = true
+	local diff_win, prev_win, main_win = M.diff_modal_win, M.preview_win, M.main_win
 	M.main_win, M.main_buf = nil, nil
 	M.preview_win, M.preview_buf = nil, nil
 	M.diff_modal_win, M.diff_modal_buf = nil, nil
+
+	ui.close(diff_win)
+	ui.close(prev_win)
+	ui.close(main_win)
+	is_closing = false
 end
 
 --- Opens the Git Center, or closes it when it is already open.
@@ -402,7 +413,7 @@ function M.open_diff_modal(target_file, _target_type)
 
 	local opts = { buffer = buf, noremap = true, silent = true, nowait = true }
 	for _, key in ipairs(M.settings.keys.modal_close) do
-		vim.keymap.set("n", key, close_modal, opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, close_modal, opts)
 	end
 
 	for _, key in ipairs({ "<Tab>", "]" }) do
@@ -472,6 +483,10 @@ function M.open_git_center()
 
 	local main_buf = vim.api.nvim_create_buf(false, true)
 	M.main_buf = main_buf
+	vim.bo[main_buf].buftype = "nofile"
+	vim.bo[main_buf].bufhidden = "wipe"
+	vim.bo[main_buf].swapfile = false
+
 	M.main_win = vim.api.nvim_open_win(main_buf, true, {
 		relative = "editor",
 		width = left_width,
@@ -480,12 +495,16 @@ function M.open_git_center()
 		col = start_col,
 		style = "minimal",
 		border = "rounded",
-		title = " 🐙 Git Center (Ctrl+Shift+J/K Scroll Preview | Tab Focus | Ctrl+Shift+G Close) ",
+		title = " 🐙 Git Center (Ctrl+Shift+J/K Scroll Preview | Tab Focus | Ctrl+Shift+G / Esc Close) ",
 		title_pos = "center",
 	})
 
 	local preview_buf = vim.api.nvim_create_buf(false, true)
 	M.preview_buf = preview_buf
+	vim.bo[preview_buf].buftype = "nofile"
+	vim.bo[preview_buf].bufhidden = "wipe"
+	vim.bo[preview_buf].swapfile = false
+
 	M.preview_win = vim.api.nvim_open_win(preview_buf, false, {
 		relative = "editor",
 		width = right_width,
@@ -501,19 +520,26 @@ function M.open_git_center()
 	vim.api.nvim_set_option_value("number", true, { win = M.preview_win })
 	vim.api.nvim_set_option_value("wrap", false, { win = M.preview_win })
 
-	-- Closing the panel by any other means still has to clean up the preview.
-	vim.api.nvim_create_autocmd("WinClosed", {
-		pattern = tostring(M.main_win),
-		once = true,
-		callback = M.close_git_center,
-	})
+	-- Closing the panel by any other means still has to clean up the preview and state.
+	for _, win in ipairs({ M.main_win, M.preview_win }) do
+		vim.api.nvim_create_autocmd("WinClosed", {
+			pattern = tostring(win),
+			once = true,
+			callback = function()
+				vim.schedule(M.close_git_center)
+			end,
+		})
+	end
 
 	local lines, line_map, section_lines = build_panel_content(info, left_width)
 	M.line_map = line_map
 
+	vim.bo[main_buf].modifiable = true
 	vim.api.nvim_buf_set_lines(main_buf, 0, -1, false, lines)
 	vim.api.nvim_set_option_value("filetype", "markdown", { buf = main_buf })
 	vim.api.nvim_set_option_value("cursorline", true, { win = M.main_win })
+	vim.bo[main_buf].modifiable = false
+	vim.bo[preview_buf].modifiable = false
 
 	-- ------------------------------------------------------------------
 	-- Live preview
@@ -542,10 +568,12 @@ function M.open_git_center()
 				local row = vim.api.nvim_win_get_cursor(M.main_win)[1]
 				local item = M.line_map[row]
 
+				vim.bo[preview_buf].modifiable = true
 				if not item or not item.file then
 					vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, {
 						" 💡 Select a staged or unstaged file to view diff.",
 					})
+					vim.bo[preview_buf].modifiable = false
 					vim.api.nvim_buf_clear_namespace(preview_buf, diff.namespace, 0, -1)
 					return
 				end
@@ -559,6 +587,7 @@ function M.open_git_center()
 
 				local cached = M.diff_cache[cache_key]
 				vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, cached.lines)
+				vim.bo[preview_buf].modifiable = false
 				diff.apply_highlights(preview_buf, cached.kinds)
 			end)
 		)
@@ -587,7 +616,9 @@ function M.open_git_center()
 		section_lines = new_sections
 
 		local cursor = vim.api.nvim_win_get_cursor(M.main_win)
+		vim.bo[main_buf].modifiable = true
 		vim.api.nvim_buf_set_lines(main_buf, 0, -1, false, new_lines)
+		vim.bo[main_buf].modifiable = false
 		pcall(vim.api.nvim_win_set_cursor, M.main_win, { math.min(cursor[1], #new_lines), cursor[2] })
 
 		M.diff_cache = {}
@@ -676,18 +707,18 @@ function M.open_git_center()
 	end
 
 	for _, key in ipairs(M.settings.keys.scroll_down) do
-		vim.keymap.set("n", key, function()
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
 			scroll_preview("down")
 		end, key_opts)
-		vim.keymap.set("n", key, function()
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
 			scroll_preview("down")
 		end, preview_opts)
 	end
 	for _, key in ipairs(M.settings.keys.scroll_up) do
-		vim.keymap.set("n", key, function()
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
 			scroll_preview("up")
 		end, key_opts)
-		vim.keymap.set("n", key, function()
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
 			scroll_preview("up")
 		end, preview_opts)
 	end
@@ -698,13 +729,12 @@ function M.open_git_center()
 			vim.api.nvim_set_current_win(target)
 		end
 	end
-	vim.keymap.set("n", "<Tab>", toggle_focus, key_opts)
-	vim.keymap.set("n", "<Tab>", toggle_focus, preview_opts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_focus, key_opts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_focus, preview_opts)
 
 	for _, key in ipairs(M.settings.keys.close) do
-		vim.keymap.set("n", key, M.close_git_center, key_opts)
-		vim.keymap.set("v", key, M.close_git_center, key_opts)
-		vim.keymap.set("n", key, M.close_git_center, preview_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, M.close_git_center, key_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, M.close_git_center, preview_opts)
 	end
 
 	for section = 1, 4 do
@@ -1036,26 +1066,19 @@ function M.setup()
 	end
 end
 
+M.setup()
+
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.GitCenter = M
 
 -- ============================================================================
--- LAZY.NVIM SPEC -- attached to neogit, which supplies the heavier git UI
+-- LAZY.NVIM SPEC
 -- ============================================================================
 
 return setmetatable({
-	"NeogitOrg/neogit",
-	cmd = { "GitCenter", "GitStageAll", "GitCenterReload", "ReloadGitCenter", "Neogit" },
-	keys = {
-		{ "<C-S-g>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
-		{ "<C-S-G>", function() M.toggle_git_center() end, mode = { "n", "i", "v", "t" }, desc = "Toggle Git Center" },
-		{ "<C-S-x>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-		{ "<C-S-X>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-		{ "<C-A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-		{ "<C-A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-		{ "<A-s>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-		{ "<A-S>", function() M.stage_all_with_modal() end, mode = { "n", "i", "v", "t" }, desc = "Stage All Unstaged & Untracked Changes" },
-	},
+	name = "krs_git_center",
+	dir = require("krs.core.lazyspec").for_module(),
+	lazy = false,
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"sindrets/diffview.nvim",

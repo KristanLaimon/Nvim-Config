@@ -30,6 +30,7 @@ M.settings = {
 	keys = {
 		--- Stage every unstaged and untracked change. Many aliases because Alt and
 		--- Meta combinations arrive differently per terminal and GUI.
+		git_center = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
 		git_stage_all = {
 			"<C-S-x>", "<C-S-X>",
 			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
@@ -92,6 +93,10 @@ end
 -- ============================================================================
 -- GIT, LAUNCH PROFILES, TASKS
 -- ============================================================================
+
+map_all_modes(M.settings.keys.git_center, function()
+	require("plugins.krs.git_center").toggle_git_center()
+end, "Toggle Git Control Center")
 
 map_all_modes(M.settings.keys.git_stage_all, function()
 	require("plugins.krs.git_center").stage_all_with_modal()
