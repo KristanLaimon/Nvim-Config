@@ -154,6 +154,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
 | `<C-S-g>` | n, i, v, t | Toggle the [Git Control Center](git-center.md) |
+| `<A-h>` / `<A-l>` | Git Center | Switch previous / next submodule repository tab |
 | `s` / `S` | Git Center | Stage selected / stage all |
 | `u` / `U` | Git Center | Unstage selected / unstage all |
 | `r` / `R` | Git Center | Restore file under cursor / whole section (confirmed) |

@@ -2,32 +2,38 @@
 -- KRS PLUGIN: Git Center (Ctrl + Shift + G) -- stage, commit, push, review.
 -- ============================================================================
 -- LAYOUT
---   Left  A control panel in four sections: commit box, staged files, unstaged
---         and untracked files, and a shortcut reference.
+--   Left  A control panel with submodule tabs at top, followed by four sections:
+--         commit box, staged files, unstaged/untracked files, and shortcuts.
 --   Right A live VSCode-style diff of the file under the cursor.
 --
 -- KEYS (inside the panel)
---   1..4 jump to a section          Tab   switch panel focus
---   s/S  stage file / everything    u/U   unstage file / everything
---   r/R  restore file / section     d     full-screen diff modal
---   c/m/t edit title/description/tag      C  commit (and tag)
---   P    push (asks about the upstream)   <F5>/<C-r> refresh
---   <C-S-j>/<C-S-k> scroll the preview    q/<Esc>/<C-S-g> close
+--   Alt+h / Alt+l switch submodule tab     1..4 jump to a section
+--   Tab switch panel focus                 s/S  stage file / everything
+--   u/U unstage file / everything          r/R  restore file / section
+--   d   full-screen diff modal             c/m/t edit title/description/tag
+--   C   commit (and tag)                   P    push (asks about upstream)
+--   <F5>/<C-r> refresh                     <C-S-j>/<C-S-k> scroll preview
+--   q/<Esc>/<C-S-g> close
 --
 -- OUTSIDE THE PANEL
 --   <C-S-g> toggles the Git Center, <C-S-x> / <A-s> stage everything.
 --
 -- STRUCTURE
---   krs.git.cmd     Running git (sync reads, async writes).
---   krs.git.status  Parsing the repository state.
---   krs.git.diff    Formatting and colouring diffs.
---   this file       Windows, panel rendering and key handling.
+--   krs.git.cmd         Running git (sync reads, async writes).
+--   krs.git.status      Parsing the repository state.
+--   krs.git.diff        Formatting and colouring diffs.
+--   krs.git.submodules  Discovering and listing root & submodules.
+--   this file           Windows, panel rendering, tab bar and key handling.
 -- ============================================================================
 
 local git = require("krs.git.cmd")
 local status = require("krs.git.status")
 local diff = require("krs.git.diff")
+local submodules = require("krs.git.submodules")
 local ui = require("krs.core.ui")
+local store = require("krs.core.store")
+local project = require("krs.core.project")
+local path_util = require("krs.core.path")
 
 local M = {}
 
@@ -58,6 +64,9 @@ M.settings = {
 	notify_title = "Git Center",
 	control_title = "Git Control Center",
 
+	--- State persistence file name in project `.krsnvim/`.
+	config_filename = "git-center.json",
+
 	keys = {
 		--- Toggle the Git Center from anywhere.
 		toggle = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
@@ -69,6 +78,9 @@ M.settings = {
 			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
 		},
+		--- Switch submodule tabs (left / right).
+		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
+		tab_next = { "<A-l>", "<A-L>", "<M-l>", "<M-L>", "<A-Right>", "<M-Right>" },
 		--- Close the panel.
 		close = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>", "q", "<Esc>" },
 		--- Scroll the preview pane.
@@ -82,12 +94,21 @@ M.settings = {
 }
 
 -- ============================================================================
--- STATE -- open windows and the commit form
+-- STATE -- open windows, submodules, and the commit form
 -- ============================================================================
 
 M.main_win, M.main_buf = nil, nil
 M.preview_win, M.preview_buf = nil, nil
 M.diff_modal_win, M.diff_modal_buf = nil, nil
+
+--- Discovered repository list: [1] = root repository, [2..n] = submodules.
+M.submodules = {}
+
+--- Index of currently active submodule repository in `M.submodules`.
+M.active_submodule_idx = 1
+
+--- Project root directory.
+M.root_dir = nil
 
 --- Formatted diffs, keyed "<type>:<file>". Cleared on every refresh.
 M.diff_cache = {}
@@ -104,6 +125,37 @@ M.commit_data = { title = "", description = "", tag = "" }
 --- @param title string|nil Defaults to `M.settings.notify_title`.
 local function notify(msg, level, title)
 	vim.notify(msg, level or vim.log.levels.INFO, { title = title or M.settings.notify_title })
+end
+
+-- ============================================================================
+-- PERSISTENCE & SUBMODULE TARGET RESOLUTION
+-- ============================================================================
+
+--- Resolves the active target table: `{ name, path, is_root, full_path }`.
+--- @return table
+local function get_active_target()
+	if not M.submodules or #M.submodules == 0 then
+		local root = M.root_dir or vim.fn.getcwd()
+		return { name = "Root", path = ".", is_root = true, full_path = root }
+	end
+	return M.submodules[M.active_submodule_idx] or M.submodules[1]
+end
+
+--- Loads the last active submodule tab identifier from `.krsnvim/git-center.json`.
+--- @param root string Project root directory.
+--- @return string|nil saved_path Submodule relative path (e.g. "." or "plugins/foo").
+local function load_saved_active_tab(root)
+	local cfg_path = project.config_path(M.settings.config_filename, root)
+	local data = store.load(cfg_path, {})
+	return data.current_tab or data.active_tab
+end
+
+--- Saves the active submodule tab identifier to `.krsnvim/git-center.json`.
+--- @param root string Project root directory.
+--- @param target_path string Submodule relative path.
+local function save_active_tab(root, target_path)
+	local cfg_path = project.config_path(M.settings.config_filename, root)
+	store.save(cfg_path, { current_tab = target_path, active_tab = target_path })
 end
 
 -- ============================================================================
@@ -150,10 +202,12 @@ end
 -- REPOSITORY QUERIES
 -- ============================================================================
 
---- Snapshot of the current repository.
+--- Snapshot of the repository at `cwd` (defaults to active submodule/root).
+--- @param cwd string|nil Target repository directory.
 --- @return table|nil info nil when the working directory is not a repository.
-function M.get_git_info()
-	return status.info()
+function M.get_git_info(cwd)
+	cwd = cwd or (get_active_target() and get_active_target().full_path) or vim.fn.getcwd()
+	return status.info(cwd)
 end
 
 --- Raw diff lines for one file, or its contents when it is untracked.
@@ -163,6 +217,7 @@ end
 --- @return string[] lines
 --- @return boolean is_untracked
 local function raw_diff_for(file, file_type, cwd)
+	cwd = cwd or (get_active_target() and get_active_target().full_path) or vim.fn.getcwd()
 	if file_type == "staged" then
 		return git.lines({ "diff", "--cached", "--color=never", "--", file }, cwd), false
 	end
@@ -187,10 +242,10 @@ end
 ---
 --- @param cwd string|nil Repository directory.
 function M.stage_all_with_modal(cwd)
-	cwd = cwd or vim.fn.getcwd()
+	cwd = cwd or (get_active_target() and get_active_target().full_path) or vim.fn.getcwd()
 	git.clean_stale_lock(cwd)
 
-	local info = M.get_git_info()
+	local info = M.get_git_info(cwd)
 	if not info then
 		notify("❌ Not inside a valid Git repository.", vim.log.levels.ERROR, M.settings.control_title)
 		return
@@ -262,6 +317,22 @@ local function build_panel_content(info, width)
 		line_map[add("   " .. prefix .. " " .. file)] = { type = file_type, file = file }
 	end
 
+	-- Submodule / Repository Tabs (Bufferline Aesthetic)
+	local tab_tokens = {}
+	for idx, item in ipairs(M.submodules or {}) do
+		if idx == M.active_submodule_idx then
+			table.insert(tab_tokens, string.format("【 %s 】", item.name))
+		else
+			table.insert(tab_tokens, string.format("  %s  ", item.name))
+		end
+	end
+	if #tab_tokens == 0 then
+		local target = get_active_target()
+		table.insert(tab_tokens, string.format("【 %s 】", target.name))
+	end
+	add(" " .. table.concat(tab_tokens, " "))
+	separator("═")
+
 	add(string.format(" 🌿 Branch: %s%s", info.branch, info.upstream and (" (Tracking " .. info.upstream .. ")") or ""))
 	add(string.format(" 📊 Changes: +%d -%d lines", info.added, info.deleted))
 	add(string.format(
@@ -307,6 +378,7 @@ local function build_panel_content(info, width)
 
 	section_lines[4] = add(" ⚡ [SECTION 4: QUICK ACTIONS & SHORTCUTS] (Press 4)")
 	for _, help in ipairs({
+		"   [Alt+h / Alt+l] Switch Submodule Tab",
 		"   [s] Stage file  |  [S] Stage All",
 		"   [u] Unstage file  |  [U] Unstage All",
 		"   [r] Restore File (Confirm)  |  [R] Restore Section (Confirm)",
@@ -330,10 +402,12 @@ end
 ---
 --- @param target_file string|nil File to open on. Defaults to the first changed file.
 --- @param _target_type string|nil Unused; kept for call-site compatibility.
-function M.open_diff_modal(target_file, _target_type)
+--- @param target_cwd string|nil Repository directory to view diffs for.
+function M.open_diff_modal(target_file, _target_type, target_cwd)
 	local orig_cwd = vim.fn.getcwd()
+	local active_cwd = target_cwd or (get_active_target() and get_active_target().full_path) or orig_cwd
 
-	local info = M.get_git_info()
+	local info = M.get_git_info(active_cwd)
 	if not info then
 		notify("Not a valid Git repository", vim.log.levels.WARN)
 		return
@@ -377,7 +451,7 @@ function M.open_diff_modal(target_file, _target_type)
 		index = ((idx - 1) % #files) + 1
 		local item = files[index]
 
-		local raw_lines, is_untracked = raw_diff_for(item.file, item.type, orig_cwd)
+		local raw_lines, is_untracked = raw_diff_for(item.file, item.type, active_cwd)
 		local lines, kinds = diff.format(raw_lines, is_untracked)
 
 		local label = item.type == "staged" and "🟢 Staged"
@@ -462,9 +536,30 @@ function M.open_git_center()
 		return
 	end
 
-	local info = M.get_git_info()
-	if not info then
+	local root = path_util.normalize(project.root() or vim.fn.getcwd())
+	if not git.is_repository(root) then
 		notify("Current directory is not a valid Git repository", vim.log.levels.WARN, "Git Center (KRS)")
+		return
+	end
+
+	M.root_dir = root
+	M.submodules = submodules.list(root)
+
+	local saved_tab_path = load_saved_active_tab(root)
+	M.active_submodule_idx = 1
+	if saved_tab_path then
+		for idx, entry in ipairs(M.submodules) do
+			if entry.path == saved_tab_path then
+				M.active_submodule_idx = idx
+				break
+			end
+		end
+	end
+
+	local active_target = get_active_target()
+	local info = M.get_git_info(active_target.full_path)
+	if not info then
+		notify("Cannot read Git status for " .. active_target.name, vim.log.levels.WARN, "Git Center (KRS)")
 		return
 	end
 
@@ -495,7 +590,7 @@ function M.open_git_center()
 		col = start_col,
 		style = "minimal",
 		border = "rounded",
-		title = " 🐙 Git Center (Ctrl+Shift+J/K Scroll Preview | Tab Focus | Ctrl+Shift+G / Esc Close) ",
+		title = " 🐙 Git Center (Alt+h/l Tabs | Ctrl+Shift+J/K Preview | Tab Focus | Esc Close) ",
 		title_pos = "center",
 	})
 
@@ -578,9 +673,10 @@ function M.open_git_center()
 					return
 				end
 
-				local cache_key = item.type .. ":" .. item.file
+				local cur_target = get_active_target()
+				local cache_key = cur_target.path .. ":" .. item.type .. ":" .. item.file
 				if not M.diff_cache[cache_key] then
-					local raw_lines, is_untracked = raw_diff_for(item.file, item.type, nil)
+					local raw_lines, is_untracked = raw_diff_for(item.file, item.type, cur_target.full_path)
 					local formatted, kinds = diff.format(raw_lines, is_untracked)
 					M.diff_cache[cache_key] = { lines = formatted, kinds = kinds }
 				end
@@ -606,7 +702,8 @@ function M.open_git_center()
 
 	--- Redraws the panel in place -- no window is closed, so there is no flicker.
 	local function refresh()
-		local current = M.get_git_info()
+		local cur_target = get_active_target()
+		local current = M.get_git_info(cur_target.full_path)
 		if not current or not M.is_open() then
 			return
 		end
@@ -625,17 +722,43 @@ function M.open_git_center()
 		update_preview()
 	end
 
+	--- Switch active submodule tab by delta (-1 for left, 1 for right).
+	--- @param delta integer -1 or 1
+	local function switch_tab(delta)
+		if not M.submodules or #M.submodules <= 1 then
+			return
+		end
+
+		local count = #M.submodules
+		local next_idx = M.active_submodule_idx + delta
+		if next_idx < 1 then
+			next_idx = count
+		elseif next_idx > count then
+			next_idx = 1
+		end
+
+		M.active_submodule_idx = next_idx
+		local target = M.submodules[M.active_submodule_idx]
+		if target then
+			save_active_tab(M.root_dir, target.path)
+			notify("Switched to repository: " .. target.name)
+		end
+
+		M.diff_cache = {}
+		refresh()
+	end
+
 	--- File the cursor is on, or nil.
 	--- @return table|nil item `{ type, file }`
 	local function current_item()
 		return M.line_map[vim.api.nvim_win_get_cursor(M.main_win)[1]]
 	end
 
-	--- Runs git synchronously in the repository, for the quick staging actions.
+	--- Runs git synchronously in the active repository target.
 	--- @param args string[] Arguments after `git`.
 	--- @return string[] output
 	local function git_lines(args)
-		return git.lines(args)
+		return git.lines(args, get_active_target().full_path)
 	end
 
 	--- Unstaging changed spelling across git versions: `restore --staged` is the
@@ -691,6 +814,24 @@ function M.open_git_center()
 	-- ------------------------------------------------------------------
 	local key_opts = { buffer = main_buf, noremap = true, silent = true, nowait = true }
 	local preview_opts = { buffer = preview_buf, noremap = true, silent = true, nowait = true }
+
+	-- Tab switching keymaps (Alt+h / Alt+l)
+	for _, key in ipairs(M.settings.keys.tab_prev) do
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			switch_tab(-1)
+		end, key_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			switch_tab(-1)
+		end, preview_opts)
+	end
+	for _, key in ipairs(M.settings.keys.tab_next) do
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			switch_tab(1)
+		end, key_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			switch_tab(1)
+		end, preview_opts)
+	end
 
 	--- Scrolls the preview with a native half-page motion, so it behaves exactly
 	--- like <C-d>/<C-u> would inside that window.
@@ -783,11 +924,12 @@ function M.open_git_center()
 	end, key_opts)
 
 	vim.keymap.set({ "n", "v" }, "S", function()
-		local current = M.get_git_info()
+		local cur_target = get_active_target()
+		local current = M.get_git_info(cur_target.full_path)
 		if current and (#current.unstaged > 0 or #current.untracked > 0) then
 			git_lines({ "add", "-A" })
 			refresh()
-			notify("🟢 Staged all files")
+			notify("🟢 Staged all files in " .. cur_target.name)
 		else
 			notify("ℹ️ Nothing to stage: working tree is clean.", vim.log.levels.WARN)
 		end
@@ -811,9 +953,10 @@ function M.open_git_center()
 	end, key_opts)
 
 	vim.keymap.set({ "n", "v" }, "U", function()
+		local cur_target = get_active_target()
 		unstage({ "." })
 		refresh()
-		notify("🔴 Unstaged all files")
+		notify("🔴 Unstaged all files in " .. cur_target.name)
 	end, key_opts)
 
 	vim.keymap.set("n", "C", function()
@@ -841,7 +984,7 @@ function M.open_git_center()
 
 	vim.keymap.set("n", "d", function()
 		local item = current_item()
-		M.open_diff_modal(item and item.file or nil, item and item.type or nil)
+		M.open_diff_modal(item and item.file or nil, item and item.type or nil, get_active_target().full_path)
 	end, key_opts)
 
 	vim.keymap.set("n", "r", function()
@@ -854,15 +997,18 @@ function M.open_git_center()
 			return
 		end
 
+		local cur_target = get_active_target()
+		local full_file_path = path_util.join(cur_target.full_path, item.file)
+
 		if item.type == "staged" then
 			unstage({ item.file })
 			git_lines({ "restore", "--", item.file })
 		elseif item.type == "unstaged" then
 			git_lines({ "restore", "--", item.file })
-		elseif vim.fn.isdirectory(item.file) == 1 then
-			vim.fn.delete(item.file, "rf")
+		elseif vim.fn.isdirectory(full_file_path) == 1 then
+			vim.fn.delete(full_file_path, "rf")
 		else
-			os.remove(item.file)
+			os.remove(full_file_path)
 		end
 
 		refresh()
@@ -896,10 +1042,11 @@ function M.open_git_center()
 	end, key_opts)
 
 	vim.keymap.set("n", "P", function()
-		local current = M.get_git_info()
+		local cur_target = get_active_target()
+		local current = M.get_git_info(cur_target.full_path)
 		local branch = current and current.branch or "HEAD"
 
-		if vim.fn.confirm("🚀 Execute 'git push' for branch '" .. branch .. "'?", "&Yes\n&No", 1) ~= 1 then
+		if vim.fn.confirm("🚀 Execute 'git push' for branch '" .. branch .. "' in " .. cur_target.name .. "?", "&Yes\n&No", 1) ~= 1 then
 			return
 		end
 
@@ -925,7 +1072,7 @@ function M.open_git_center()
 					)
 				end
 				refresh()
-			end)
+			end, cur_target.full_path)
 		end
 
 		local remotes = git_lines({ "remote" })
@@ -962,7 +1109,7 @@ function M.open_git_center()
 					)
 				end
 				refresh()
-			end)
+			end, cur_target.full_path)
 			return
 		end
 

@@ -114,4 +114,35 @@ describe("plugins.krs.git_center", function()
 		expect(vim.api.nvim_win_is_valid(main_win)).toBeFalsy()
 		expect(vim.api.nvim_win_is_valid(prev_win)).toBeFalsy()
 	end)
+
+	it("binds tab switching keys in both main and preview buffers", function()
+		git_center.open_git_center()
+
+		local main_buf = git_center.main_buf
+		local preview_buf = git_center.preview_buf
+
+		local tab_keys = { "<A-h>", "<A-l>" }
+		for _, key in ipairs(tab_keys) do
+			local main_map = vim.api.nvim_buf_call(main_buf, function()
+				return vim.fn.maparg(key, "n", false, true)
+			end)
+			expect({ key = key, buf = "main", bound = (main_map.buffer == 1) }).toEqual({
+				key = key,
+				buf = "main",
+				bound = true,
+			})
+
+			local preview_map = vim.api.nvim_buf_call(preview_buf, function()
+				return vim.fn.maparg(key, "n", false, true)
+			end)
+			expect({ key = key, buf = "preview", bound = (preview_map.buffer == 1) }).toEqual({
+				key = key,
+				buf = "preview",
+				bound = true,
+			})
+		end
+
+		git_center.close_git_center()
+	end)
 end)
+
