@@ -73,7 +73,42 @@ function M.open_desktop_explorer(opts)
 	local action_state = require("telescope.actions.state")
 
 	opts = opts or {}
-	local curr_dir = opts.path or M.get_desktop_path()
+	local curr_dir = opts.path
+
+	if not curr_dir or curr_dir == "" then
+		local is_dashboard = (vim.bo.filetype == "alpha")
+		if is_dashboard then
+			curr_dir = M.get_desktop_path()
+		else
+			local cwd = vim.fn.getcwd()
+			local home = vim.fn.expand("~")
+			local desktop = M.get_desktop_path()
+
+			if cwd and cwd ~= "" and vim.fn.isdirectory(cwd) == 1 then
+				local norm_cwd = normalize_path(cwd)
+				local norm_home = normalize_path(home)
+				if norm_cwd == norm_home then
+					local has_project_file = false
+					for _, b in ipairs(vim.api.nvim_list_bufs()) do
+						if vim.fn.buflisted(b) == 1 and vim.api.nvim_buf_get_name(b) ~= "" and vim.bo[b].filetype ~= "alpha" and vim.bo[b].filetype ~= "neo-tree" then
+							has_project_file = true
+							break
+						end
+					end
+					if has_project_file then
+						curr_dir = cwd
+					else
+						curr_dir = desktop
+					end
+				else
+					curr_dir = cwd
+				end
+			else
+				curr_dir = desktop
+			end
+		end
+	end
+
 	curr_dir = vim.fn.fnamemodify(curr_dir, ":p"):gsub("[/\\]$", "")
 
 	if vim.fn.isdirectory(curr_dir) == 0 then
@@ -82,7 +117,25 @@ function M.open_desktop_explorer(opts)
 
 	local favs = load_favorites()
 
+	local parent = vim.fn.fnamemodify(curr_dir, ":h")
+	local norm_parent = normalize_path(parent)
+	local norm_curr = normalize_path(curr_dir)
+	local has_parent = (norm_parent ~= "" and norm_parent ~= norm_curr)
+
 	local entries = {}
+
+	if has_parent then
+		table.insert(entries, {
+			name = "../",
+			path = parent,
+			norm = norm_parent,
+			is_dir = true,
+			is_parent = true,
+			is_favorite = false,
+			display = "📁 ../",
+		})
+	end
+
 	local handle = vim.uv.fs_scandir(curr_dir)
 	if handle then
 		while true do
@@ -109,27 +162,31 @@ function M.open_desktop_explorer(opts)
 	end
 
 	table.sort(entries, function(a, b)
+		if a.is_parent ~= b.is_parent then
+			return a.is_parent == true
+		end
 		if a.is_favorite ~= b.is_favorite then
-			return a.is_favorite
+			return a.is_favorite == true
 		end
 		if a.is_dir ~= b.is_dir then
-			return a.is_dir
+			return a.is_dir == true
 		end
 		return a.name:lower() < b.name:lower()
 	end)
 
 	pickers.new({
 		prompt_title = " 📁 Explorer: " .. curr_dir .. " ",
-		results_title = " Files / Folders | [Ctrl+F]=Favorite | Press [?] for help ",
+		results_title = " Files / Folders | [f / Ctrl+F]=Favorite | Press [?] for help ",
 		finder = finders.new_table({
 			results = entries,
 			entry_maker = function(entry)
+				local parent_prefix = entry.is_parent and "00_" or "01_"
 				local fav_prefix = entry.is_favorite and "0_" or "1_"
 				local dir_prefix = entry.is_dir and "0_" or "1_"
 				return {
 					value = entry,
 					display = entry.display,
-					ordinal = fav_prefix .. dir_prefix .. entry.name,
+					ordinal = parent_prefix .. fav_prefix .. dir_prefix .. entry.name,
 				}
 			end,
 		}),
@@ -224,7 +281,7 @@ function M.open_desktop_explorer(opts)
 
 			local rename_item = function()
 				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value then
+				if not selection or not selection.value or selection.value.is_parent then
 					return
 				end
 				local item = selection.value
@@ -245,7 +302,7 @@ function M.open_desktop_explorer(opts)
 
 			local delete_item = function()
 				local selection = action_state.get_selected_entry()
-				if not selection or not selection.value then
+				if not selection or not selection.value or selection.value.is_parent then
 					return
 				end
 				local item = selection.value
@@ -262,12 +319,64 @@ function M.open_desktop_explorer(opts)
 			end
 			map("n", "d", delete_item)
 
+			local copy_item = function()
+				local selection = action_state.get_selected_entry()
+				if not selection or not selection.value or selection.value.is_parent then
+					return
+				end
+				local item = selection.value
+				actions.close(prompt_bufnr)
+				vim.schedule(function()
+					vim.ui.input({ prompt = "Copy '" .. item.name .. "' to: ", default = item.name }, function(new_name)
+						if not new_name or new_name == "" or new_name == item.name then
+							return
+						end
+						local dest_path = curr_dir .. "/" .. new_name
+						if item.is_dir then
+							if vim.fn.has("win32") == 1 then
+								local win_src = item.path:gsub("/", "\\")
+								local win_dst = dest_path:gsub("/", "\\")
+								vim.fn.system({ "xcopy", win_src, win_dst, "/E", "/I", "/H", "/Y" })
+							else
+								vim.fn.system({ "cp", "-r", item.path, dest_path })
+							end
+							vim.notify("📋 Copied folder to: " .. new_name, vim.log.levels.INFO)
+						else
+							local success, err = vim.uv.fs_copyfile(item.path, dest_path)
+							if success then
+								vim.notify("📋 Copied file to: " .. new_name, vim.log.levels.INFO)
+							else
+								vim.notify("Error copying file: " .. tostring(err), vim.log.levels.ERROR)
+							end
+						end
+						M.open_desktop_explorer({ path = curr_dir })
+					end)
+				end)
+			end
+			map("n", "c", copy_item)
+
+			local move_item = function()
+				local selection = action_state.get_selected_entry()
+				if not selection or not selection.value or selection.value.is_parent then
+					return
+				end
+				local item = selection.value
+				actions.close(prompt_bufnr)
+				vim.schedule(function()
+					M.open_move_picker({
+						source_path = item.path,
+						root_dir = curr_dir,
+					})
+				end)
+			end
+			map("n", "m", move_item)
+
 			local toggle_favorite = function()
 				local selection = action_state.get_selected_entry()
 				local target_path = nil
 				local target_name = nil
 
-				if selection and selection.value then
+				if selection and selection.value and not selection.value.is_parent then
 					target_path = selection.value.path
 					target_name = selection.value.name
 				else
@@ -315,6 +424,12 @@ function M.open_desktop_explorer(opts)
 			end
 			map("i", "<C-f>", toggle_favorite)
 			map("n", "<C-f>", toggle_favorite)
+			map("n", "f", toggle_favorite)
+
+			local close_explorer = function()
+				actions.close(prompt_bufnr)
+			end
+			map("n", "q", close_explorer)
 
 			local go_parent = function()
 				local parent = vim.fn.fnamemodify(curr_dir, ":h")
@@ -327,6 +442,18 @@ function M.open_desktop_explorer(opts)
 			end
 			map("n", "h", go_parent)
 			map("n", "<BS>", go_parent)
+			map("n", "<Left>", go_parent)
+			map("n", "u", go_parent)
+
+			map("i", "<C-h>", go_parent)
+			map("i", "<BS>", function()
+				local line = action_state.get_current_line()
+				if line == "" then
+					go_parent()
+				else
+					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<BS>", true, false, true), "n", false)
+				end
+			end)
 
 			local drill_in = function()
 				local selection = action_state.get_selected_entry()
@@ -338,6 +465,7 @@ function M.open_desktop_explorer(opts)
 				end
 			end
 			map("n", "l", drill_in)
+			map("n", "<Right>", drill_in)
 
 			local show_help = function()
 				require("plugins.krs.context_help").show_help()
@@ -373,7 +501,23 @@ function M.open_move_picker(opts)
 		curr_dir = root_dir
 	end
 
+	local parent = vim.fn.fnamemodify(curr_dir, ":h")
+	local norm_parent = normalize_path(parent)
+	local norm_curr = normalize_path(curr_dir)
+	local has_parent = (norm_parent ~= "" and norm_parent ~= norm_curr)
+
 	local entries = {}
+
+	if has_parent then
+		table.insert(entries, {
+			name = "../",
+			path = parent,
+			is_dir = true,
+			is_parent = true,
+			display = "📁 ../",
+		})
+	end
+
 	local handle = vim.uv.fs_scandir(curr_dir)
 	if handle then
 		while true do
@@ -395,8 +539,11 @@ function M.open_move_picker(opts)
 	end
 
 	table.sort(entries, function(a, b)
+		if a.is_parent ~= b.is_parent then
+			return a.is_parent == true
+		end
 		if a.is_dir ~= b.is_dir then
-			return a.is_dir
+			return a.is_dir == true
 		end
 		return a.name:lower() < b.name:lower()
 	end)
@@ -407,11 +554,12 @@ function M.open_move_picker(opts)
 		finder = finders.new_table({
 			results = entries,
 			entry_maker = function(entry)
+				local parent_prefix = entry.is_parent and "00_" or "01_"
 				local dir_prefix = entry.is_dir and "0_" or "1_"
 				return {
 					value = entry,
 					display = entry.display,
-					ordinal = dir_prefix .. entry.name,
+					ordinal = parent_prefix .. dir_prefix .. entry.name,
 				}
 			end,
 		}),
@@ -483,6 +631,11 @@ function M.open_move_picker(opts)
 			map("n", "a", create_item)
 			map("i", "<C-a>", create_item)
 
+			local close_picker = function()
+				actions.close(prompt_bufnr)
+			end
+			map("n", "q", close_picker)
+
 			local go_parent = function()
 				local parent = vim.fn.fnamemodify(curr_dir, ":h")
 				if parent and parent ~= curr_dir then
@@ -494,6 +647,8 @@ function M.open_move_picker(opts)
 			end
 			map("n", "h", go_parent)
 			map("n", "<BS>", go_parent)
+			map("n", "<Left>", go_parent)
+			map("n", "u", go_parent)
 
 			local drill_in = function()
 				local selection = action_state.get_selected_entry()
@@ -505,6 +660,7 @@ function M.open_move_picker(opts)
 				end
 			end
 			map("n", "l", drill_in)
+			map("n", "<Right>", drill_in)
 
 			return true
 		end,

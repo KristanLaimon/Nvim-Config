@@ -139,10 +139,31 @@ return {
 			local conf = require('telescope.config').values
 			local themes = require('telescope.themes')
 
-			local raw_projects = history.get_recent_projects() or {}
-			-- WSL recents dropped: isdirectory() over \\wsl.localhost\... is slow
-			-- enough (network stat) to make the picker noticeably laggy to open.
+			local raw_projects = {}
+			local seen_raw = {}
 			local wsl_ok, wsl = pcall(require, 'plugins.krs.wsl')
+
+			-- 1. Gather WSL recent projects (fast, load_recent_raw without disk stat)
+			if wsl_ok and wsl.get_recent_projects then
+				for _, wp in ipairs(wsl.get_recent_projects(false)) do
+					local norm = normalize_proj_path(wp)
+					if norm ~= '' and not seen_raw[norm:lower()] then
+						seen_raw[norm:lower()] = true
+						table.insert(raw_projects, wp)
+					end
+				end
+			end
+
+			-- 2. Gather standard history projects
+			local proj_history = history.get_recent_projects() or {}
+			for _, p in ipairs(proj_history) do
+				local norm = normalize_proj_path(p)
+				if norm ~= '' and not seen_raw[norm:lower()] then
+					seen_raw[norm:lower()] = true
+					table.insert(raw_projects, p)
+				end
+			end
+
 			local favs = load_favorites()
 
 			local non_fav_items = {}
@@ -150,13 +171,33 @@ return {
 
 			for _, p in ipairs(raw_projects) do
 				local norm = normalize_proj_path(p)
-				if norm ~= '' and vim.fn.isdirectory(p) == 1 then
+				local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(p)) or p:gsub('\\', '/'):match('^//wsl') ~= nil
+
+				local is_valid = false
+				local icon, hl
+
+				if is_wsl then
+					-- WSL path: DO NOT call vim.fn.isdirectory() or get_project_icon().
+					-- Statting WSL UNC paths over SMB forces Windows to initialize/boot WSL,
+					-- causing UI lag. We skip disk stat when showing recent projects list.
+					is_valid = true
+					icon = '🐧'
+					hl = 'Directory'
+				else
+					-- Local Windows path: fast filesystem check
+					if vim.fn.isdirectory(p) == 1 then
+						is_valid = true
+						icon, hl = get_project_icon(p)
+					end
+				end
+
+				if is_valid then
 					local is_fav = favs[norm] == true
-					local icon, hl = get_project_icon(p)
 					local entry_item = {
 						path = p,
 						norm = norm,
 						is_favorite = is_fav,
+						is_wsl = is_wsl,
 						icon = icon,
 						hl = hl,
 					}
@@ -168,18 +209,30 @@ return {
 				end
 			end
 
-			-- Non-favorites first, favorites at the bottom (as requested)
+			-- Favorites first (at the top), non-favorites below
 			local sorted_entries = {}
-			for _, item in ipairs(non_fav_items) do
+			for _, item in ipairs(fav_items) do
 				table.insert(sorted_entries, item)
 			end
-			for _, item in ipairs(fav_items) do
+			for _, item in ipairs(non_fav_items) do
 				table.insert(sorted_entries, item)
 			end
 
 			local function open_project(dir_path)
-				if not dir_path or vim.fn.isdirectory(dir_path) == 0 then
-					vim.notify('Directory does not exist: ' .. tostring(dir_path), vim.log.levels.ERROR)
+				if not dir_path or dir_path == '' then
+					return
+				end
+
+				local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(dir_path)) or dir_path:gsub('\\', '/'):match('^//wsl') ~= nil
+
+				-- Now that the user explicitly clicked/selected this project, check directory existence.
+				-- For WSL paths, this will access WSL now (which is intended since the user clicked it).
+				if vim.fn.isdirectory(dir_path) == 0 then
+					if is_wsl then
+						vim.notify('🐧 WSL project directory is unreachable or does not exist:\n' .. tostring(dir_path), vim.log.levels.ERROR, { title = 'Recent Projects' })
+					else
+						vim.notify('Directory does not exist: ' .. tostring(dir_path), vim.log.levels.ERROR)
+					end
 					return
 				end
 
@@ -199,18 +252,40 @@ return {
 				end
 
 				pcall(vim.api.nvim_set_current_dir, dir_path)
+
+				-- Add to recent projects
+				if wsl_ok and wsl.add_recent_project and is_wsl then
+					wsl.add_recent_project(dir_path)
+				end
+
+				local norm_path = normalize_proj_path(dir_path)
+				if history.recent_projects then
+					local new_recent = {}
+					for _, p in ipairs(history.recent_projects) do
+						if normalize_proj_path(p):lower() ~= norm_path:lower() then
+							table.insert(new_recent, p)
+						end
+					end
+					table.insert(new_recent, dir_path)
+					history.recent_projects = new_recent
+					save_history_to_disk(history.recent_projects)
+				end
+
 				if _G.AddOpenedFolder then
 					_G.AddOpenedFolder(dir_path)
 				end
-				-- not calling wsl.add_recent_project here anymore: WSL paths no
-				-- longer tracked in recents (see above)
 
 				pcall(vim.cmd, 'Neotree show dir=' .. vim.fn.fnameescape(dir_path))
 				vim.notify('📁 Switched to project: ' .. dir_path, vim.log.levels.INFO)
 			end
 
 			pickers.new(themes.get_dropdown({
-				prompt_title = ' 📁 Recent Projects | [Ctrl+F]=Favorite (bottom) [Ctrl+R]=Delete ',
+				prompt_title = ' 📁 Recent Projects | [f] Favorite | [r] Rename | [d] Delete ',
+				width = 0.85,
+				layout_config = {
+					width = 0.85,
+					height = 0.70,
+				},
 				finder = finders.new_table({
 					results = sorted_entries,
 					entry_maker = function(entry)
@@ -219,7 +294,7 @@ return {
 						return {
 							value = entry,
 							display = title,
-							ordinal = (entry.is_favorite and '1_' or '0_') .. entry.path,
+							ordinal = (entry.is_favorite and '0_' or '1_') .. entry.path,
 						}
 					end,
 				}),
@@ -233,7 +308,7 @@ return {
 						end
 					end)
 
-					-- Ctrl+F: Toggle Favorite (Saves to favorites & moves to bottom)
+					-- f: Toggle Favorite (Saves to favorites & keeps at top)
 					local function toggle_favorite()
 						local selection = tstate.get_selected_entry()
 						if not selection or not selection.value then
@@ -249,7 +324,7 @@ return {
 							vim.notify('Removed project from favorites', vim.log.levels.INFO, { title = 'Recent Projects' })
 						else
 							current_favs[norm] = true
-							vim.notify('⭐ Project saved as favorite (moved to bottom)', vim.log.levels.INFO, { title = 'Recent Projects' })
+							vim.notify('⭐ Project saved as favorite (top first)', vim.log.levels.INFO, { title = 'Recent Projects' })
 						end
 
 						save_favorites(current_favs)
@@ -259,10 +334,79 @@ return {
 						end)
 					end
 
-					map('i', '<C-f>', toggle_favorite)
-					map('n', '<C-f>', toggle_favorite)
+					-- r: Rename Project
+					local function rename_project()
+						local selection = tstate.get_selected_entry()
+						if not selection or not selection.value then
+							return
+						end
+						local old_path = selection.value.path
+						local old_norm = selection.value.norm
+						local old_name = vim.fn.fnamemodify(old_path, ':t')
 
-					-- Ctrl+R: Delete Project from Recent Projects List
+						actions.close(prompt_bufnr)
+
+						vim.schedule(function()
+							local input_modal = require('plugins.krs.input_modal')
+							input_modal.open({
+								label = 'Rename Project (' .. old_name .. ')',
+								default_value = old_name,
+								relative = 'editor',
+								callback = function(ok, new_name)
+									if not ok or not new_name or new_name == '' or new_name == old_name then
+										open_projects_picker(opts)
+										return
+									end
+
+									local parent_dir = vim.fn.fnamemodify(old_path, ':h')
+									local new_path = parent_dir .. '/' .. new_name
+
+									local is_wsl = (wsl_ok and wsl.is_wsl_path and wsl.is_wsl_path(old_path))
+									if not is_wsl and vim.fn.isdirectory(old_path) == 1 then
+										local renamed, err = os.rename(old_path, new_path)
+										if not renamed then
+											vim.notify('Failed to rename directory: ' .. tostring(err), vim.log.levels.ERROR, { title = 'Recent Projects' })
+											open_projects_picker(opts)
+											return
+										end
+									end
+
+									-- Update history
+									if history.recent_projects then
+										local new_recent = {}
+										for _, p in ipairs(history.recent_projects) do
+											if normalize_proj_path(p) == old_norm then
+												table.insert(new_recent, new_path)
+											else
+												table.insert(new_recent, p)
+											end
+										end
+										history.recent_projects = new_recent
+										save_history_to_disk(history.recent_projects)
+									end
+
+									-- Update WSL recent
+									if is_wsl and wsl_ok then
+										wsl.remove_recent_project(old_path)
+										wsl.add_recent_project(new_path)
+									end
+
+									-- Update favorites
+									local current_favs = load_favorites()
+									if current_favs[old_norm] then
+										current_favs[old_norm] = nil
+										current_favs[normalize_proj_path(new_path)] = true
+										save_favorites(current_favs)
+									end
+
+									vim.notify('✏️ Project renamed to: ' .. new_name, vim.log.levels.INFO, { title = 'Recent Projects' })
+									open_projects_picker(opts)
+								end,
+							})
+						end)
+					end
+
+					-- d: Delete Project from Recent Projects List
 					local function delete_project()
 						local selection = tstate.get_selected_entry()
 						if selection == nil or not selection.value then
@@ -313,8 +457,9 @@ return {
 						end)
 					end
 
-					map('i', '<C-r>', delete_project)
-					map('n', '<C-r>', delete_project)
+					map('n', 'f', toggle_favorite)
+					map('n', 'r', rename_project)
+					map('n', 'd', delete_project)
 
 					return true
 				end,

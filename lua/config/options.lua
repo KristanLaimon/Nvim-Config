@@ -47,7 +47,9 @@ end
 
 -- Unicode & UTF-8 Encoding
 vim.opt.encoding = "utf-8"
-vim.opt.fileencoding = "utf-8"
+pcall(function()
+  vim.opt.fileencoding = "utf-8"
+end)
 
 -- Performance & Clipboard Optimizations
 vim.opt.autoread = true        -- Automatically reload files modified externally

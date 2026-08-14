@@ -58,16 +58,20 @@ function M.parse_wsl_path(path)
 		return nil
 	end
 	local p = path:gsub("\\", "/")
-	local distro, rest = p:match("^//wsl%.localhost/([^/]+)(/.*)$")
-	if not distro then
-		distro, rest = p:match("^//wsl%$/([^/]+)(/.*)$")
+	local lower_p = p:lower()
+	local distro, rest
+
+	if lower_p:match("^//wsl%.localhost/") or lower_p:match("^//wsl%$/") then
+		distro, rest = p:match("^//[^/]+/([^/]+)(/.*)$")
+		if not distro then
+			distro = p:match("^//[^/]+/([^/]+)$")
+			rest = "/"
+		end
 	end
-	if not distro then
-		distro = p:match("^//wsl%.localhost/([^/]+)$") or p:match("^//wsl%$/([^/]+)$")
-		rest = "/"
-	end
+
 	if distro then
-		return distro, (rest ~= "" and rest or "/")
+		local linux_path = (rest and rest ~= "") and rest or "/"
+		return distro, linux_path
 	end
 	return nil
 end
@@ -88,7 +92,12 @@ function M.shell_command_for_cwd(cwd)
 	if not distro then
 		return nil
 	end
-	return string.format("wsl.exe -d %s --cd %s", distro, vim.fn.shellescape(linux_path))
+	distro = distro:gsub("^%s+", ""):gsub("%s+$", "")
+	linux_path = linux_path:gsub("\\", "/"):gsub("/+$", "")
+	if linux_path == "" then
+		linux_path = "/"
+	end
+	return string.format('wsl.exe -d %s --cd "%s"', distro, linux_path:gsub('"', '\\"'))
 end
 
 -- ============================================================================
@@ -122,14 +131,22 @@ local function save_recent_raw(list)
 	f:close()
 end
 
+local function norm_wsl(p)
+	if not p then
+		return ""
+	end
+	return p:gsub("\\", "/"):gsub("/$", "")
+end
+
 -- Record a WSL folder as an opened project (no-op for non-WSL paths)
 function M.add_recent_project(path)
 	if not M.is_wsl_path(path) then
 		return
 	end
-	local list = { path }
+	local target = norm_wsl(path)
+	local list = { target }
 	for _, p in ipairs(load_recent_raw()) do
-		if p ~= path then
+		if norm_wsl(p):lower() ~= target:lower() then
 			table.insert(list, p)
 		end
 	end
@@ -141,24 +158,29 @@ end
 
 -- Remove a WSL folder from recent projects
 function M.remove_recent_project(path)
+	local target = norm_wsl(path)
 	local list = {}
 	for _, p in ipairs(load_recent_raw()) do
-		if p ~= path then
+		if norm_wsl(p):lower() ~= target:lower() then
 			table.insert(list, p)
 		end
 	end
 	save_recent_raw(list)
 end
 
--- List recent WSL projects that still exist on disk
-function M.get_recent_projects()
-	local list = {}
-	for _, p in ipairs(load_recent_raw()) do
-		if vim.fn.isdirectory(p) == 1 then
-			table.insert(list, p)
+-- List recent WSL projects (check_exists=false by default for fast UI loading without booting WSL)
+function M.get_recent_projects(check_exists)
+	local raw = load_recent_raw()
+	if check_exists == true then
+		local list = {}
+		for _, p in ipairs(raw) do
+			if vim.fn.isdirectory(p) == 1 then
+				table.insert(list, p)
+			end
 		end
+		return list
 	end
-	return list
+	return raw
 end
 
 _G.Wsl = M
