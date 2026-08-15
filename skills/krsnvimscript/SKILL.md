@@ -1,115 +1,316 @@
 ---
 name: krsnvimscript
-description: Write, run, test and transpile `.krsnvim` automation scripts (Lua-based build/CLI scripting suite shipped with the user's Neovim config at %LOCALAPPDATA%\nvim\lua\krsnvim). Use whenever a task needs a build script, task runner, CLI tool, HTTP call, or JSON/YAML/TOML file handling and the user wants it in krsnvimscript, mentions `.krsnvim`, `krsnvim.*`, `import()`, `KrsExport`, or asks for a script that must also run as `.sh` and `.ps1`.
+description: Write, run, test and transpile `.krsnvim` automation scripts (Lua-based build/CLI scripting suite shipped with Neovim config at lua/krsnvim/). Use whenever a task needs a build script, task runner, CLI tool, HTTP call, JSON/YAML/TOML file handling, or testing and requires explicit `krsnvim.*` modules (`require("krsnvim.<module>")`), with zero reliance on global imports.
 ---
 
 # krsnvimscript
 
-Lua automation suite living in the user's Neovim config (`lua/krsnvim/`). Scripts are plain Lua in `*.krsnvim` files. Runs anywhere Neovim is installed — no Node, no Python, no curl. Optionally transpiles to native `.sh` + `.ps1` for CI/servers.
+Lua automation suite living in the Neovim configuration (`lua/krsnvim/`). Scripts are plain Lua saved in `*.krsnvim` files and run anywhere Neovim is installed — zero external runtime dependencies (no Node, Python, or curl required). Scripts can also be transpiled to native `.sh` (Bash) and `.ps1` (PowerShell) for CI/CD environments and servers.
 
-Use it for: build scripts, task runners, small CLI tools, HTTP calls, config file read/write, test suites.
-Do NOT use it for: application code, plugin code, anything that must run without Neovim (transpile instead).
+Use it for: build scripts, task runners, CLI tools, HTTP/HTTPS API integrations, JSON/YAML/TOML file manipulation, and unit test suites.
 
-## Run a script
+> [!IMPORTANT]
+> Global imports on `_G` (such as global `import()`, `console`, `fetch`) have been removed. All modules must be explicitly imported using `require("krsnvim.<module>")` or `require("krsnvim")`.
+
+## Run & Execute
 
 ```bash
+# Execute a script headlessly from the command line
 nvim --headless -l build.krsnvim
 ```
 
-Inside Neovim: `<C-,>` runs/saves current script (or opens Launch Profiles). `<C-S-,>` opens the wiki docs.
-`.krsnvim` files register as filetype `krsnvim` with Lua syntax.
+Inside Neovim:
+- `<C-,>` runs/saves the active `.krsnvim` script (or opens Launch Profiles).
+- `<C-S-,>` opens the floating wiki documentation.
+- `.krsnvim` files automatically register with filetype `krsnvim` and Lua syntax highlighting.
 
-## Imports & Modules
+---
 
-Use `require("krsnvim")` or `require("krsnvim.<module>")`:
-`local krsnvim = require("krsnvim")`
-`local import = krsnvim.import`
+## Requires & Module Import Syntax
 
-`import("fs")`, `import("json")`, ... Aliases work with or without prefix (`"fs"` == `"krsnvim.fs"`).
+Scripts must import specific submodules directly using `require("krsnvim.<module>")`:
 
-`import()` also loads data files by extension: `import("package.json")`, `import("config.yaml")`, `import("Cargo.toml")` return parsed tables.
-
-## API
-
-`import("terminal")` — call it directly, commonly aliased `$`:
 ```lua
-local $ = import("terminal")
-local res = $("git status")      -- { code, ok, stdout, stderr, output }
-assert(res.ok, "git failed: " .. res.code)
-$.cwd()                          -- string
-$.is_windows                     -- boolean
+local fs = require("krsnvim.fs")
+local json = require("krsnvim.json")
+local terminal = require("krsnvim.terminal")
+local fetch = require("krsnvim.fetch")
+local console = require("krsnvim.console")
 ```
-Runs `cmd.exe /C` on Windows, `bash -c` elsewhere. Sync only.
 
-`fs` — `exists(path)`, `read(path)` (throws if missing), `write(path, content)`, `mkdir(path)` (recursive, mkdir -p), `list(dir)` (one level, returns array of paths).
+Alternatively, import the master module to access all submodules from a single table:
 
-`json` / `yaml` / `toml` — same shape each: `decode(str)`, `encode(obj)`, `load(filepath)`, `save(filepath, obj)`. Pure Lua parsers, no external tools.
-
-`fetch` — web-standard client, pure Lua sockets for http, native OS TLS for https:
 ```lua
+local krs = require("krsnvim")
+local fs = krs.fs
+local json = krs.json
+```
+
+---
+
+## Available Modules & API Reference
+
+### 1. `krsnvim.terminal` — Command Execution
+Cross-platform synchronous terminal execution (`cmd.exe /C` on Windows, `bash -c` on Unix).
+
+```lua
+local terminal = require("krsnvim.terminal")
+
+-- Execute command string or table array of tokens
+local res = terminal.exec("git status") -- { code, ok, stdout, stderr, output }
+assert(res.ok, "git status failed with exit code: " .. res.code)
+
+-- Calling module directly as alias `$`
+local $ = require("krsnvim.terminal")
+local build_res = $("bun run build")
+
+-- Helpers
+local cwd = terminal.cwd()         -- string: current working directory
+local is_win = terminal.is_windows -- boolean: true if host OS is Windows
+terminal.echo("Message")           -- prints to output
+```
+
+### 2. `krsnvim.fs` — File System Operations
+High-performance file system and path operations.
+
+- `fs.exists(path)` -> `boolean`: Checks if file, directory, or glob pattern exists.
+- `fs.read(path)` -> `string`: Reads entire file text. Throws error if file cannot be opened.
+- `fs.write(path, content)` -> `boolean`: Overwrites or creates file.
+- `fs.mkdir(path)` -> `boolean`: Recursively creates directory tree (`mkdir -p`).
+- `fs.list(dir_path)` -> `table`: Returns array of file and folder paths contained within directory.
+
+```lua
+local fs = require("krsnvim.fs")
+
+if not fs.exists("dist") then
+    fs.mkdir("dist")
+end
+fs.write("dist/version.txt", "1.0.0")
+local files = fs.list("src")
+```
+
+### 3. Data Parsers — `krsnvim.json`, `krsnvim.yaml`, `krsnvim.toml`
+Pure Lua and C-accelerated configuration file parsers and serializers sharing a consistent API.
+
+- `.decode(str)` -> `table|any`: Parses formatted text string into Lua table.
+- `.encode(obj)` -> `string`: Serializes Lua table into formatted text.
+- `.load(filepath)` -> `table|any`: Reads file from disk and parses contents.
+- `.save(filepath, obj)` -> `boolean`: Encodes Lua table and writes directly to disk.
+
+```lua
+local json = require("krsnvim.json")
+local yaml = require("krsnvim.yaml")
+local toml = require("krsnvim.toml")
+
+-- JSON (C-accelerated via vim.json)
+local pkg = json.load("package.json")
+pkg.version = "1.1.0"
+json.save("package.json", pkg)
+
+-- YAML
+local docker = yaml.load("docker-compose.yml")
+
+-- TOML
+local cargo = toml.load("Cargo.toml")
+```
+
+### 4. `krsnvim.fetch` — HTTP / HTTPS Client
+Web-standard HTTP client supporting JSON auto-encoding/decoding, URL query formatting, and case-insensitive headers.
+
+```lua
+local fetch = require("krsnvim.fetch")
+
+-- Standard GET
 local res = fetch.get("https://api.github.com/zen")
-res.status, res.ok, res.headers, res.body, res.url
-res:text()                       -- raw body
-res:json()                       -- parsed table, or nil, err
-fetch.post(url, { name = "x" })  -- table body auto-encodes JSON + Content-Type
+print("Status:", res.status, "OK:", res.ok)
+print("Body text:", res:text())
+
+-- Automatic JSON parsing
+local api_res = fetch.get("https://api.github.com/repos/neovim/neovim")
+local repo, err = api_res:json()
+if repo then
+    print("Stars:", repo.stargazers_count)
+end
+
+-- POST / PUT / PATCH / DELETE / HEAD
+local post_res = fetch.post("https://httpbin.org/post", {
+    name = "krsnvimscript",
+    tags = { "lua", "nvim" }
+}, {
+    headers = { ["Authorization"] = "Bearer token123" },
+    query = { verbose = "true" },
+    timeout = 10000 -- ms
+})
 ```
-Also `put`, `patch`, `delete`, `head`, and `fetch(url, opts)`.
-`opts`: `method`, `headers`, `body` (table auto-JSON), `query` (table, auto percent-encoded), `timeout` (ms, default 15000), `callback(err, res)` for async.
-Headers are case-insensitive both directions.
 
-`console` — `log`, `info`, `warn`, `error`, `debug` (all pretty-print tables as JSON, handle cycles), `json(obj, indent)`, `dir(obj)`.
+`FetchResponse` fields and methods:
+- `res.status` (`number`), `res.statusText` (`string`), `res.ok` (`boolean`)
+- `res.headers` (case-insensitive table)
+- `res.body` (`string`), `res.url` (`string`)
+- `res:text()` -> `string`: Returns raw body text
+- `res:json()` -> `table|nil, err`: Safely parses body as JSON table
 
-`cli`:
+### 5. `krsnvim.console` & `krsnvim.debug` — Formatted Logging
+Formatted console output, structured object inspection, and cycle-safe JSON pretty-printing.
+
 ```lua
-local cli = import("cli")
-local args = cli.parse_args({ "--verbose", "--env=prod", "input.txt" })
--- args.flags.verbose == true, args.flags.env == "prod", args.positional[1] == "input.txt"
-cli.menu("Pick:", { "Build", "Test", "Clean" }, function(choice, idx) ... end)
-cli.help(schema)                 -- schema: { name, description, options }
+local console = require("krsnvim.console")
+
+console.log("Building target:", { env = "prod", minified = true })
+console.info("Server started on port", 8080)
+console.warn("Deprecation warning:", "feature X")
+console.error("Build failed:", "Missing file")
+console.debug("State:", state)
+
+-- Pretty print & stringify
+console.dir(tbl)                       -- Prints formatted JSON representation of table/object
+local json_str = console.json(tbl, "  ") -- Serializes object to pretty JSON string
+
+-- Direct callable alias
+console("Quick log message")           -- Equivalent to console.log(...)
 ```
 
-`tests` — Vitest/bun:test style: `describe`, `test`/`it`, `expect`, `beforeEach`, `afterEach`, `beforeAll`, `afterAll`, `run()`.
-Matchers: `toBe`, `toEqual` (deep), `toBeTruthy`, `toBeFalsy`, `toBeNil`/`toBeNull`/`toBeUndefined`, `toBeDefined`, `toContain`, `toHaveLength`, `toBeGreaterThan(OrEqual)`, `toBeLessThan(OrEqual)`, `toThrow`. Negate with `expect(x).not_.toBe(y)` or `.isNot` (`not` is a Lua keyword — use `not_`).
+`require("krsnvim.debug")` is a direct alias for `krsnvim.console`.
 
-## Transpile to .sh / .ps1
-
-For CI runners or machines without Neovim.
+### 6. `krsnvim.cli` — Argument Parsing & Interactive Menus
+Command-line argument parser, help text generator, and interactive selection UI helper.
 
 ```lua
-local t = import("krsnvimtranspiler")
-t.export_sh("build.krsnvim")     -- build.sh
-t.export_ps1("build.krsnvim")    -- build.ps1
-t.export_both("build.krsnvim")   -- { sh = ..., ps1 = ... }
-t.to_sh(code_string)             -- returns script text
+local cli = require("krsnvim.cli")
+
+-- Argument parsing (--flag, --key=value, -v, positional)
+local args = cli.parse_args(arg, {
+    options = { env = "Environment", verbose = "Enable verbose logging" }
+})
+-- args.flags.env -> "production"
+-- args.flags.verbose -> true
+-- args.positional[1] -> "build"
+
+-- Help doc generator
+local help_str = cli.help({
+    name = "build-tool",
+    description = "Automated project builder",
+    options = { env = "Target environment", clean = "Clean dist directory first" }
+})
+
+-- Interactive menu (uses vim.ui.select in Neovim UI, terminal prompts in standalone CLI)
+cli.menu("Select Target", { "Production", "Staging", "Development" }, function(choice, idx)
+    print("Selected:", choice, "at index:", idx)
+end)
 ```
-Commands: `:KrsExport [sh|ps1|both] [out]`, `:KrsExportSh`, `:KrsExportPs1`.
 
-Transpiler covers a subset: functions, `print`, `assert`, `error`, `fs.*`, `fetch.get/json`, `json.*`, `yaml.load`, `$ "cmd"`, numeric/ipairs `for`, `while`. Anything outside that (closures, metatables, `cli.menu`, `tests`) will not transpile cleanly — keep transpile-targeted scripts flat and imperative.
+### 7. `krsnvim.test` — Testing Framework
+Vitest/Bun:test inspired test suite runner with BDD syntax and chainable matchers.
 
-## Project config
+```lua
+local t = require("krsnvim.test")
+local describe, it, expect = t.describe, t.it, t.expect
+local beforeEach, afterEach = t.beforeEach, t.afterEach
 
-Per-project state lives in `.krsnvim/` at the project root (fallbacks: `.krslocal`, `.nvimkrs`): `tasks.json`, `launch.json`, `breakpoints.json`, `git-center.json`. Launch profiles can run a script with runtime `krsnvimscript`, or transpile it with runtime `krsnvimtranspiler` (`args` = `sh` | `ps1` | anything else = both).
+describe("Calculator Test Suite", function()
+    beforeEach(function()
+        -- setup state
+    end)
 
-## Style
+    it("should perform addition", function()
+        expect(2 + 2).toBe(4)
+        expect({ name = "nvim" }).toEqual({ name = "nvim" })
+        expect("krsnvimscript").toContain("nvim")
+        expect(10).toBeGreaterThan(5)
+        expect(function() error("fail") end).toThrow()
+    end)
 
-Match the user's existing scripts: `local x = import("...")` at top, `console.log` over `print` for structured data, check `res.ok` after every `$()`, `assert` with a message on failure paths.
+    it("should handle negations", function()
+        expect(5).not_.toBe(10)
+        expect(nil).toBeNil()
+    end)
+end)
+
+-- Execute test runner
+t.run()
+```
+
+Matchers available:
+- `toBe(val)`, `toEqual(val)` (deep equality check)
+- `toBeTruthy()`, `toBeFalsy()`
+- `toBeNil()`, `toBeNull()`, `toBeUndefined()`, `toBeDefined()`
+- `toContain(item)`, `toHaveLength(len)`
+- `toBeGreaterThan(n)`, `toBeGreaterThanOrEqual(n)`, `toBeLessThan(n)`, `toBeLessThanOrEqual(n)`
+- `toThrow(err_msg)`
+- Negate matchers with `.not_`, `.isNot`, or `["not"]` (e.g., `expect(x).not_.toBe(y)`).
+
+### 8. `krsnvim.krsnvimtranspiler` — Script Transpilation
+Transpiles `.krsnvim` scripts into standalone `.sh` (Bash) and `.ps1` (PowerShell) scripts that run on machines without Neovim.
+
+```lua
+local transpiler = require("krsnvim.krsnvimtranspiler")
+
+transpiler.export_sh("build.krsnvim")   -- Generates build.sh
+transpiler.export_ps1("build.krsnvim")  -- Generates build.ps1
+transpiler.export_both("build.krsnvim") -- Generates build.sh and build.ps1
+local sh_code = transpiler.to_sh(lua_str)
+local ps1_code = transpiler.to_ps1(lua_str)
+```
+
+Neovim buffer commands:
+- `:KrsExport [sh|ps1|both] [out]`
+- `:KrsExportSh`
+- `:KrsExportPs1`
+
+Transpiler supports: standard functions, `print`, `assert`, `error`, `fs.*`, `fetch.get/json`, `json.*`, `yaml.load`, `$ "cmd"`, `for`/`while` loops, and imperative control flow. Avoid complex metatables or UI callbacks in scripts intended for transpilation.
+
+### 9. `krsnvim.wiki` — Interactive Wiki Documentation
+Opens an interactive floating Markdown documentation viewer inside Neovim.
+
+```lua
+local wiki = require("krsnvim.wiki")
+wiki.open("index.md") -- Opens floating documentation UI with single-key page switching (1-6)
+```
+
+---
+
+## Project Configuration & Launch Profiles
+
+Per-project configuration files live in `.krsnvim/` at the root of a project:
+- `.krsnvim/tasks.json` — Custom tasks and commands.
+- `.krsnvim/launch.json` — Launch profiles for running/debugging scripts.
+- `.krsnvim/breakpoints.json` — Saved breakpoints.
+
+To configure a launch profile for `krsnvimscript`:
+```json
+{
+  "name": "Run krsnvimscript",
+  "type": "krsnvimscript",
+  "request": "launch",
+  "entry_point": "scripts/build.krsnvim"
+}
+```
+
+---
+
+## Code Example & Style Guide
+
+Always use explicit `require("krsnvim.<module>")` at the top of the file, check result objects, and assert on error states.
 
 ```lua
 -- build.krsnvim
-local $ = import("terminal")
-local fs = import("fs")
-local pkg = import("package.json")
+local $ = require("krsnvim.terminal")
+local fs = require("krsnvim.fs")
+local json = require("krsnvim.json")
+local console = require("krsnvim.console")
 
-console.log("Building", pkg.name, pkg.version)
-fs.mkdir("dist")
+console.info("Starting build process...")
+
+if not fs.exists("dist") then
+    fs.mkdir("dist")
+end
+
+local pkg = json.load("package.json")
+console.log("Building package:", pkg.name, "v" .. pkg.version)
 
 local res = $("bun run build")
-assert(res.ok, "build failed: " .. res.output)
+assert(res.ok, "Build execution failed: " .. res.output)
 
-fs.write("dist/VERSION", pkg.version)
-console.info("Done")
+fs.write("dist/BUILD_VERSION", pkg.version)
+console.info("Build completed successfully!")
 ```
-
-## Full docs
-
-`lua/krsnvim/docs/*.md` in the nvim config: `index.md`, `fetch.md`, `console.md`, `cli.md`, `terminal.md`, `import.md`, `json_yaml_toml.md`, `test.md`, `krsnvimtranspiler.md`. Source is heavily annotated with `@param`/`@return`/`@example` — read `lua/krsnvim/<module>.lua` when a signature is unclear. Tests/usage examples: `lua/krsnvim/tests/*_spec.lua`.

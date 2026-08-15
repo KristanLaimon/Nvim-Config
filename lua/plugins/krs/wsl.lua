@@ -52,6 +52,9 @@ end
 --- True when WSL can be invoked on this machine.
 --- @return boolean
 function M.available()
+	if vim.g.krs_testing or _G.krs_testing then
+		return false
+	end
 	if not M.is_windows() then
 		return false
 	end
@@ -64,6 +67,9 @@ end
 ---
 --- @return string[] distros
 function M.list_distros()
+	if vim.g.krs_testing or _G.krs_testing then
+		return {}
+	end
 	if not M.available() then
 		return {}
 	end
@@ -154,9 +160,22 @@ function M.shell_command_for_cwd(cwd)
 	end
 
 	distro = vim.trim(distro)
+	if M.available() then
+		for _, d in ipairs(M.list_distros()) do
+			if d:lower() == distro:lower() then
+				distro = d
+				break
+			end
+		end
+	end
+
 	linux_path = linux_path:gsub("\\", "/"):gsub("/+$", "")
 	if linux_path == "" then
 		linux_path = "/"
+	end
+
+	if M.is_windows() then
+		vim.env.MSYS_NO_PATHCONV = "1"
 	end
 
 	return string.format('wsl.exe -d %s --cd "%s"', distro, linux_path:gsub('"', '\\"'))

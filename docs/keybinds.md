@@ -125,7 +125,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<C-k>` / `<C-/>` / `<C-_>` | n, i | Find files, respecting `.gitignore` |
 | `<C-A-k>` / `<C-S-/>` / `<C-?>` / `<leader>fa` | n, i, v | Find files, ignoring `.gitignore` |
 | `<C-f>` | n, i | Live grep across the project |
-| `<C-S-o>` | n, i | Open any folder as a project |
+| `<C-S-o>` | n, i, v, t | Sneak-Peek project modal (90% width & height on-top window) |
 | `<C-S-f>` | n, i, v | Floating Desktop file explorer |
 | `<leader>fw` | n, i, v | Floating WSL file explorer (Windows only) |
 | `<C-S-r>` | n | Recent projects |

@@ -46,7 +46,7 @@ M.settings = {
 	--- `left_ratio` of the total width; the preview gets the rest.
 	width_ratio = 0.92,
 	height_ratio = 0.85,
-	left_ratio = 0.50,
+	left_ratio = 0.30,
 
 	--- Full-screen diff modal geometry.
 	modal_width_ratio = 0.94,
@@ -73,10 +73,20 @@ M.settings = {
 		--- Stage everything from anywhere. Many aliases because terminals and GUIs
 		--- disagree about how Alt/Meta combinations arrive.
 		stage_all = {
-			"<C-S-x>", "<C-S-X>",
-			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
-			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
-			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
+			"<C-S-x>",
+			"<C-S-X>",
+			"<C-A-s>",
+			"<C-A-S>",
+			"<C-M-s>",
+			"<C-M-S>",
+			"<A-C-s>",
+			"<A-C-S>",
+			"<M-C-s>",
+			"<M-C-S>",
+			"<A-s>",
+			"<A-S>",
+			"<M-s>",
+			"<M-S>",
 		},
 		--- Switch submodule tabs (left / right).
 		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
@@ -408,7 +418,14 @@ local function build_panel_content(info, width)
 	local lines, line_map, section_lines = {}, {}, {}
 
 	local function add(text)
-		table.insert(lines, text)
+		if type(text) == "string" and (text:find("\n") or text:find("\r")) then
+			local split_lines = vim.split(text:gsub("\r\n", "\n"):gsub("\r", "\n"), "\n", { plain = true })
+			for _, l in ipairs(split_lines) do
+				table.insert(lines, l)
+			end
+		else
+			table.insert(lines, text)
+		end
 		return #lines
 	end
 
@@ -439,23 +456,40 @@ local function build_panel_content(info, width)
 
 	add(string.format(" 🌿 Branch: %s%s", info.branch, info.upstream and (" (Tracking " .. info.upstream .. ")") or ""))
 	add(string.format(" 📊 Changes: +%d -%d lines", info.added, info.deleted))
-	add(string.format(
-		" 🟢 Staged: %d  |  🔴 Unstaged: %d  |  ❓ Untracked: %d",
-		#info.staged, #info.unstaged, #info.untracked
-	))
+	add(
+		string.format(
+			" 🟢 Staged: %d  |  🔴 Unstaged: %d  |  ❓ Untracked: %d",
+			#info.staged,
+			#info.unstaged,
+			#info.untracked
+		)
+	)
 	separator("═")
 
 	section_lines[1] = add(" 📝 [SECTION 1: COMMIT BOX & TAG] (Press 1)")
-	add("   [c] Title:       " .. (M.commit_data.title ~= "" and M.commit_data.title or "<Press c to edit in Vim>"))
-	add("   [m] Description: " .. (M.commit_data.description ~= "" and M.commit_data.description or "<Optional - Press m>"))
-	add("   [t] Tag:         " .. (M.commit_data.tag ~= "" and M.commit_data.tag or "<Optional - Press t>"))
+	local title_display = M.commit_data.title ~= "" and M.commit_data.title or "<Press c to edit in Vim>"
+	add("   [c] Title:       " .. title_display)
+
+	if M.commit_data.description ~= "" then
+		local desc_lines = vim.split(M.commit_data.description:gsub("\r\n", "\n"):gsub("\r", "\n"), "\n", { plain = true })
+		for i, dline in ipairs(desc_lines) do
+			if i == 1 then
+				add("   [m] Description: " .. dline)
+			else
+				add("                    " .. dline)
+			end
+		end
+	else
+		add("   [m] Description: <Optional - Press m>")
+	end
+
+	local tag_display = M.commit_data.tag ~= "" and M.commit_data.tag or "<Optional - Press t>"
+	add("   [t] Tag:         " .. tag_display)
 	add("   🚀 [C] Execute Commit & Tag  |  [P] Push Remote")
 	separator("─")
 
-	section_lines[2] = add(string.format(
-		" 🟢 [SECTION 2: STAGED FILES (%d)] (Press 2 | [u] Unstage / [U] Unstage All)",
-		#info.staged
-	))
+	section_lines[2] =
+		add(string.format(" 🟢 [SECTION 2: STAGED FILES (%d)] (Press 2 | [u] Unstage / [U] Unstage All)", #info.staged))
 	for _, file in ipairs(info.staged) do
 		add_file("✓", file, "staged")
 	end
@@ -465,10 +499,9 @@ local function build_panel_content(info, width)
 	separator("─")
 
 	local pending = #info.unstaged + #info.untracked
-	section_lines[3] = add(string.format(
-		" 🔴 [SECTION 3: UNSTAGED & UNTRACKED FILES (%d)] (Press 3 | [s] Stage / [S] Stage All)",
-		pending
-	))
+	section_lines[3] = add(
+		string.format(" 🔴 [SECTION 3: UNSTAGED & UNTRACKED FILES (%d)] (Press 3 | [s] Stage / [S] Stage All)", pending)
+	)
 	for _, file in ipairs(info.unstaged) do
 		add_file("M", file, "unstaged")
 	end
@@ -482,13 +515,12 @@ local function build_panel_content(info, width)
 
 	section_lines[4] = add(" ⚡ [SECTION 4: QUICK ACTIONS & SHORTCUTS] (Press 4)")
 	for _, help in ipairs({
-		"   [Alt+h / Alt+l] Switch Submodule Tab",
-		"   [< / >] Resize Split Width (Persistent)",
-		"   [s] Stage file  |  [S] Stage All",
-		"   [u] Unstage file  |  [U] Unstage All",
-		"   [r] Restore File (Confirm)  |  [R] Restore Section (Confirm)",
-		"   [P] Push to Remote (Confirm & Upstream Picker)",
-		"   [c] Edit Commit Title  |  [C] Execute Commit & Tag",
+		"   [Alt+h / Alt+l] Switch Submodule Tab  |  [< / >] Resize Split Width",
+		"   [b] Branch Manager (Create / Delete / Switch / Rename)",
+		"   [l / L] Commit Log & History Viewer (--all)",
+		"   [s] Stage file  |  [S] Stage All  |  [u] Unstage file  |  [U] Unstage All",
+		"   [r] Restore File  |  [R] Restore Section  |  [d] Side-by-Side Diff Modal",
+		"   [c] Commit Title  |  [C] Execute Commit & Tag  |  [P] Push to Remote",
 		"   [Tab] Switch panel focus  |  [Ctrl+Shift+J/K] Scroll preview",
 	}) do
 		add(help)
@@ -501,10 +533,472 @@ end
 -- DIFF MODAL
 -- ============================================================================
 
---- Full-screen diff viewer with file rotation and hunk navigation.
---- The working directory is captured up front and restored on close, so nothing
---- here can move the project root out from under neo-tree.
----
+-- ============================================================================
+-- BRANCH MANAGEMENT (b)
+-- ============================================================================
+
+--- Opens the Branch Management modal UI.
+--- @param target_cwd string|nil Repository path.
+function M.open_branch_modal(target_cwd)
+	local active_cwd = target_cwd or (get_active_target() and get_active_target().full_path) or vim.fn.getcwd()
+	local info = M.get_git_info(active_cwd)
+	if not info then
+		notify("Not inside a valid Git repository", vim.log.levels.WARN)
+		return
+	end
+
+	local raw_branches = git.lines({ "branch", "-a", "--sort=-committerdate" }, active_cwd)
+	local branches = {}
+	local current_branch = info.branch or "main"
+
+	for _, line in ipairs(raw_branches) do
+		local clean = line:gsub("^%*%s*", ""):gsub("^%s*", ""):gsub("%s*$", "")
+		if clean ~= "" and not clean:match("HEAD %->") then
+			local is_current = line:sub(1, 1) == "*" or clean == current_branch
+			local is_remote = clean:match("^remotes/") or clean:match("^origin/")
+			local display_name = clean:gsub("^remotes/origin/", ""):gsub("^remotes/", ""):gsub("^origin/", "")
+
+			local exists = false
+			for _, b in ipairs(branches) do
+				if b.name == display_name and b.is_remote == is_remote then
+					exists = true
+					break
+				end
+			end
+			if not exists then
+				table.insert(branches, {
+					raw = clean,
+					name = display_name,
+					is_current = is_current,
+					is_remote = is_remote,
+				})
+			end
+		end
+	end
+
+	if #branches == 0 then
+		table.insert(branches, { raw = current_branch, name = current_branch, is_current = true, is_remote = false })
+	end
+
+	local lines = {}
+	local current_idx = 1
+	for idx, b in ipairs(branches) do
+		if b.is_current then
+			current_idx = idx
+			table.insert(lines, string.format(" 🌿 %-30s [CURRENT HEAD]", b.name))
+		elseif b.is_remote then
+			table.insert(lines, string.format(" 🌐 %-30s (remote)", b.name))
+		else
+			table.insert(lines, string.format(" 🌲 %-30s", b.name))
+		end
+	end
+
+	local buf, win = ui.float({
+		width = 0.68,
+		height = math.min(18, math.max(6, #lines + 3)),
+		title = " 🌿 Branch Manager | [Enter]: Switch | [c/n]: Create | [d]: Delete | [D]: Force Delete | [r]: Rename ",
+		lines = lines,
+		modifiable = false,
+	})
+
+	vim.api.nvim_set_option_value("cursorline", true, { win = win })
+	pcall(vim.api.nvim_win_set_cursor, win, { current_idx, 0 })
+
+	local opts = { buffer = buf, noremap = true, silent = true, nowait = true }
+
+	local function close_modal()
+		ui.close(win)
+	end
+
+	local function checkout_selected()
+		local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+		local target_b = branches[cursor_row]
+		if not target_b then
+			return
+		end
+
+		close_modal()
+
+		if target_b.is_current then
+			notify("Already on branch: " .. target_b.name, vim.log.levels.WARN)
+			return
+		end
+
+		notify("🌿 Checking out branch: " .. target_b.name .. "...")
+		local cmd_args = { "checkout", target_b.name }
+		if target_b.is_remote then
+			cmd_args = { "checkout", "-b", target_b.name, target_b.raw }
+		end
+
+		git.run(cmd_args, function(ok, output)
+			if ok then
+				notify("✅ Checked out branch: " .. target_b.name)
+			else
+				git.run({ "switch", target_b.name }, function(ok2, output2)
+					if ok2 then
+						notify("✅ Switched to branch: " .. target_b.name)
+					else
+						notify("❌ Checkout failed:\n" .. output, vim.log.levels.ERROR)
+					end
+					if M.is_open() and M.refresh then
+						M.refresh()
+					end
+				end, active_cwd)
+				return
+			end
+			if M.is_open() and M.refresh then
+				M.refresh()
+			end
+		end, active_cwd)
+	end
+
+	local function create_branch()
+		close_modal()
+		require("plugins.krs.input_modal").open({
+			label = "Create & Checkout New Branch",
+			default_value = "",
+			relative = "editor",
+			callback = function(ok, new_name)
+				if ok and new_name and new_name ~= "" then
+					new_name = new_name:gsub("%s+", "-"):gsub("[^%w%-_/.]", "")
+					git.run({ "checkout", "-b", new_name }, function(ok2, output)
+						if ok2 then
+							notify("🌿 Created and switched to branch: " .. new_name)
+						else
+							notify("❌ Failed to create branch:\n" .. output, vim.log.levels.ERROR)
+						end
+						if M.is_open() and M.refresh then
+							M.refresh()
+						end
+					end, active_cwd)
+				end
+			end,
+		})
+	end
+
+	local function delete_branch(force)
+		local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+		local target_b = branches[cursor_row]
+		if not target_b then
+			return
+		end
+		if target_b.is_current then
+			notify("Cannot delete current active branch!", vim.log.levels.WARN)
+			return
+		end
+
+		local flag = force and "-D" or "-d"
+		local label = force and "FORCE DELETE" or "Delete"
+		if vim.fn.confirm("⚠️ " .. label .. " branch '" .. target_b.name .. "'?", "&Yes\n&No", 2) ~= 1 then
+			return
+		end
+
+		close_modal()
+		git.run({ "branch", flag, target_b.name }, function(ok, output)
+			if ok then
+				notify("🗑️ Deleted branch: " .. target_b.name)
+			elseif not force and output:match("not fully merged") then
+				if
+					vim.fn.confirm(
+						"⚠️ Branch '" .. target_b.name .. "' is not fully merged. Force delete (-D)?",
+						"&Yes\n&No",
+						2
+					) == 1
+				then
+					git.run({ "branch", "-D", target_b.name }, function(ok2, output2)
+						if ok2 then
+							notify("🗑️ Force deleted branch: " .. target_b.name)
+						else
+							notify("❌ Failed to delete branch:\n" .. output2, vim.log.levels.ERROR)
+						end
+						if M.is_open() and M.refresh then
+							M.refresh()
+						end
+					end, active_cwd)
+				end
+			else
+				notify("❌ Failed to delete branch:\n" .. output, vim.log.levels.ERROR)
+			end
+			if M.is_open() and M.refresh then
+				M.refresh()
+			end
+		end, active_cwd)
+	end
+
+	local function rename_branch()
+		local cursor_row = vim.api.nvim_win_get_cursor(win)[1]
+		local target_b = branches[cursor_row]
+		if not target_b then
+			return
+		end
+		close_modal()
+
+		require("plugins.krs.input_modal").open({
+			label = "Rename Branch '" .. target_b.name .. "'",
+			default_value = target_b.name,
+			relative = "editor",
+			callback = function(ok, new_name)
+				if ok and new_name and new_name ~= "" and new_name ~= target_b.name then
+					new_name = new_name:gsub("%s+", "-"):gsub("[^%w%-_/.]", "")
+					git.run({ "branch", "-m", target_b.name, new_name }, function(ok2, output)
+						if ok2 then
+							notify("✏️ Renamed branch to: " .. new_name)
+						else
+							notify("❌ Failed to rename branch:\n" .. output, vim.log.levels.ERROR)
+						end
+						if M.is_open() and M.refresh then
+							M.refresh()
+						end
+					end, active_cwd)
+				end
+			end,
+		})
+	end
+
+	vim.keymap.set("n", "<CR>", checkout_selected, opts)
+	vim.keymap.set("n", "c", create_branch, opts)
+	vim.keymap.set("n", "n", create_branch, opts)
+	vim.keymap.set("n", "d", function()
+		delete_branch(false)
+	end, opts)
+	vim.keymap.set("n", "D", function()
+		delete_branch(true)
+	end, opts)
+	vim.keymap.set("n", "r", rename_branch, opts)
+
+	for _, key in ipairs(M.settings.keys.modal_close) do
+		vim.keymap.set("n", key, close_modal, opts)
+	end
+end
+
+-- ============================================================================
+-- COMMIT LOG & HISTORY MODAL (l / L)
+-- ============================================================================
+
+--- Full commit log modal showing git log --all, commit info, description, author, date, and side-by-side diff.
+--- @param target_cwd string|nil Repository path.
+function M.open_commit_log_modal(target_cwd)
+	local orig_cwd = vim.fn.getcwd()
+	local active_cwd = target_cwd or (get_active_target() and get_active_target().full_path) or orig_cwd
+
+	local info = M.get_git_info(active_cwd)
+	if not info then
+		notify("Not inside a valid Git repository", vim.log.levels.WARN)
+		return
+	end
+
+	local raw_commits = git.lines({
+		"log",
+		"--all",
+		"--pretty=format:%h%x1f%an%x1f%ar%x1f%s%x1f%d",
+		"-n",
+		"150",
+	}, active_cwd)
+
+	local commits = {}
+	local list_lines = {}
+	for _, line in ipairs(raw_commits) do
+		local parts = vim.split(line, "\x1f", { plain = true })
+		if #parts >= 4 then
+			local hash = parts[1] or ""
+			local author = parts[2] or ""
+			local date = parts[3] or ""
+			local subject = parts[4] or ""
+			local refs = parts[5] or ""
+
+			table.insert(commits, {
+				hash = hash,
+				author = author,
+				date = date,
+				subject = subject,
+				refs = refs,
+			})
+			table.insert(
+				list_lines,
+				string.format(
+					" %-7s │ %-12.12s │ %-10.10s │ %s%s",
+					hash,
+					author,
+					date,
+					subject,
+					refs ~= "" and (" " .. refs) or ""
+				)
+			)
+		end
+	end
+
+	if #commits == 0 then
+		notify("No commit history found", vim.log.levels.INFO)
+		return
+	end
+
+	diff.setup_highlights()
+
+	local tot_w = math.floor(vim.o.columns * M.settings.width_ratio)
+	local tot_h = math.floor(vim.o.lines * M.settings.height_ratio)
+	local s_row = math.floor((vim.o.lines - tot_h) / 2)
+	local s_col = math.floor((vim.o.columns - tot_w) / 2)
+
+	local left_w = math.floor(tot_w * 0.42)
+	local right_w = tot_w - left_w - 2
+
+	local left_buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[left_buf].buftype = "nofile"
+	vim.bo[left_buf].bufhidden = "wipe"
+	vim.bo[left_buf].swapfile = false
+	vim.api.nvim_buf_set_lines(left_buf, 0, -1, false, list_lines)
+
+	local left_win = vim.api.nvim_open_win(left_buf, true, {
+		relative = "editor",
+		width = left_w,
+		height = tot_h,
+		row = s_row,
+		col = s_col,
+		style = "minimal",
+		border = "rounded",
+		title = " 📜 Git Log (--all) | [j/k]: Move | [k/Enter]: Checkout | [q/Esc]: Close ",
+		title_pos = "center",
+	})
+	vim.api.nvim_set_option_value("cursorline", true, { win = left_win })
+
+	local right_buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[right_buf].buftype = "nofile"
+	vim.bo[right_buf].bufhidden = "wipe"
+	vim.bo[right_buf].swapfile = false
+
+	local right_win = vim.api.nvim_open_win(right_buf, false, {
+		relative = "editor",
+		width = right_w,
+		height = tot_h,
+		row = s_row,
+		col = s_col + left_w + 2,
+		style = "minimal",
+		border = "rounded",
+		title = " 👁️ Commit Details & Side-by-Side Diff ",
+		title_pos = "center",
+	})
+	vim.api.nvim_set_option_value("wrap", false, { win = right_win })
+	vim.api.nvim_set_option_value("number", true, { win = right_win })
+
+	local is_closed = false
+	local function close_log_modal()
+		if is_closed then
+			return
+		end
+		is_closed = true
+		ui.close(left_win)
+		ui.close(right_win)
+	end
+
+	for _, win in ipairs({ left_win, right_win }) do
+		vim.api.nvim_create_autocmd("WinClosed", {
+			pattern = tostring(win),
+			once = true,
+			callback = function()
+				vim.schedule(close_log_modal)
+			end,
+		})
+	end
+
+	local function update_commit_details()
+		if is_closed or not (left_win and vim.api.nvim_win_is_valid(left_win)) then
+			return
+		end
+		local row = vim.api.nvim_win_get_cursor(left_win)[1]
+		local commit = commits[row]
+		if not commit then
+			return
+		end
+
+		local raw_diff = git.lines({ "show", "--color=never", commit.hash }, active_cwd)
+		local combined_diff_lines, l_kinds, r_kinds, col_w = diff.format_side_by_side_single(raw_diff, false, right_w)
+
+		local content = {}
+		table.insert(content, string.format(" 📌 Commit:      %s", commit.hash))
+		table.insert(content, string.format(" 👤 Author:      %s", commit.author))
+		table.insert(content, string.format(" 🕒 Date:        %s", commit.date))
+		if commit.refs ~= "" then
+			table.insert(content, string.format(" 🏷️ Refs:        %s", commit.refs))
+		end
+		table.insert(content, string.format(" 💬 Title:       %s", commit.subject))
+		table.insert(
+			content,
+			" ──────────────────────────────────────────────────────────────────────────"
+		)
+
+		for _, line in ipairs(combined_diff_lines) do
+			table.insert(content, line)
+		end
+
+		vim.bo[right_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, content)
+		vim.bo[right_buf].modifiable = false
+
+		diff.apply_highlights_side_by_side_single(right_buf, l_kinds, r_kinds, col_w)
+	end
+
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		group = vim.api.nvim_create_augroup("KRSGitLogModalPreview", { clear = true }),
+		buffer = left_buf,
+		callback = function()
+			vim.schedule(update_commit_details)
+		end,
+	})
+
+	update_commit_details()
+
+	local opts = { buffer = left_buf, noremap = true, silent = true, nowait = true }
+	local right_opts = { buffer = right_buf, noremap = true, silent = true, nowait = true }
+
+	local function checkout_commit()
+		local row = vim.api.nvim_win_get_cursor(left_win)[1]
+		local commit = commits[row]
+		if not commit then
+			return
+		end
+		if
+			vim.fn.confirm("⚠️ Checkout commit " .. commit.hash .. " (" .. commit.subject .. ")?", "&Yes\n&No", 2) ~= 1
+		then
+			return
+		end
+		close_log_modal()
+		git.run({ "checkout", commit.hash }, function(ok, output)
+			if ok then
+				notify("✅ Checked out commit: " .. commit.hash)
+			else
+				notify("❌ Checkout failed:\n" .. output, vim.log.levels.ERROR)
+			end
+			if M.is_open() and M.refresh then
+				M.refresh()
+			end
+		end, active_cwd)
+	end
+
+	local function toggle_log_focus()
+		local target = vim.api.nvim_get_current_win() == left_win and right_win or left_win
+		if target and vim.api.nvim_win_is_valid(target) then
+			vim.api.nvim_set_current_win(target)
+		end
+	end
+
+	vim.keymap.set("n", "<CR>", checkout_commit, opts)
+	vim.keymap.set("n", "k", checkout_commit, opts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_log_focus, opts)
+	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_log_focus, right_opts)
+
+	for _, key in ipairs(M.settings.keys.modal_close) do
+		vim.keymap.set({ "n", "v", "i", "t" }, key, close_log_modal, opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, close_log_modal, right_opts)
+	end
+	vim.keymap.set("n", "l", close_log_modal, opts)
+	vim.keymap.set("n", "L", close_log_modal, opts)
+end
+
+-- ============================================================================
+-- DIFF MODAL (Side-by-Side Comparison: Left = Before, Right = After)
+-- ============================================================================
+
+--- Full-screen side-by-side diff viewer with file rotation and hunk navigation.
 --- @param target_file string|nil File to open on. Defaults to the first changed file.
 --- @param _target_type string|nil Unused; kept for call-site compatibility.
 --- @param target_cwd string|nil Repository directory to view diffs for.
@@ -539,94 +1033,159 @@ function M.open_diff_modal(target_file, _target_type, target_cwd)
 
 	diff.setup_highlights()
 
-	local buf, win = ui.float({
-		width = M.settings.modal_width_ratio,
-		height = M.settings.modal_height_ratio,
-		title = " 🔍 Git Center Diff Modal ",
-		modifiable = true,
-	})
-	M.diff_modal_buf, M.diff_modal_win = buf, win
+	local total_width = math.floor(vim.o.columns * M.settings.modal_width_ratio)
+	local total_height = math.floor(vim.o.lines * M.settings.modal_height_ratio)
+	local left_width = math.floor((total_width - 2) / 2)
+	local right_width = total_width - left_width - 2
+	local start_row = math.floor((vim.o.lines - total_height) / 2)
+	local start_col = math.floor((vim.o.columns - total_width) / 2)
 
-	for option, value in pairs({ number = true, wrap = false, cursorline = true }) do
-		vim.api.nvim_set_option_value(option, value, { win = win })
+	local left_buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[left_buf].buftype = "nofile"
+	vim.bo[left_buf].bufhidden = "wipe"
+	vim.bo[left_buf].swapfile = false
+
+	local left_win = vim.api.nvim_open_win(left_buf, true, {
+		relative = "editor",
+		width = left_width,
+		height = total_height,
+		row = start_row,
+		col = start_col,
+		style = "minimal",
+		border = "rounded",
+		title = " 🔴 BEFORE (Old) ",
+		title_pos = "center",
+	})
+
+	local right_buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[right_buf].buftype = "nofile"
+	vim.bo[right_buf].bufhidden = "wipe"
+	vim.bo[right_buf].swapfile = false
+
+	local right_win = vim.api.nvim_open_win(right_buf, false, {
+		relative = "editor",
+		width = right_width,
+		height = total_height,
+		row = start_row,
+		col = start_col + left_width + 2,
+		style = "minimal",
+		border = "rounded",
+		title = " 🟢 AFTER (New) ",
+		title_pos = "center",
+	})
+
+	M.diff_modal_win = left_win
+	M.diff_modal_buf = left_buf
+
+	for _, w in ipairs({ left_win, right_win }) do
+		vim.api.nvim_set_option_value("number", true, { win = w })
+		vim.api.nvim_set_option_value("wrap", false, { win = w })
+		vim.api.nvim_set_option_value("scrollbind", true, { win = w })
+		vim.api.nvim_set_option_value("cursorbind", true, { win = w })
 	end
 
-	--- Renders file `idx`, wrapping around at both ends.
+	--- Renders file `idx`
 	local function render(idx)
 		index = ((idx - 1) % #files) + 1
 		local item = files[index]
 
 		local raw_lines, is_untracked = raw_diff_for(item.file, item.type, active_cwd)
-		local lines, kinds = diff.format(raw_lines, is_untracked)
+		local l_lines, l_kinds, r_lines, r_kinds = diff.format_side_by_side_dual(raw_lines, is_untracked)
 
 		local label = item.type == "staged" and "🟢 Staged"
 			or (item.type == "unstaged" and "🔴 Unstaged" or "❓ Untracked")
-		pcall(vim.api.nvim_win_set_config, win, {
+
+		pcall(vim.api.nvim_win_set_config, left_win, {
+			title = string.format(" 🔴 BEFORE (%d/%d): %s [%s] ", index, #files, item.file, label),
+			title_pos = "center",
+		})
+		pcall(vim.api.nvim_win_set_config, right_win, {
 			title = string.format(
-				" 🔍 Diff (%d/%d): %s [%s] | [q/Esc]: Close | [Tab/S-Tab]: Switch File | []c/[c]: Next/Prev Hunk ",
-				index, #files, item.file, label
+				" 🟢 AFTER (%d/%d): %s | [q/Esc]: Close | [Tab/S-Tab]: Switch File | []c/[c]: Hunk ",
+				index,
+				#files,
+				item.file
 			),
 			title_pos = "center",
 		})
 
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-		diff.apply_highlights(buf, kinds, item.file)
-		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+		vim.bo[left_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(left_buf, 0, -1, false, l_lines)
+		vim.bo[left_buf].modifiable = false
+
+		vim.bo[right_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, r_lines)
+		vim.bo[right_buf].modifiable = false
+
+		diff.apply_highlights_side_by_side_dual(left_buf, l_kinds, right_buf, r_kinds, item.file)
+
+		pcall(vim.api.nvim_win_set_cursor, left_win, { 1, 0 })
+		pcall(vim.api.nvim_win_set_cursor, right_win, { 1, 0 })
 	end
 
 	render(index)
 
+	local is_closed = false
 	local function close_modal()
-		ui.close(M.diff_modal_win)
+		if is_closed then
+			return
+		end
+		is_closed = true
 		M.diff_modal_win, M.diff_modal_buf = nil, nil
+		ui.close(left_win)
+		ui.close(right_win)
 		if orig_cwd and vim.fn.isdirectory(orig_cwd) == 1 then
 			pcall(vim.fn.chdir, orig_cwd)
 		end
 	end
 
-	vim.api.nvim_create_autocmd("WinClosed", {
-		pattern = tostring(win),
-		once = true,
-		callback = close_modal,
-	})
-
-	local opts = { buffer = buf, noremap = true, silent = true, nowait = true }
-	for _, key in ipairs(M.settings.keys.modal_close) do
-		vim.keymap.set({ "n", "v", "i", "t" }, key, close_modal, opts)
+	for _, win in ipairs({ left_win, right_win }) do
+		vim.api.nvim_create_autocmd("WinClosed", {
+			pattern = tostring(win),
+			once = true,
+			callback = close_modal,
+		})
 	end
 
-	for _, key in ipairs({ "<Tab>", "]" }) do
-		vim.keymap.set("n", key, function()
-			render(index + 1)
-		end, opts)
-	end
-	for _, key in ipairs({ "<S-Tab>", "[" }) do
-		vim.keymap.set("n", key, function()
-			render(index - 1)
-		end, opts)
-	end
+	for _, b in ipairs({ left_buf, right_buf }) do
+		local opts = { buffer = b, noremap = true, silent = true, nowait = true }
+		for _, key in ipairs(M.settings.keys.modal_close) do
+			vim.keymap.set({ "n", "v", "i", "t" }, key, close_modal, opts)
+		end
 
-	--- Moves the cursor to the next/previous hunk separator.
-	--- @param step integer 1 forward, -1 backward.
-	local function jump_hunk(step)
-		local current = vim.api.nvim_win_get_cursor(win)[1]
-		local last = step > 0 and vim.api.nvim_buf_line_count(buf) or 1
+		for _, key in ipairs({ "<Tab>", "]" }) do
+			vim.keymap.set("n", key, function()
+				render(index + 1)
+			end, opts)
+		end
+		for _, key in ipairs({ "<S-Tab>", "[" }) do
+			vim.keymap.set("n", key, function()
+				render(index - 1)
+			end, opts)
+		end
 
-		for line = current + step, last, step do
-			local text = vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1] or ""
-			if text:match("─── Hunk") or text:match("^@@") then
-				vim.api.nvim_win_set_cursor(win, { line, 0 })
-				return
+		local function jump_hunk(step)
+			local win = vim.api.nvim_get_current_win()
+			local current = vim.api.nvim_win_get_cursor(win)[1]
+			local last = step > 0 and vim.api.nvim_buf_line_count(b) or 1
+
+			for line = current + step, last, step do
+				local text = vim.api.nvim_buf_get_lines(b, line - 1, line, false)[1] or ""
+				if text:match("─── Hunk") or text:match("^@@") then
+					pcall(vim.api.nvim_win_set_cursor, left_win, { line, 0 })
+					pcall(vim.api.nvim_win_set_cursor, right_win, { line, 0 })
+					return
+				end
 			end
 		end
-	end
 
-	vim.keymap.set("n", "]c", function()
-		jump_hunk(1)
-	end, opts)
-	vim.keymap.set("n", "[c", function()
-		jump_hunk(-1)
-	end, opts)
+		vim.keymap.set("n", "]c", function()
+			jump_hunk(1)
+		end, opts)
+		vim.keymap.set("n", "[c", function()
+			jump_hunk(-1)
+		end, opts)
+	end
 end
 
 -- ============================================================================
@@ -794,14 +1353,18 @@ function M.open_git_center()
 				local cache_key = cur_target.path .. ":" .. item.type .. ":" .. item.file
 				if not M.diff_cache[cache_key] then
 					local raw_lines, is_untracked = raw_diff_for(item.file, item.type, cur_target.full_path)
-					local formatted, kinds = diff.format(raw_lines, is_untracked)
-					M.diff_cache[cache_key] = { lines = formatted, kinds = kinds, file = item.file }
+					local p_width = (M.preview_win and vim.api.nvim_win_is_valid(M.preview_win))
+							and vim.api.nvim_win_get_width(M.preview_win)
+						or right_width
+					local formatted, l_kinds, r_kinds, col_w = diff.format_side_by_side_single(raw_lines, is_untracked, p_width)
+					M.diff_cache[cache_key] =
+						{ lines = formatted, l_kinds = l_kinds, r_kinds = r_kinds, col_w = col_w, file = item.file }
 				end
 
 				local cached = M.diff_cache[cache_key]
 				vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, cached.lines)
 				vim.bo[preview_buf].modifiable = false
-				diff.apply_highlights(preview_buf, cached.kinds, cached.file or item.file)
+				diff.apply_highlights_side_by_side_single(preview_buf, cached.l_kinds, cached.r_kinds, cached.col_w)
 			end)
 		)
 	end
@@ -825,8 +1388,7 @@ function M.open_git_center()
 			return
 		end
 
-		local l_width = (M.main_win and vim.api.nvim_win_is_valid(M.main_win))
-				and vim.api.nvim_win_get_width(M.main_win)
+		local l_width = (M.main_win and vim.api.nvim_win_is_valid(M.main_win)) and vim.api.nvim_win_get_width(M.main_win)
 			or left_width
 		local new_lines, new_line_map, new_sections = build_panel_content(current, l_width)
 		M.line_map = new_line_map
@@ -1025,6 +1587,18 @@ function M.open_git_center()
 		end, key_opts)
 	end
 
+	vim.keymap.set("n", "b", function()
+		M.open_branch_modal(get_active_target().full_path)
+	end, key_opts)
+
+	vim.keymap.set("n", "l", function()
+		M.open_commit_log_modal(get_active_target().full_path)
+	end, key_opts)
+
+	vim.keymap.set("n", "L", function()
+		M.open_commit_log_modal(get_active_target().full_path)
+	end, key_opts)
+
 	--- Commit form fields, each edited through the shared input modal.
 	local commit_fields = {
 		{ key = "c", field = "title", label = "Commit Title" },
@@ -1038,7 +1612,10 @@ function M.open_git_center()
 				default_value = M.commit_data[entry.field],
 				relative = "editor",
 				callback = function(ok, input)
-					if ok then
+					if ok and input then
+						if entry.field == "title" or entry.field == "tag" then
+							input = input:gsub("[\r\n]+", " "):gsub("^%s*", ""):gsub("%s*$", "")
+						end
 						M.commit_data[entry.field] = input
 						refresh()
 					end
@@ -1185,7 +1762,13 @@ function M.open_git_center()
 		local current = M.get_git_info(cur_target.full_path)
 		local branch = current and current.branch or "HEAD"
 
-		if vim.fn.confirm("🚀 Execute 'git push' for branch '" .. branch .. "' in " .. cur_target.name .. "?", "&Yes\n&No", 1) ~= 1 then
+		if
+			vim.fn.confirm(
+				"🚀 Execute 'git push' for branch '" .. branch .. "' in " .. cur_target.name .. "?",
+				"&Yes\n&No",
+				1
+			) ~= 1
+		then
 			return
 		end
 
@@ -1264,8 +1847,15 @@ function M.open_git_center()
 		end
 
 		local choices = {
-			"1. 🚀 Push and set upstream to " .. remote .. "/" .. branch
-				.. " (git push -u " .. remote .. " " .. branch .. ")",
+			"1. 🚀 Push and set upstream to "
+				.. remote
+				.. "/"
+				.. branch
+				.. " (git push -u "
+				.. remote
+				.. " "
+				.. branch
+				.. ")",
 		}
 		for index, name in ipairs(remote_branches) do
 			table.insert(choices, string.format("%d. 🌿 Push to existing remote branch: %s", index + 1, name))
@@ -1342,13 +1932,18 @@ function M.setup()
 		})
 	end
 	for _, key in ipairs(M.settings.keys.stage_all) do
-		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(function()
-			M.stage_all_with_modal()
-		end), {
-			noremap = true,
-			silent = true,
-			desc = "Stage All Unstaged & Untracked Changes (Modal Confirmation)",
-		})
+		vim.keymap.set(
+			{ "n", "i", "v", "t" },
+			key,
+			from_any_mode(function()
+				M.stage_all_with_modal()
+			end),
+			{
+				noremap = true,
+				silent = true,
+				desc = "Stage All Unstaged & Untracked Changes (Modal Confirmation)",
+			}
+		)
 	end
 end
 

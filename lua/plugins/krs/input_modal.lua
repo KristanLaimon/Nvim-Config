@@ -115,7 +115,8 @@ function M.open(opts)
 	vim.b[buf].completion = false
 	vim.api.nvim_buf_set_name(buf, "Input: " .. label)
 
-	local lines = vim.split(opts.default_value or opts.default or "", "\n", { plain = true })
+	local raw_default = (opts.default_value or opts.default or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+	local lines = vim.split(raw_default, "\n", { plain = true })
 	if #lines == 0 then
 		lines = { "" }
 	end

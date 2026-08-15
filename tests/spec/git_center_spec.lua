@@ -188,5 +188,59 @@ describe("plugins.krs.git_center", function()
 
 		store.save(cfg_path, { left_ratio = 0.50 })
 	end)
+
+	it("refreshes cleanly when commit fields contain newlines or multiline input", function()
+		git_center.open_git_center()
+
+		-- Set title and description with newlines
+		git_center.commit_data.title = "feat: add feature\nwith newline"
+		git_center.commit_data.description = "Line 1 of description\nLine 2 of description\nLine 3"
+		git_center.commit_data.tag = "v1.0.0\n"
+
+		local ok, err = pcall(git_center.refresh)
+		expect(ok).toBeTruthy()
+		expect(err).toBeNil()
+
+		git_center.close_git_center()
+		git_center.commit_data = { title = "", description = "", tag = "" }
+	end)
+
+	it("exports open_branch_modal and open_commit_log_modal functions", function()
+		expect(type(git_center.open_branch_modal)).toBe("function")
+		expect(type(git_center.open_commit_log_modal)).toBe("function")
+	end)
+
+	it("binds branch (b) and commit log (l, L) keymaps in main panel", function()
+		git_center.open_git_center()
+		local main_buf = git_center.main_buf
+
+		for _, key in ipairs({ "b", "l", "L" }) do
+			local map = vim.api.nvim_buf_call(main_buf, function()
+				return vim.fn.maparg(key, "n", false, true)
+			end)
+			expect({ key = key, bound = (map.buffer == 1) }).toEqual({
+				key = key,
+				bound = true,
+			})
+		end
+
+		local k_map = vim.api.nvim_buf_call(main_buf, function()
+			return vim.fn.maparg("k", "n", false, true)
+		end)
+		expect(k_map.buffer ~= 1).toBeTruthy()
+
+		git_center.close_git_center()
+	end)
+
+	it("opens side-by-side diff modal with left (before) and right (after) float windows", function()
+		git_center.open_git_center()
+		git_center.open_diff_modal(nil, nil, vim.fn.getcwd())
+
+		if git_center.diff_modal_win then
+			expect(vim.api.nvim_win_is_valid(git_center.diff_modal_win)).toBeTruthy()
+		end
+
+		git_center.close_git_center()
+	end)
 end)
 

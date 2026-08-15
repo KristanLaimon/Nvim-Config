@@ -30,6 +30,9 @@ M.wiki = require("krsnvim.wiki")
 M.tests = require("krsnvim.tests")
 M.console = require("krsnvim.console")
 M.debug = require("krsnvim.debug")
+M.async = require("krsnvim.async")
+M.concurrent = M.async
+M.parallel = M.async
 M.krsnvimtranspiler = require("krsnvim.krsnvimtranspiler")
 M.exporter = M.krsnvimtranspiler
 
@@ -80,6 +83,8 @@ function M.import(target)
 		return M.console
 	elseif target == "krsnvim.debug" or target == "debug" then
 		return M.debug
+	elseif target == "krsnvim.async" or target == "async" or target == "concurrent" or target == "parallel" then
+		return M.async
 	elseif target == "krsnvim.test" or target == "test" or target == "tests" then
 		return M.tests
 	elseif target == "krsnvim.krsnvimtranspiler" or target == "krsnvimtranspiler" or target == "krsnvim.exporter" or target == "exporter" then

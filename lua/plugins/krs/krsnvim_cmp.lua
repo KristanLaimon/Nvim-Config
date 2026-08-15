@@ -76,6 +76,9 @@ M.settings = {
 				{ label = '"fetch"', detail = "krsnvim.fetch - HTTP/HTTPS fetch client", insertText = '"fetch"' },
 				{ label = '"console"', detail = "krsnvim.console - Console logger & pretty-JSON printer", insertText = '"console"' },
 				{ label = '"debug"', detail = "krsnvim.debug - Console debugger alias", insertText = '"debug"' },
+				{ label = '"async"', detail = "krsnvim.async - Concurrency, parallelism & async/await suite", insertText = '"async"' },
+				{ label = '"concurrent"', detail = "krsnvim.async - Concurrency & parallel tasks alias", insertText = '"concurrent"' },
+				{ label = '"parallel"', detail = "krsnvim.async - Parallelism & multi-threading alias", insertText = '"parallel"' },
 				{ label = '"tests"', detail = "krsnvim.tests - Vitest-like testing framework", insertText = '"tests"' },
 			},
 		},
@@ -85,6 +88,9 @@ M.settings = {
 			items = {
 				{ label = "console", detail = "krsnvim.console - Console logger & pretty-JSON printer", insertText = "console" },
 				{ label = "fetch", detail = "krsnvim.fetch - HTTP/HTTPS fetch client", insertText = "fetch" },
+				{ label = "async", detail = "krsnvim.async - Concurrency & OS thread parallelism suite", insertText = "async" },
+				{ label = "concurrent", detail = "krsnvim.async - Concurrency alias", insertText = "concurrent" },
+				{ label = "parallel", detail = "krsnvim.async - Parallelism alias", insertText = "parallel" },
 				{ label = "json", detail = "krsnvim.json - JSON parser & file I/O", insertText = "json" },
 				{ label = "yaml", detail = "krsnvim.yaml - YAML parser & file I/O", insertText = "yaml" },
 				{ label = "toml", detail = "krsnvim.toml - TOML parser & file I/O", insertText = "toml" },
@@ -95,10 +101,26 @@ M.settings = {
 			},
 		},
 		{
+			pattern = "async%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "parallel", detail = "async.parallel({ t1, t2 }, cb) - Execute tasks concurrently", insertText = "parallel({ ${1:tasks} })", insertTextFormat = SNIPPET },
+				{ label = "race", detail = "async.race({ t1, t2 }, cb) - Execute tasks concurrently and resolve first result", insertText = "race({ ${1:tasks} })", insertTextFormat = SNIPPET },
+				{ label = "thread", detail = "async.thread(fn, args, cb) - Execute worker function on background OS thread", insertText = "thread(${1:worker_fn}, { ${2:args} })", insertTextFormat = SNIPPET },
+				{ label = "map", detail = "async.map(items, worker_fn, opts) - Map items concurrently", insertText = "map(${1:items}, ${2:worker_fn})", insertTextFormat = SNIPPET },
+				{ label = "series", detail = "async.series({ t1, t2 }, cb) - Execute tasks sequentially", insertText = "series({ ${1:tasks} })", insertTextFormat = SNIPPET },
+				{ label = "waterfall", detail = "async.waterfall({ t1, t2 }, cb) - Sequential task chain passing arguments", insertText = "waterfall({ ${1:tasks} })", insertTextFormat = SNIPPET },
+				{ label = "sleep", detail = "async.sleep(ms) - Non-blocking delay", insertText = "sleep(${1:ms})", insertTextFormat = SNIPPET },
+				{ label = "run", detail = "async.run(fn) - Run function in managed coroutine for async/await", insertText = "run(function()\n\t${1}\nend)", insertTextFormat = SNIPPET },
+				{ label = "channel", detail = "async.channel() - Create thread-safe / coroutine-safe channel", insertText = "channel()", insertTextFormat = SNIPPET },
+			},
+		},
+		{
 			-- Fallback: the globals a script starts with.
 			items = {
 				{ label = "console", kind = KIND.object, detail = "krsnvim.console - Human-readable console logger & JSON printer", insertText = "console.log(${1:data})", insertTextFormat = SNIPPET },
 				{ label = "fetch", kind = KIND.object, detail = "krsnvim.fetch - HTTP/HTTPS Web-standard fetch client", insertText = 'fetch.get("${1:url}")', insertTextFormat = SNIPPET },
+				{ label = "async", kind = KIND.object, detail = "krsnvim.async - Concurrency, parallelism & async/await suite", insertText = "async", insertTextFormat = SNIPPET },
 				{ label = "import", kind = KIND.object, detail = "krsnvim.import - Smart module & file loader", insertText = 'import("${1:module}")', insertTextFormat = SNIPPET },
 				{ label = "krsnvim", kind = KIND.module, detail = "krsnvim - Automation library suite", insertText = "krsnvim" },
 			},

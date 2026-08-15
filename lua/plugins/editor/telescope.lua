@@ -316,78 +316,15 @@ return {
 
 		local open_folder_picker
 
-		--- Browses directories; <CR> adopts one, <C-l> descends, <C-h> goes up.
+		--- Browses directories; <CR> adopts one (or calls on_select), <C-l> descends, <C-h> goes up.
 		--- @param opts table|nil `{ cwd = string }` Directory to browse.
-		open_folder_picker = function(opts)
+		--- @param on_select function|nil `function(dir)` Optional callback when selected.
+		open_folder_picker = function(opts, on_select)
 			opts = opts or {}
-
-			local desktop = vim.fn.expand("~/Desktop")
-			if vim.fn.isdirectory(desktop) == 0 then
-				desktop = vim.fn.expand("~")
-			end
-
-			local curr_dir = normalize_dir(opts.cwd or desktop)
-
-			pickers
-				.new(themes.get_dropdown({
-					prompt_title = " 📁 Open Folder (Root: " .. vim.fn.fnamemodify(curr_dir, ":t") .. ") ",
-					finder = finders.new_table({
-						results = scan_directories(curr_dir),
-						entry_maker = function(entry)
-							local normalized = entry:gsub("\\", "/"):gsub("/$", "")
-							local root = curr_dir:gsub("\\", "/"):gsub("/$", "")
-							local label = normalized
-
-							-- Show paths relative to the browsed root; it is shorter
-							-- and makes the depth obvious.
-							if normalized:lower() == root:lower() then
-								label = ". (Current Root: " .. normalized .. ")"
-							elseif normalized:lower():sub(1, #root) == root:lower() then
-								label = normalized:sub(#root + 2)
-							end
-
-							return { value = normalized, display = "📁 " .. label, ordinal = label .. " " .. normalized }
-						end,
-					}),
-					sorter = conf.generic_sorter({}),
-					attach_mappings = function(prompt_bufnr, map)
-						actions.select_default:replace(function()
-							local selection = action_state.get_selected_entry()
-							actions.close(prompt_bufnr)
-							if selection and selection.value then
-								open_directory(selection.value)
-							end
-						end)
-
-						local function drill_down()
-							local selection = action_state.get_selected_entry()
-							if selection and selection.value and vim.fn.isdirectory(selection.value) == 1 then
-								actions.close(prompt_bufnr)
-								vim.schedule(function()
-									open_folder_picker({ cwd = selection.value })
-								end)
-							end
-						end
-						map("i", "<C-l>", drill_down)
-						map("n", "<C-l>", drill_down)
-
-						local function go_up()
-							local parent = vim.fn.fnamemodify(curr_dir, ":h")
-							if parent and parent ~= curr_dir then
-								actions.close(prompt_bufnr)
-								vim.schedule(function()
-									open_folder_picker({ cwd = parent })
-								end)
-							end
-						end
-						map("i", "<C-h>", go_up)
-						map("n", "<C-h>", go_up)
-
-						return true
-					end,
-				}), {})
-				:find()
+			return require("plugins.krs.file_explorer").open_folder_picker(opts, on_select)
 		end
+
+		_G.OpenFolderPicker = open_folder_picker
 
 		pcall(telescope.load_extension, "file_browser")
 
@@ -395,8 +332,8 @@ return {
 			open_folder_picker()
 		end, { desc = "Browse folders and open one as the active project" })
 		vim.keymap.set({ "n", "i" }, settings.open_folder_key, function()
-			open_folder_picker()
-		end, { desc = "Telescope open folder" })
+			require("plugins.krs.sneak_peek").toggle_or_pick()
+		end, { desc = "Sneak-Peek Project Modal (Ctrl+Shift+O)" })
 
 		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
 			require("plugins.krs.file_explorer").open_desktop_explorer()

@@ -84,6 +84,8 @@ end
 --- @param filter string|nil Optional spec name filter.
 --- @return integer exit_code 0 on success, 1 on any failure.
 function M.run(root, filter)
+	vim.g.krs_testing = true
+	_G.krs_testing = true
 	local loaded, errors = M.load_specs(root, filter)
 
 	for _, err in ipairs(errors) do

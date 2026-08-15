@@ -41,6 +41,8 @@ local settings = {
 
 	--- Sidebar mappings, mapped to the commands defined further down.
 	mappings = {
+		["d"] = "delete",
+		["D"] = "delete_visual",
 		["r"] = "rename_with_modal",
 		["m"] = "move_with_picker",
 		["a"] = "add_file_with_modal",
@@ -153,6 +155,59 @@ local function refresh_tree()
 	pcall(function()
 		require("neo-tree.sources.manager").refresh("filesystem")
 	end)
+end
+
+--- Deletes a file or directory on disk, handling Windows reserved names like NUL.
+--- @param path string Absolute path to file or directory.
+--- @return boolean ok, string|nil err
+local function delete_path(path)
+	if not path or path == "" then
+		return false, "Invalid path"
+	end
+
+	local is_win = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 or os.getenv("OS") == "Windows_NT"
+	local win_path = is_win and ("\\\\?\\" .. path:gsub("/", "\\")) or path
+
+	-- Try stdlib os.remove first (fast for single files and Windows reserved device names like NUL)
+	local ok, err = os.remove(is_win and win_path or path)
+	if ok then
+		return true, nil
+	end
+
+	-- Try vim.fn.delete (handles directories and normal files)
+	local res = vim.fn.delete(is_win and win_path or path, "rf")
+	if res == 0 then
+		return true, nil
+	end
+
+	if is_win then
+		ok, err = os.remove(path)
+		if ok then
+			return true, nil
+		end
+
+		res = vim.fn.delete(path, "rf")
+		if res == 0 then
+			return true, nil
+		end
+
+		-- Final fallback for Windows reserved files or locked files via powershell
+		pcall(function()
+			vim.fn.system({
+				"powershell",
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
+				"Remove-Item -LiteralPath '" .. win_path .. "' -Force -Recurse",
+			})
+		end)
+		local uv = vim.uv or vim.loop
+		if uv.fs_stat(path) == nil then
+			return true, nil
+		end
+	end
+
+	return false, tostring(err or "Failed to delete path")
 end
 
 --- Directory a new entry should be created in: the selected directory, or the
@@ -323,6 +378,59 @@ return {
 						else
 							require("telescope.builtin").find_files({ no_ignore = true, hidden = true })
 						end
+					end,
+
+					delete = with_node(function(node, state)
+						local inputs = require("neo-tree.ui.inputs")
+						local path = node.path
+						local name = node.name
+
+						inputs.confirm("Are you sure you want to delete '" .. name .. "'?", function(confirmed)
+							if not confirmed then
+								return
+							end
+
+							local ok, err = delete_path(path)
+							if ok then
+								vim.notify("Deleted: " .. name, vim.log.levels.INFO, { title = "Neo-tree" })
+								refresh_tree()
+							else
+								vim.notify("Failed to delete '" .. name .. "': " .. tostring(err), vim.log.levels.ERROR, { title = "Neo-tree" })
+							end
+						end)
+					end, true),
+
+					delete_visual = function(state, selected_nodes)
+						local inputs = require("neo-tree.ui.inputs")
+						local nodes = selected_nodes or {}
+						if #nodes == 0 then
+							local node = state.tree:get_node()
+							if node then
+								table.insert(nodes, node)
+							end
+						end
+						if #nodes == 0 then
+							return
+						end
+
+						local msg = #nodes == 1 and ("Are you sure you want to delete '" .. nodes[1].name .. "'?")
+							or string.format("Are you sure you want to delete %d selected item(s)?", #nodes)
+
+						inputs.confirm(msg, function(confirmed)
+							if not confirmed then
+								return
+							end
+
+							local count = 0
+							for _, node in ipairs(nodes) do
+								if node.path and delete_path(node.path) then
+									count = count + 1
+								end
+							end
+
+							vim.notify("Deleted " .. count .. " item(s)", vim.log.levels.INFO, { title = "Neo-tree" })
+							refresh_tree()
+						end)
 					end,
 				},
 				filesystem = {

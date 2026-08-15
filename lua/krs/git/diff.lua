@@ -39,6 +39,7 @@ M.highlights = {
 	delete_prefix = { name = "GitCenterDiffDeletePrefix", opts = { fg = "#f38ba8", bold = true, default = true } },
 	header = { name = "GitCenterDiffHeader", opts = { bg = "#1e293b", fg = "#89dceb", bold = true, default = true } },
 	context = { name = "GitCenterDiffContext", opts = { fg = "#cdd6f4", default = true } },
+	filler = { name = "GitCenterDiffFiller", opts = { bg = "#181825", fg = "#45475a", default = true } },
 }
 
 --- Diff lines that carry no information for a reader.
@@ -301,6 +302,296 @@ function M.apply_highlights(bufnr, kinds, filename)
 			apply_ts_captures(bufnr, old_code_lines, old_line_map, lang, 1, "delete", kinds)
 		end
 	end)
+end
+
+--- Formats raw diff output into side-by-side dual buffer structures (Left = Before, Right = After).
+--- @param raw_lines string[] Output of `git diff --color=never` or untracked file lines.
+--- @param is_untracked boolean|nil
+--- @return string[] left_lines
+--- @return string[] left_kinds ("delete" | "context" | "header" | "filler")
+--- @return string[] right_lines
+--- @return string[] right_kinds ("add" | "context" | "header" | "filler")
+function M.format_side_by_side_dual(raw_lines, is_untracked)
+	local left_lines, left_kinds = {}, {}
+	local right_lines, right_kinds = {}, {}
+
+	local function push(l_text, l_kind, r_text, r_kind)
+		table.insert(left_lines, l_text)
+		table.insert(left_kinds, l_kind)
+		table.insert(right_lines, r_text)
+		table.insert(right_kinds, r_kind)
+	end
+
+	if is_untracked then
+		push(" ─── 📄 Before (Empty File) ─────────────────────────", "header", " ─── 📄 After (New Untracked File) ──────────────────", "header")
+		for _, line in ipairs(raw_lines) do
+			push("", "filler", "+ " .. line, "add")
+		end
+		return left_lines, left_kinds, right_lines, right_kinds
+	end
+
+	local in_header = true
+	local hunk_count = 0
+	local idx = 1
+	local total = #raw_lines
+
+	while idx <= total do
+		local line = raw_lines[idx]
+		if is_noise(line) then
+			idx = idx + 1
+		elseif line:match(M.hunk_pattern) then
+			in_header = false
+			hunk_count = hunk_count + 1
+			local context = line:match("@@ %-%d+,?%d* %+%d+,?%d* @@(.*)") or ""
+			local range = line:match("(@@ %-%d+,?%d* %+%d+,?%d* @@)") or line
+			local header = string.format(
+				" ─── Hunk %d %s %s",
+				hunk_count,
+				range,
+				context ~= "" and ("(" .. context:gsub("^%s*", "") .. ") ") or ""
+			)
+			if #header < M.separator_width then
+				header = header .. string.rep("─", M.separator_width - #header)
+			end
+			push(header, "header", header, "header")
+			idx = idx + 1
+		elseif not in_header then
+			local first = line:sub(1, 1)
+			if first == "-" or first == "+" then
+				local dels, adds = {}, {}
+				while idx <= total do
+					local l = raw_lines[idx]
+					if is_noise(l) then
+						idx = idx + 1
+					elseif l:sub(1, 1) == "-" then
+						table.insert(dels, l)
+						idx = idx + 1
+					else
+						break
+					end
+				end
+				while idx <= total do
+					local l = raw_lines[idx]
+					if is_noise(l) then
+						idx = idx + 1
+					elseif l:sub(1, 1) == "+" then
+						table.insert(adds, l)
+						idx = idx + 1
+					else
+						break
+					end
+				end
+
+				local max_count = math.max(#dels, #adds)
+				for i = 1, max_count do
+					local l_txt = dels[i] or ""
+					local l_k = dels[i] and "delete" or "filler"
+					local r_txt = adds[i] or ""
+					local r_k = adds[i] and "add" or "filler"
+					push(l_txt, l_k, r_txt, r_k)
+				end
+			else
+				push(line, "context", line, "context")
+				idx = idx + 1
+			end
+		else
+			idx = idx + 1
+		end
+	end
+
+	if #left_lines == 0 then
+		push(M.empty_message, "context", M.empty_message, "context")
+	end
+
+	return left_lines, left_kinds, right_lines, right_kinds
+end
+
+--- Formats side-by-side lines into a single buffer line array with dual columns separated by `│`.
+--- @param raw_lines string[]
+--- @param is_untracked boolean|nil
+--- @param width integer Total available width in characters.
+--- @return string[] lines
+--- @return string[] left_kinds
+--- @return string[] right_kinds
+--- @return integer col_w Left column width.
+function M.format_side_by_side_single(raw_lines, is_untracked, width)
+	width = math.max(40, width or 80)
+	local col_w = math.floor((width - 3) / 2)
+	local left_lines, left_kinds, right_lines, right_kinds = M.format_side_by_side_dual(raw_lines, is_untracked)
+
+	local combined = {}
+	for i = 1, #left_lines do
+		local l_raw = left_lines[i] or ""
+		local r_raw = right_lines[i] or ""
+
+		if left_kinds[i] == "header" or right_kinds[i] == "header" then
+			local hdr = l_raw
+			if #hdr > width then
+				hdr = hdr:sub(1, width)
+			elseif #hdr < width then
+				hdr = hdr .. string.rep("─", width - #hdr)
+			end
+			table.insert(combined, hdr)
+		else
+			local l_padded = l_raw
+			if #l_padded > col_w then
+				l_padded = l_padded:sub(1, col_w)
+			else
+				l_padded = l_padded .. string.rep(" ", col_w - #l_padded)
+			end
+
+			local r_padded = r_raw
+			if #r_padded > col_w then
+				r_padded = r_padded:sub(1, col_w)
+			else
+				r_padded = r_padded .. string.rep(" ", col_w - #r_padded)
+			end
+
+			table.insert(combined, l_padded .. " │ " .. r_padded)
+		end
+	end
+
+	return combined, left_kinds, right_kinds, col_w
+end
+
+--- Applies highlights to side-by-side dual buffers (Left = Before, Right = After).
+--- @param left_buf integer
+--- @param left_kinds string[]
+--- @param right_buf integer
+--- @param right_kinds string[]
+--- @param filename string|nil
+function M.apply_highlights_side_by_side_dual(left_buf, left_kinds, right_buf, right_kinds, filename)
+	if left_buf and vim.api.nvim_buf_is_valid(left_buf) then
+		vim.api.nvim_buf_clear_namespace(left_buf, M.namespace, 0, -1)
+		vim.api.nvim_buf_clear_namespace(left_buf, M.ts_namespace, 0, -1)
+		local lines = vim.api.nvim_buf_get_lines(left_buf, 0, -1, false)
+		for idx, kind in ipairs(left_kinds) do
+			local row = idx - 1
+			local line_text = lines[idx] or ""
+			if kind == "header" then
+				vim.api.nvim_buf_add_highlight(left_buf, M.namespace, "GitCenterDiffHeader", row, 0, -1)
+			elseif kind == "delete" then
+				vim.api.nvim_buf_set_extmark(left_buf, M.namespace, row, 0, {
+					line_hl_group = "GitCenterDiffDelete",
+					priority = 50,
+				})
+				local prefix_len = line_text:sub(1, 2) == "- " and 2 or (line_text:sub(1, 1) == "-" and 1 or 0)
+				if prefix_len > 0 then
+					vim.api.nvim_buf_add_highlight(left_buf, M.namespace, "GitCenterDiffDeletePrefix", row, 0, prefix_len)
+				end
+			elseif kind == "filler" then
+				vim.api.nvim_buf_set_extmark(left_buf, M.namespace, row, 0, {
+					line_hl_group = "GitCenterDiffFiller",
+					priority = 40,
+				})
+			end
+		end
+	end
+
+	if right_buf and vim.api.nvim_buf_is_valid(right_buf) then
+		vim.api.nvim_buf_clear_namespace(right_buf, M.namespace, 0, -1)
+		vim.api.nvim_buf_clear_namespace(right_buf, M.ts_namespace, 0, -1)
+		local lines = vim.api.nvim_buf_get_lines(right_buf, 0, -1, false)
+		for idx, kind in ipairs(right_kinds) do
+			local row = idx - 1
+			local line_text = lines[idx] or ""
+			if kind == "header" then
+				vim.api.nvim_buf_add_highlight(right_buf, M.namespace, "GitCenterDiffHeader", row, 0, -1)
+			elseif kind == "add" then
+				vim.api.nvim_buf_set_extmark(right_buf, M.namespace, row, 0, {
+					line_hl_group = "GitCenterDiffAdd",
+					priority = 50,
+				})
+				local prefix_len = line_text:sub(1, 2) == "+ " and 2 or (line_text:sub(1, 1) == "+" and 1 or 0)
+				if prefix_len > 0 then
+					vim.api.nvim_buf_add_highlight(right_buf, M.namespace, "GitCenterDiffAddPrefix", row, 0, prefix_len)
+				end
+			elseif kind == "filler" then
+				vim.api.nvim_buf_set_extmark(right_buf, M.namespace, row, 0, {
+					line_hl_group = "GitCenterDiffFiller",
+					priority = 40,
+				})
+			end
+		end
+	end
+
+	local lang = M.get_file_language(filename)
+	if not lang then
+		return
+	end
+
+	pcall(function()
+		if left_buf and vim.api.nvim_buf_is_valid(left_buf) then
+			local buf_lines = vim.api.nvim_buf_get_lines(left_buf, 0, -1, false)
+			local code_lines, line_map = {}, {}
+			for idx, kind in ipairs(left_kinds) do
+				if kind == "context" or kind == "delete" then
+					local text = buf_lines[idx] or ""
+					local code = text:sub(1, 1) == "-" and text:sub(2) or text
+					table.insert(code_lines, code)
+					line_map[#code_lines - 1] = idx - 1
+				end
+			end
+			apply_ts_captures(left_buf, code_lines, line_map, lang, 1, nil, left_kinds)
+		end
+
+		if right_buf and vim.api.nvim_buf_is_valid(right_buf) then
+			local buf_lines = vim.api.nvim_buf_get_lines(right_buf, 0, -1, false)
+			local code_lines, line_map = {}, {}
+			for idx, kind in ipairs(right_kinds) do
+				if kind == "context" or kind == "add" then
+					local text = buf_lines[idx] or ""
+					local code = text:sub(1, 1) == "+" and text:sub(2) or text
+					table.insert(code_lines, code)
+					line_map[#code_lines - 1] = idx - 1
+				end
+			end
+			apply_ts_captures(right_buf, code_lines, line_map, lang, 1, nil, right_kinds)
+		end
+	end)
+end
+
+--- Applies highlights to a single-buffer dual-column side-by-side diff.
+--- @param bufnr integer
+--- @param left_kinds string[]
+--- @param right_kinds string[]
+--- @param col_w integer
+function M.apply_highlights_side_by_side_single(bufnr, left_kinds, right_kinds, col_w)
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+
+	vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
+	vim.api.nvim_buf_clear_namespace(bufnr, M.ts_namespace, 0, -1)
+
+	local buf_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+	for idx = 1, #left_kinds do
+		local row = idx - 1
+		local l_kind = left_kinds[idx]
+		local r_kind = right_kinds[idx]
+		local line_text = buf_lines[idx] or ""
+
+		if l_kind == "header" or r_kind == "header" then
+			vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffHeader", row, 0, -1)
+		else
+			if l_kind == "delete" then
+				vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffDelete", row, 0, col_w)
+			elseif l_kind == "filler" then
+				vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffFiller", row, 0, col_w)
+			end
+
+			local sep_start = col_w
+			local sep_end = math.min(#line_text, col_w + 3)
+			vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffContext", row, sep_start, sep_end)
+
+			if r_kind == "add" then
+				vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffAdd", row, sep_end, -1)
+			elseif r_kind == "filler" then
+				vim.api.nvim_buf_add_highlight(bufnr, M.namespace, "GitCenterDiffFiller", row, sep_end, -1)
+			end
+		end
+	end
 end
 
 return M

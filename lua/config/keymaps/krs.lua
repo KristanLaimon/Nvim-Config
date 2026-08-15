@@ -50,6 +50,7 @@ M.settings = {
 		task_slot_prefix = "<C-",
 		explorer = "<C-S-f>",
 		wsl_explorer = "<leader>fw",
+		sneak_peek = { "<C-S-o>", "<C-S-O>" },
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.
@@ -152,6 +153,10 @@ vim.keymap.set({ "n", "i", "v" }, M.settings.keys.wsl_explorer, function()
 	require("plugins.krs.file_explorer").open_wsl_explorer()
 end, opts("Open Floating WSL File Explorer"))
 
+map_all_modes(M.settings.keys.sneak_peek, function()
+	require("plugins.krs.sneak_peek").toggle_or_pick()
+end, "Sneak-Peek Project Modal (90% Window)")
+
 -- ============================================================================
 -- KRSNVIMSCRIPT
 -- ============================================================================
@@ -180,22 +185,37 @@ end, "Open krsnvimscript Floating Wiki Documentation")
 -- TRANSPILER COMMANDS
 -- ============================================================================
 
---- The `.krsnvim` file to transpile: the current buffer when it is one, else the
---- first listed one. These commands often run from the command palette, after
---- focus has passed through neo-tree or telescope.
+--- Resolves the active selected file (from active buffer OR active Neo-tree selection).
+--- Returns path ONLY if it is a valid, readable .krsnvim file.
 ---
 --- @return string|nil path
-local function script_buffer_name()
-	local buf_name = vim.api.nvim_buf_get_name(0)
-	if buf_name:match("%.krsnvim$") and vim.fn.filereadable(buf_name) == 1 then
-		return buf_name
-	end
+local function resolve_active_krsnvim_file()
+	local path = nil
 
-	for _, buf in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
-		if buf.name:match("%.krsnvim$") and vim.fn.filereadable(buf.name) == 1 then
-			return buf.name
+	-- 1. If currently focused in Neo-tree, get the active selected node
+	if vim.bo.filetype == "neo-tree" then
+		local ok, manager = pcall(require, "neo-tree.sources.manager")
+		if ok and manager then
+			local state = manager.get_state("filesystem")
+			if state and state.tree then
+				local node = state.tree:get_node()
+				if node and node.path then
+					path = node.path
+				end
+			end
 		end
 	end
+
+	-- 2. Otherwise get the active buffer's file path
+	if not path or path == "" then
+		path = vim.api.nvim_buf_get_name(0)
+	end
+
+	-- 3. Verify it is a valid .krsnvim file
+	if path and path:match("%.krsnvim$") and vim.fn.filereadable(path) == 1 then
+		return path
+	end
+
 	return nil
 end
 
@@ -203,17 +223,28 @@ end
 --- @param exporter fun(path: string, ...) Export function from krsnvimtranspiler.
 --- @param ... any Extra arguments, e.g. an output path.
 local function export(exporter, ...)
-	local buf_name = script_buffer_name()
-	if not buf_name then
-		vim.notify("KrsExport: no .krsnvim file found to transpile", vim.log.levels.ERROR, {
+	local script_path = resolve_active_krsnvim_file()
+	if not script_path then
+		vim.notify("Transpile failed: Active buffer or Neo-tree selection is not a .krsnvim file", vim.log.levels.WARN, {
 			title = "krsnvimtranspiler",
 		})
 		return
 	end
-	exporter(buf_name, ...)
+
+	local ok, res = pcall(exporter, script_path, ...)
+	if ok then
+		-- Refresh Neo-tree if available so new .sh / .ps1 files appear immediately
+		pcall(function()
+			require("neo-tree.sources.manager").refresh("filesystem")
+		end)
+	else
+		vim.notify("Transpile error: " .. tostring(res), vim.log.levels.ERROR, {
+			title = "krsnvimtranspiler",
+		})
+	end
 end
 
-vim.api.nvim_create_user_command("KrsExport", function(command)
+vim.api.nvim_create_user_command("KrsTranspile", function(command)
 	local transpiler = require("krsnvim").krsnvimtranspiler
 	local target = command.fargs[1] or "both"
 
@@ -224,14 +255,23 @@ vim.api.nvim_create_user_command("KrsExport", function(command)
 	else
 		export(transpiler.export_both)
 	end
-end, { nargs = "*", desc = "Export current .krsnvim script to .sh and .ps1 equivalents" })
+end, { nargs = "*", desc = "Transpile active buffer or Neo-tree .krsnvim selection to .sh and .ps1" })
 
-vim.api.nvim_create_user_command("KrsExportSh", function(command)
+vim.api.nvim_create_user_command("KrsTranspileBoth", function()
+	export(require("krsnvim").krsnvimtranspiler.export_both)
+end, { desc = "Transpile active .krsnvim file to both .sh and .ps1" })
+
+vim.api.nvim_create_user_command("KrsTranspileSh", function(command)
 	export(require("krsnvim").krsnvimtranspiler.export_sh, command.args ~= "" and command.args or nil)
-end, { nargs = "?", desc = "Export current .krsnvim script to .sh (Bash)" })
+end, { nargs = "?", desc = "Transpile active .krsnvim file to .sh (Bash)" })
 
-vim.api.nvim_create_user_command("KrsExportPs1", function(command)
+vim.api.nvim_create_user_command("KrsTranspilePs1", function(command)
 	export(require("krsnvim").krsnvimtranspiler.export_ps1, command.args ~= "" and command.args or nil)
-end, { nargs = "?", desc = "Export current .krsnvim script to .ps1 (PowerShell)" })
+end, { nargs = "?", desc = "Transpile active .krsnvim file to .ps1 (PowerShell)" })
+
+-- Aliases for backwards compatibility
+vim.api.nvim_create_user_command("KrsExport", function(...) vim.cmd("KrsTranspile " .. (... or "")) end, { nargs = "*" })
+vim.api.nvim_create_user_command("KrsExportSh", function(...) vim.cmd("KrsTranspileSh " .. (... or "")) end, { nargs = "?" })
+vim.api.nvim_create_user_command("KrsExportPs1", function(...) vim.cmd("KrsTranspilePs1 " .. (... or "")) end, { nargs = "?" })
 
 return M

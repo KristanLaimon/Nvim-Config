@@ -110,9 +110,10 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 🦊 krsnvimtranspiler (Script Transpiler)
 	-- --------------------------------------------------------------------------
-	{ name = "🦊 Transpile .krsnvim Script (Both .sh & .ps1)", cmd = "KrsExport", category = "Transpiler" },
-	{ name = "🐧 Transpile .krsnvim Script to Bash (.sh)", cmd = "KrsExportSh", category = "Transpiler" },
-	{ name = "🪟 Transpile .krsnvim Script to PowerShell (.ps1)", cmd = "KrsExportPs1", category = "Transpiler" },
+	{ name = "🦊 Transpile Selected .krsnvim Script (Both .sh & .ps1)", cmd = "KrsTranspileBoth", category = "Transpiler" },
+	{ name = "🐧 Transpile Selected .krsnvim Script to Bash (.sh)", cmd = "KrsTranspileSh", category = "Transpiler" },
+	{ name = "🪟 Transpile Selected .krsnvim Script to PowerShell (.ps1)", cmd = "KrsTranspilePs1", category = "Transpiler" },
+	{ name = "🔄 Transpile Active / Neo-tree .krsnvim File", cmd = "KrsTranspile", category = "Transpiler" },
 	{ name = "🚀 Open Launch Profiles Manager (<C-S-q>)", cmd = "LaunchProfiles", category = "Transpiler" },
 }
 

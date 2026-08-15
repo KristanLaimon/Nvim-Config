@@ -15,6 +15,7 @@ function M.run_all()
 		"import_spec",
 		"fetch_spec",
 		"console_spec",
+		"async_spec",
 		"test_framework_spec",
 		"krsnvimtranspiler_spec",
 	}

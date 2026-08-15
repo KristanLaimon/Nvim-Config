@@ -177,3 +177,82 @@ describe("git diff tree-sitter highlighting", function()
 		vim.api.nvim_buf_delete(buf, { force = true })
 	end)
 end)
+
+describe("side-by-side git diff format", function()
+	it("formats raw diff into dual left (before) and right (after) lines", function()
+		local left_lines, left_kinds, right_lines, right_kinds = diff.format_side_by_side_dual(SAMPLE, false)
+
+		expect(#left_lines).toBe(#right_lines)
+		expect(#left_kinds).toBe(#right_kinds)
+
+		-- Hunk header
+		expect(left_kinds[1]).toBe("header")
+		expect(right_kinds[1]).toBe("header")
+
+		-- Deletions on left side (kind "delete"), additions on right side (kind "add")
+		expect(left_lines).toContain("-removed line")
+		expect(right_lines).toContain("+added line")
+
+		local del_idx, add_idx
+		for idx, k in ipairs(left_kinds) do
+			if k == "delete" then
+				del_idx = idx
+			end
+		end
+		for idx, k in ipairs(right_kinds) do
+			if k == "add" then
+				add_idx = idx
+			end
+		end
+
+		expect(del_idx).toBeDefined()
+		expect(add_idx).toBeDefined()
+		expect(left_kinds[del_idx]).toBe("delete")
+		expect(right_kinds[add_idx]).toBe("add")
+	end)
+
+	it("formats untracked file as filler on left and additions on right", function()
+		local left_lines, left_kinds, right_lines, right_kinds = diff.format_side_by_side_dual({ "line1", "line2" }, true)
+
+		expect(#left_lines).toBe(#right_lines)
+		expect(left_kinds[2]).toBe("filler")
+		expect(right_kinds[2]).toBe("add")
+		expect(right_lines[2]).toBe("+ line1")
+	end)
+
+	it("formats side-by-side dual column into single combined buffer lines", function()
+		local combined, l_kinds, r_kinds, col_w = diff.format_side_by_side_single(SAMPLE, false, 80)
+
+		expect(#combined).toBeGreaterThan(0)
+		expect(col_w).toBeGreaterThan(15)
+		local has_sep = false
+		for _, line in ipairs(combined) do
+			if line:find("│") then
+				has_sep = true
+				break
+			end
+		end
+		expect(has_sep).toBeTruthy()
+	end)
+
+	it("applies highlights for side-by-side dual buffers", function()
+		diff.setup_highlights()
+		local left_buf = vim.api.nvim_create_buf(false, true)
+		local right_buf = vim.api.nvim_create_buf(false, true)
+
+		local l_lines, l_kinds, r_lines, r_kinds = diff.format_side_by_side_dual(SAMPLE, false)
+		vim.api.nvim_buf_set_lines(left_buf, 0, -1, false, l_lines)
+		vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, r_lines)
+
+		diff.apply_highlights_side_by_side_dual(left_buf, l_kinds, right_buf, r_kinds, "init.lua")
+
+		local l_marks = vim.api.nvim_buf_get_extmarks(left_buf, diff.namespace, 0, -1, {})
+		local r_marks = vim.api.nvim_buf_get_extmarks(right_buf, diff.namespace, 0, -1, {})
+
+		expect(#l_marks).toBeGreaterThan(0)
+		expect(#r_marks).toBeGreaterThan(0)
+
+		vim.api.nvim_buf_delete(left_buf, { force = true })
+		vim.api.nvim_buf_delete(right_buf, { force = true })
+	end)
+end)

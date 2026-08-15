@@ -81,6 +81,8 @@ local settings = {
 			shellcmdflag = "-c",
 			shellxquote = "",
 			shellquote = "",
+			shellredir = ">%s 2>&1",
+			shellpipe = "2>&1| tee",
 		},
 	},
 
@@ -196,6 +198,10 @@ local shell_settings = (vim.fn.has("wsl") == 1 or vim.fn.has("unix") == 1) and s
 
 for name, value in pairs(shell_settings or {}) do
 	vim.opt[name] = value
+end
+
+if is_windows then
+	vim.env.MSYS_NO_PATHCONV = "1"
 end
 
 -- ============================================================================
