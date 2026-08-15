@@ -24,4 +24,6 @@ return {
 	project = require("krs.core.project"),
 	ui = require("krs.core.ui"),
 	lazyspec = require("krs.core.lazyspec"),
+	z_index = require("krs.core.z_index"),
+	zindex = require("krs.core.z_index"),
 }

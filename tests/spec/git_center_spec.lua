@@ -121,7 +121,7 @@ describe("plugins.krs.git_center", function()
 		local main_buf = git_center.main_buf
 		local preview_buf = git_center.preview_buf
 
-		local tab_keys = { "<A-h>", "<A-l>" }
+		local tab_keys = { "<A-h>", "<A-l>", "<C-h>", "<C-l>" }
 		for _, key in ipairs(tab_keys) do
 			local main_map = vim.api.nvim_buf_call(main_buf, function()
 				return vim.fn.maparg(key, "n", false, true)
@@ -232,13 +232,129 @@ describe("plugins.krs.git_center", function()
 		git_center.close_git_center()
 	end)
 
-	it("opens side-by-side diff modal with left (before) and right (after) float windows", function()
+	it("opens side-by-side diff modal with left (before) and right (after) float windows with elevated zindex and Ctrl+h/l keymaps", function()
+		local z_index = require("krs.core.z_index")
 		git_center.open_git_center()
 		git_center.open_diff_modal(nil, nil, vim.fn.getcwd())
 
 		if git_center.diff_modal_win then
 			expect(vim.api.nvim_win_is_valid(git_center.diff_modal_win)).toBeTruthy()
+			local cfg = vim.api.nvim_win_get_config(git_center.diff_modal_win)
+			local expected_z = z_index.get_zindex("git_center_diff", 40)
+			expect(cfg.zindex).toBe(expected_z)
+
+			-- Verify Ctrl+h and Ctrl+l keymaps are bound in the diff modal buffer
+			local buf = git_center.diff_modal_buf
+			local map_h = vim.api.nvim_buf_call(buf, function()
+				return vim.fn.maparg("<C-h>", "n", false, true)
+			end)
+			local map_l = vim.api.nvim_buf_call(buf, function()
+				return vim.fn.maparg("<C-l>", "n", false, true)
+			end)
+
+			expect(map_h.buffer == 1 or map_h.callback ~= nil).toBeTruthy()
+			expect(map_l.buffer == 1 or map_l.callback ~= nil).toBeTruthy()
 		end
+
+		git_center.close_git_center()
+	end)
+
+	it("opens commit log modal with configured left ratio, dynamic zindex and correct keymaps", function()
+		local z_index = require("krs.core.z_index")
+		git_center.open_git_center()
+		git_center.resize_split(0.05) -- Set custom ratio
+
+		git_center.open_commit_log_modal(vim.fn.getcwd())
+
+		local expected_z = z_index.get_zindex("git_center_log", 30)
+		local wins = vim.api.nvim_list_wins()
+		local log_wins = {}
+		for _, w in ipairs(wins) do
+			local cfg = vim.api.nvim_win_get_config(w)
+			if cfg.zindex == expected_z then
+				table.insert(log_wins, w)
+			end
+		end
+
+		expect(#log_wins).toBeGreaterThanOrEqual(2)
+
+		local found_K = false
+		local found_k = false
+		for _, w in ipairs(log_wins) do
+			if vim.api.nvim_win_is_valid(w) then
+				local buf = vim.api.nvim_win_get_buf(w)
+				local keymaps = vim.api.nvim_buf_get_keymap(buf, "n")
+				for _, m in ipairs(keymaps) do
+					if m.lhs == "K" then
+						found_K = true
+					end
+					if m.lhs == "k" then
+						found_k = true
+					end
+				end
+			end
+		end
+
+		expect(found_K).toBe(true)
+		expect(found_k).toBe(false)
+
+		-- Close log modal windows
+		for _, w in ipairs(log_wins) do
+			if vim.api.nvim_win_is_valid(w) then
+				pcall(vim.api.nvim_win_close, w, true)
+			end
+		end
+
+		git_center.close_git_center()
+	end)
+
+	it("registers user commands GitLog and GitHistory", function()
+		expect(vim.fn.exists(":GitLog")).toBe(2)
+		expect(vim.fn.exists(":GitHistory")).toBe(2)
+	end)
+
+	it("restores focus to git-center main_win when closing log modal from right pane", function()
+		local z_index = require("krs.core.z_index")
+		git_center.open_git_center()
+		local main_win = git_center.main_win
+		expect(vim.api.nvim_get_current_win()).toBe(main_win)
+
+		git_center.open_commit_log_modal(vim.fn.getcwd())
+
+		local expected_z = z_index.get_zindex("git_center_log", 30)
+		local log_wins = {}
+		for _, w in ipairs(vim.api.nvim_list_wins()) do
+			local cfg = vim.api.nvim_win_get_config(w)
+			if cfg.zindex == expected_z then
+				table.insert(log_wins, w)
+			end
+		end
+		expect(#log_wins).toBeGreaterThanOrEqual(2)
+
+		local right_win = nil
+		for _, w in ipairs(log_wins) do
+			if w ~= vim.api.nvim_get_current_win() then
+				right_win = w
+				break
+			end
+		end
+		expect(right_win).toBeDefined()
+
+		-- Move focus to right window of log modal
+		vim.api.nvim_set_current_win(right_win)
+		expect(vim.api.nvim_get_current_win()).toBe(right_win)
+
+		-- Close right window / trigger modal close
+		local right_buf = vim.api.nvim_win_get_buf(right_win)
+		local esc_map = vim.api.nvim_buf_call(right_buf, function()
+			return vim.fn.maparg("<Esc>", "n", false, true)
+		end)
+		expect(esc_map.rhs or esc_map.callback).toBeDefined()
+		if esc_map.callback then
+			esc_map.callback()
+		end
+
+		expect(vim.api.nvim_get_current_win()).toBe(main_win)
 
 		git_center.close_git_center()
 	end)

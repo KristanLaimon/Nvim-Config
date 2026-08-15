@@ -122,7 +122,20 @@ function M.float(opts)
 		win_opts.title_pos = "center"
 	end
 
+	local z_index = require("krs.core.z_index")
+	local name = opts.name or (opts.title and opts.title:gsub("%s+", "_"):lower()) or ("float_" .. tostring(buf))
+	local z_val = opts.zindex
+
+	if type(z_val) == "number" then
+		win_opts.zindex = z_val
+	else
+		z_val = z_index.next_zindex(name, { parent = opts.parent, offset = opts.offset })
+		win_opts.zindex = z_val
+	end
+
 	local win = vim.api.nvim_open_win(buf, opts.focus ~= false, win_opts)
+	z_index.register(name, win, { zindex = z_val, parent = opts.parent, offset = opts.offset })
+
 	return buf, win
 end
 

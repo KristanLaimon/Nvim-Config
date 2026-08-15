@@ -87,6 +87,25 @@ local function is_noise(line)
 	return false
 end
 
+--- Extracts a filename from a diff line if present (e.g. diff --git, --- a/, +++ b/).
+--- @param line string
+--- @return string|nil filename
+local function extract_diff_filename(line)
+	local b_path = line:match("^diff %-%-git%s+a/.+%s+b/(.+)$")
+	if b_path then
+		return b_path
+	end
+	local plus_path = line:match("^%+%+%+%s+b/(.+)$")
+	if plus_path and plus_path ~= "/dev/null" then
+		return plus_path
+	end
+	local minus_path = line:match("^%-%-%-%s+a/(.+)$")
+	if minus_path and minus_path ~= "/dev/null" then
+		return minus_path
+	end
+	return nil
+end
+
 --- Formats raw diff output for display.
 ---
 --- @param raw_lines string[] Output of `git diff --color=never`, or the file's
@@ -116,8 +135,21 @@ function M.format(raw_lines, is_untracked)
 	-- Everything before the first hunk header is preamble and gets dropped.
 	local in_header = true
 	local hunk_count = 0
+	local current_file = nil
 
 	for _, line in ipairs(raw_lines) do
+		local fname = extract_diff_filename(line)
+		if fname and fname ~= current_file then
+			current_file = fname
+			hunk_count = 0
+			in_header = true
+			local file_banner = string.format(" ─── 📄 File: %s ", current_file)
+			if #file_banner < M.separator_width then
+				file_banner = file_banner .. string.rep("─", M.separator_width - #file_banner)
+			end
+			push(file_banner, "header")
+		end
+
 		if is_noise(line) then -- skip
 		elseif line:match(M.hunk_pattern) then
 			in_header = false
@@ -141,7 +173,15 @@ function M.format(raw_lines, is_untracked)
 		end
 	end
 
-	if #lines == 0 then
+	local has_content = false
+	for _, k in ipairs(kinds) do
+		if k ~= "header" then
+			has_content = true
+			break
+		end
+	end
+
+	if not has_content then
 		push(M.empty_message, "context")
 	end
 	return lines, kinds
@@ -332,11 +372,24 @@ function M.format_side_by_side_dual(raw_lines, is_untracked)
 
 	local in_header = true
 	local hunk_count = 0
+	local current_file = nil
 	local idx = 1
 	local total = #raw_lines
 
 	while idx <= total do
 		local line = raw_lines[idx]
+		local fname = extract_diff_filename(line)
+		if fname and fname ~= current_file then
+			current_file = fname
+			hunk_count = 0
+			in_header = true
+			local file_banner = string.format(" ─── 📄 File: %s ", current_file)
+			if #file_banner < M.separator_width then
+				file_banner = file_banner .. string.rep("─", M.separator_width - #file_banner)
+			end
+			push(file_banner, "header", file_banner, "header")
+		end
+
 		if is_noise(line) then
 			idx = idx + 1
 		elseif line:match(M.hunk_pattern) then
@@ -361,7 +414,9 @@ function M.format_side_by_side_dual(raw_lines, is_untracked)
 				local dels, adds = {}, {}
 				while idx <= total do
 					local l = raw_lines[idx]
-					if is_noise(l) then
+					if l:match("^diff %-%-git") or l:match("^@@") or l:match("^%-%-%-%s+a/") or l:match("^%+%+%+%s+b/") then
+						break
+					elseif is_noise(l) then
 						idx = idx + 1
 					elseif l:sub(1, 1) == "-" then
 						table.insert(dels, l)
@@ -372,7 +427,9 @@ function M.format_side_by_side_dual(raw_lines, is_untracked)
 				end
 				while idx <= total do
 					local l = raw_lines[idx]
-					if is_noise(l) then
+					if l:match("^diff %-%-git") or l:match("^@@") or l:match("^%-%-%-%s+a/") or l:match("^%+%+%+%s+b/") then
+						break
+					elseif is_noise(l) then
 						idx = idx + 1
 					elseif l:sub(1, 1) == "+" then
 						table.insert(adds, l)
@@ -556,10 +613,13 @@ end
 --- @param left_kinds string[]
 --- @param right_kinds string[]
 --- @param col_w integer
-function M.apply_highlights_side_by_side_single(bufnr, left_kinds, right_kinds, col_w)
+--- @param start_row_offset integer|nil Line offset for headers (default 0).
+function M.apply_highlights_side_by_side_single(bufnr, left_kinds, right_kinds, col_w, start_row_offset)
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return
 	end
+
+	start_row_offset = start_row_offset or 0
 
 	vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
 	vim.api.nvim_buf_clear_namespace(bufnr, M.ts_namespace, 0, -1)
@@ -567,7 +627,7 @@ function M.apply_highlights_side_by_side_single(bufnr, left_kinds, right_kinds, 
 	local buf_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
 	for idx = 1, #left_kinds do
-		local row = idx - 1
+		local row = start_row_offset + (idx - 1)
 		local l_kind = left_kinds[idx]
 		local r_kind = right_kinds[idx]
 		local line_text = buf_lines[idx] or ""

@@ -15,6 +15,7 @@ Documentation for **KrsVim** — a Windows-first, WSL-aware Neovim config built 
 | 📦 [**Plugin Inventory**](plugins.md) | Every third-party plugin and every custom `krs` module |
 | 🏛️ [**Architecture**](architecture.md) | The four layers, startup sequence, dependency graph, where to put new code |
 | 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` specs are wired, and the `lazydir` fix behind it |
+| 📶 [**Dynamic Z-Index Manager**](z-index.md) | Centralized Z-index stack manager (`krs.core.z_index`) for floating UI popups & inputs |
 | 🧪 [**Testing**](testing.md) | Running the suite, writing a spec, what is covered |
 
 ### Daily driving

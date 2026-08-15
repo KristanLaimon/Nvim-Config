@@ -23,11 +23,14 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 
 | Key | Mode | Action |
 | :--- | :---: | :--- |
-| `<C-S-g>` | All | Toggle Git Control Center open / close |
+| `<C-S-g>` / `<Esc>` / `q` | All | Close Git Control Center or active modal |
+| `<C-h>` / `<C-H>` | All | Focus Left Panel / Switch to Previous Submodule Tab |
+| `<C-l>` / `<C-L>` | All | Focus Right Panel / Switch to Next Submodule Tab |
 | `<A-h>` / `<M-h>` | Normal, Visual, Insert, Terminal | Switch to Previous Submodule Tab (Left) |
 | `<A-l>` / `<M-l>` | Normal, Visual, Insert, Terminal | Switch to Next Submodule Tab (Right) |
 | `b` | Normal | Open Branch Management Modal (Create, Delete, Switch, Rename) |
-| `l` / `L` | Normal | Open Commit Log & History Modal (`git log --all` with side-by-side diff) |
+| `l` / `L` | Normal | Open Commit Log & History Modal (`git log --all` with per-file diffs & jump) |
+| `<CR>` (Commit Log) | Normal | Press Enter on file in "Files Changed" to jump directly to its diff |
 | `s` | Normal, Visual | Stage selected file or selection |
 | `S` | Normal, Visual | Stage all files |
 | `u` | Normal, Visual | Unstage selected file or selection |

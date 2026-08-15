@@ -42,6 +42,7 @@ Plus the shared libraries outside the spec tree, in `lua/krs/`:
 | `krs.core.store` | JSON load & save that never throws |
 | `krs.core.project` | Project root and `.krsnvim/` config resolution |
 | `krs.core.ui` | Floating window and scratch buffer factory |
+| `krs.core.z_index` | Centralized dynamic Z-index stack manager for floating UI popups & inputs — see [Z-Index Manager](z-index.md) |
 | `krs.core.dock` | The bottom dock shared by terminals and task outputs |
 | `krs.core.lazyspec` | Unique lazy.nvim `dir` per local spec — see [Module Architecture](module-architecture.md#-lazydir--why-every-spec-needs-its-own-directory) |
 | `krs.git.cmd` / `status` / `diff` | Running git, parsing status, formatting diffs |

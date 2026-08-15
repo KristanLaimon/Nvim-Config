@@ -12,6 +12,7 @@ The **Reusable Input Modal** is a custom floating UI component in KRS Neovim (`l
 - **Clean Callback Interface**: Delivers an `(ok: boolean, new_text: string)` payload:
   - `ok = true` when confirmed with `<CR>` or `:w`.
   - `ok = false` when cancelled with `<Esc>`, `q`, or closing the window.
+- **Dynamic Z-Index Stack Placement**: Integrates with [`krs.core.z_index`](z-index.md) to ensure prompt dialogs always render on top of any UI layer.
 - **Global `vim.ui.input` Override**: Automatically powers standard Neovim input prompts across plugins.
 
 ---

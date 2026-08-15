@@ -75,7 +75,7 @@ graph TD
     end
 
     subgraph L2["Layer 2 · Shared libraries"]
-        CORE["krs.core<br/>path · store · project · ui · dock"]
+        CORE["krs.core<br/>path · store · project · ui · z_index · dock"]
         GIT["krs.git<br/>cmd · status · diff"]
         LAUNCH["krs.launch.runtimes"]
         KRSLSP["krs.lsp · krs.projects"]

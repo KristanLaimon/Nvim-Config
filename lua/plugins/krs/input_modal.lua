@@ -138,7 +138,13 @@ function M.open(opts)
 		win_opts.relative, win_opts.row, win_opts.col = "editor", row, col
 	end
 
+	local z_index = require("krs.core.z_index")
+	local name = opts.name or "input_modal"
+	local z_val = z_index.next_zindex(name, { parent = opts.parent, offset = opts.offset or 50 })
+	win_opts.zindex = z_val
+
 	local win = vim.api.nvim_open_win(buf, true, win_opts)
+	z_index.register(name, win, { zindex = z_val, parent = opts.parent })
 	for option, value in pairs({ wrap = true, linebreak = true, scrolloff = 0, cursorline = false }) do
 		pcall(vim.api.nvim_set_option_value, option, value, { win = win })
 	end

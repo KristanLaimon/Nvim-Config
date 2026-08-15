@@ -47,8 +47,8 @@ describe("git diff format", function()
 		local lines, kinds = diff.format(SAMPLE, false)
 
 		expect(kinds[1]).toBe("header")
-		expect(lines[1]).toContain("Hunk 1")
-		expect(lines[1]).toContain("local M = {}")
+		expect(lines[2]).toContain("Hunk 1")
+		expect(lines[2]).toContain("local M = {}")
 	end)
 
 	it("numbers multiple hunks", function()
@@ -82,8 +82,8 @@ describe("git diff format", function()
 	it("says so when a diff carries no visible change", function()
 		local lines, kinds = diff.format({ "diff --git a/x b/x", "old mode 100644" }, false)
 
-		expect(lines).toEqual({ diff.empty_message })
-		expect(kinds).toEqual({ "context" })
+		expect(lines[2]).toBe(diff.empty_message)
+		expect(kinds[2]).toBe("context")
 	end)
 end)
 
@@ -254,5 +254,38 @@ describe("side-by-side git diff format", function()
 
 		vim.api.nvim_buf_delete(left_buf, { force = true })
 		vim.api.nvim_buf_delete(right_buf, { force = true })
+	end)
+
+	it("formats multi-file diffs with file header banners for each file", function()
+		local MULTI_SAMPLE = {
+			"diff --git a/foo.lua b/foo.lua",
+			"index 1111111..2222222 100644",
+			"--- a/foo.lua",
+			"+++ b/foo.lua",
+			"@@ -1,1 +1,1 @@",
+			"-foo old",
+			"+foo new",
+			"diff --git a/bar.lua b/bar.lua",
+			"index 3333333..4444444 100644",
+			"--- a/bar.lua",
+			"+++ b/bar.lua",
+			"@@ -1,1 +1,1 @@",
+			"-bar old",
+			"+bar new",
+		}
+
+		local l_lines, _, r_lines, _ = diff.format_side_by_side_dual(MULTI_SAMPLE, false)
+		local found_foo, found_bar = false, false
+		for _, line in ipairs(r_lines) do
+			if line:find("foo.lua", 1, true) then
+				found_foo = true
+			end
+			if line:find("bar.lua", 1, true) then
+				found_bar = true
+			end
+		end
+
+		expect(found_foo).toBeTruthy()
+		expect(found_bar).toBeTruthy()
 	end)
 end)
