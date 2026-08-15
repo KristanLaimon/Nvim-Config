@@ -71,6 +71,7 @@ M.settings = {
 				{ label = '"yaml"', detail = "krsnvim.yaml - YAML parser & file I/O", insertText = '"yaml"' },
 				{ label = '"toml"', detail = "krsnvim.toml - TOML parser & file I/O", insertText = '"toml"' },
 				{ label = '"terminal"', detail = "krsnvim.terminal - Cross-platform shell execution", insertText = '"terminal"' },
+				{ label = '"cmd"', detail = "krsnvim.cmd - Cross-platform shell execution suite alias", insertText = '"cmd"' },
 				{ label = '"cli"', detail = "krsnvim.cli - CLI argument parser & menu helper", insertText = '"cli"' },
 				{ label = '"fs"', detail = "krsnvim.fs - File system helper suite", insertText = '"fs"' },
 				{ label = '"fetch"', detail = "krsnvim.fetch - HTTP/HTTPS fetch client", insertText = '"fetch"' },
@@ -95,9 +96,20 @@ M.settings = {
 				{ label = "yaml", detail = "krsnvim.yaml - YAML parser & file I/O", insertText = "yaml" },
 				{ label = "toml", detail = "krsnvim.toml - TOML parser & file I/O", insertText = "toml" },
 				{ label = "terminal", detail = "krsnvim.terminal - Shell execution suite", insertText = "terminal" },
+				{ label = "cmd", detail = "krsnvim.cmd - Shell execution suite alias", insertText = "cmd" },
 				{ label = "cli", detail = "krsnvim.cli - CLI argument parser & UI", insertText = "cli" },
 				{ label = "fs", detail = "krsnvim.fs - File system helpers", insertText = "fs" },
 				{ label = "tests", detail = "krsnvim.tests - Testing framework runner", insertText = "tests" },
+			},
+		},
+		{
+			pattern = "cmd%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "exec", detail = "cmd.exec(cmd, opts) - Synchronously execute shell command", insertText = 'exec("${1:command}")', insertTextFormat = SNIPPET },
+				{ label = "run", detail = "cmd.run(cmd, opts) - Synchronously execute shell command", insertText = 'run("${1:command}")', insertTextFormat = SNIPPET },
+				{ label = "cwd", detail = "cmd.cwd() - Get current working directory", insertText = "cwd()", insertTextFormat = SNIPPET },
+				{ label = "echo", detail = "cmd.echo(msg) - Output message to console", insertText = 'echo("${1:message}")', insertTextFormat = SNIPPET },
 			},
 		},
 		{

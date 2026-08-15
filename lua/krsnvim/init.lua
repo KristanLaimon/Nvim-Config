@@ -23,6 +23,7 @@ M.json = require("krsnvim.json")
 M.yaml = require("krsnvim.yaml")
 M.toml = require("krsnvim.toml")
 M.terminal = require("krsnvim.terminal")
+M.cmd = require("krsnvim.cmd")
 M.cli = require("krsnvim.cli")
 M.fs = require("krsnvim.fs")
 M.fetch = require("krsnvim.fetch")
@@ -73,8 +74,8 @@ function M.import(target)
 		error("import(): Target must be a non-empty string")
 	end
 
-	if target == "krsnvim.terminal" or target == "terminal" then
-		return M.terminal
+	if target == "krsnvim.terminal" or target == "terminal" or target == "krsnvim.cmd" or target == "cmd" then
+		return M.cmd
 	elseif target == "krsnvim.json" or target == "json" then
 		return M.json
 	elseif target == "krsnvim.yaml" or target == "yaml" then

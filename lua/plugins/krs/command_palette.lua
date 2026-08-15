@@ -70,7 +70,7 @@ M.commands = {
 	-- 🧠 LSP, Diagnostics & Type Injection
 	-- --------------------------------------------------------------------------
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
-	{ name = "🚫 Add KRS Generated Files to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
+	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
 	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
 	{ name = "📦 Nuget Package Manager (C#)", cmd = "NugetManager", category = "LSP" },

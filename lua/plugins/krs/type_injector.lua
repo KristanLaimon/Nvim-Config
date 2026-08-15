@@ -279,7 +279,8 @@ end
 --- @param root string|nil Project root.
 --- @return string[] paths
 function M.get_active_lua_libraries(root)
-	local paths = { vim.env.VIMRUNTIME }
+	local config_lua = vim.fn.stdpath("config") .. "/lua"
+	local paths = { vim.env.VIMRUNTIME, config_lua }
 	for _, name in ipairs(M.load_project_types(root).lua) do
 		local schema_path = M.resolve_schema_dir("lua", name)
 		if schema_path then
@@ -739,26 +740,51 @@ end
 -- HOUSEKEEPING
 -- ============================================================================
 
---- Adds the generated declaration file to the project's .gitignore.
+--- Adds .krsnvim generated files and ignore patterns to the project's .gitignore (prepended to the beginning of the file).
 --- @param root string|nil Project root.
 function M.gitignore_generated(root)
 	local gitignore = path.join(path.normalize(vim.fs.normalize(root or M.get_project_root())), ".gitignore")
-	local entry = M.settings.ref_file
+	local default_entries = {
+		M.settings.ref_file or ".krsnvim/types.d.ts",
+		".krsnvim/",
+		"*.krsnvim",
+	}
 
-	local lines = {}
+	local existing_lines = {}
+	local existing_set = {}
 	if path.is_file(gitignore) then
-		lines = vim.fn.readfile(gitignore)
-		for _, line in ipairs(lines) do
-			if vim.trim(line) == entry then
-				notify(entry .. " is already in .gitignore")
-				return
-			end
+		existing_lines = vim.fn.readfile(gitignore)
+		for _, line in ipairs(existing_lines) do
+			existing_set[vim.trim(line)] = true
 		end
 	end
 
-	table.insert(lines, entry)
-	vim.fn.writefile(lines, gitignore)
-	notify("Added '" .. entry .. "' to .gitignore")
+	local to_add = {}
+	for _, entry in ipairs(default_entries) do
+		if not existing_set[entry] then
+			table.insert(to_add, entry)
+		end
+	end
+
+	if #to_add == 0 then
+		notify(".krsnvim ignore entries are already in .gitignore")
+		return
+	end
+
+	local new_lines = {}
+	for _, entry in ipairs(to_add) do
+		table.insert(new_lines, entry)
+	end
+
+	if #existing_lines > 0 then
+		table.insert(new_lines, "")
+		for _, line in ipairs(existing_lines) do
+			table.insert(new_lines, line)
+		end
+	end
+
+	vim.fn.writefile(new_lines, gitignore)
+	notify("Added " .. table.concat(to_add, ", ") .. " to top of .gitignore")
 end
 
 -- ============================================================================
@@ -775,7 +801,7 @@ function M.setup()
 			function()
 				M.gitignore_generated()
 			end,
-			"Add .krsnvim/types.d.ts (auto-generated) to .gitignore",
+			"Add .krsnvim ignore entries (*.krsnvim, .krsnvim/, types.d.ts) to .gitignore",
 		},
 	}
 	for name, spec in pairs(commands) do
