@@ -216,11 +216,19 @@ local function load_saved_active_tab(root)
 	return data.current_tab or data.active_tab
 end
 
+local save_tab_timer = nil
 --- Saves the active submodule tab identifier.
 --- @param root string Project root directory.
 --- @param target_path string Submodule relative path.
 local function save_active_tab(root, target_path)
-	save_git_center_config(root, { current_tab = target_path, active_tab = target_path })
+	if save_tab_timer then
+		save_tab_timer:stop()
+		save_tab_timer = nil
+	end
+	save_tab_timer = vim.defer_fn(function()
+		save_tab_timer = nil
+		save_git_center_config(root, { current_tab = target_path, active_tab = target_path })
+	end, 500)
 end
 
 --- Loads the saved left panel width ratio.
@@ -440,9 +448,42 @@ end
 --- Renders the control panel.
 ---
 M.submodule_statuses = {}
+M.fetching_submodules = {}
 
---- Synchronously or from cache returns submodule status info:
---- `{ has_changes = bool, behind = int, ahead = int }`
+local render_tab_bar -- Forward declaration
+
+--- Asynchronously fetches submodule status for non-active tab indicators in background.
+--- @param target table
+local function fetch_target_status_async(target)
+	if not target or not target.full_path or M.fetching_submodules[target.path] then
+		return
+	end
+	M.fetching_submodules[target.path] = true
+	local handle = status.info_start(target.full_path)
+	if not handle then
+		M.fetching_submodules[target.path] = nil
+		return
+	end
+
+	vim.schedule(function()
+		local info = status.info_finish(handle)
+		M.fetching_submodules[target.path] = nil
+		if info and target and target.path then
+			M.submodule_statuses[target.path] = {
+				has_changes = info.has_changes or (#info.staged + #info.unstaged + #info.untracked > 0),
+				behind = info.behind or 0,
+				ahead = info.ahead or 0,
+			}
+			if render_tab_bar and M.is_open() and M.tab_buf and vim.api.nvim_buf_is_valid(M.tab_buf) and M.main_win and vim.api.nvim_win_is_valid(M.main_win) then
+				local l_width = vim.api.nvim_win_get_width(M.main_win)
+				render_tab_bar(l_width)
+			end
+		end
+	end)
+end
+
+--- Returns submodule status info from cache or triggers background fetch.
+--- Never blocks the UI thread.
 --- @param target table
 --- @return table
 local function get_target_status(target)
@@ -452,16 +493,7 @@ local function get_target_status(target)
 	if M.submodule_statuses[target.path] then
 		return M.submodule_statuses[target.path]
 	end
-	local info = M.get_git_info(target.full_path)
-	if info then
-		local st = {
-			has_changes = info.has_changes or (#info.staged + #info.unstaged + #info.untracked > 0),
-			behind = info.behind or 0,
-			ahead = info.ahead or 0,
-		}
-		M.submodule_statuses[target.path] = st
-		return st
-	end
+	fetch_target_status_async(target)
 	return { has_changes = false, behind = 0, ahead = 0 }
 end
 
@@ -537,7 +569,7 @@ end
 
 --- Renders bufferline-style submodule tabs into M.tab_buf, directly overlaying top border.
 --- @param left_w integer Inner width of left panel.
-local function render_tab_bar(left_w)
+render_tab_bar = function(left_w)
 	if not M.tab_buf or not vim.api.nvim_buf_is_valid(M.tab_buf) then
 		return
 	end
@@ -1795,6 +1827,14 @@ function M.open_git_center()
 		return
 	end
 
+	if active_target and active_target.path then
+		M.submodule_statuses[active_target.path] = {
+			has_changes = info.has_changes or (#info.staged + #info.unstaged + #info.untracked > 0),
+			behind = info.behind or 0,
+			ahead = info.ahead or 0,
+		}
+	end
+
 	diff.setup_highlights()
 	M.diff_cache = {}
 
@@ -1992,14 +2032,26 @@ function M.open_git_center()
 	-- ------------------------------------------------------------------
 
 	--- Redraws the panel in place -- no window is closed, so there is no flicker.
-	local function refresh()
+	--- @param force_clear_cache boolean|nil
+	local function refresh(force_clear_cache)
+		if force_clear_cache then
+			M.submodule_statuses = {}
+			M.fetching_submodules = {}
+		end
+
 		local cur_target = get_active_target()
 		local current = M.get_git_info(cur_target.full_path)
 		if not current or not M.is_open() then
 			return
 		end
 
-		M.submodule_statuses = {}
+		if cur_target and cur_target.path then
+			M.submodule_statuses[cur_target.path] = {
+				has_changes = current.has_changes or (#current.staged + #current.unstaged + #current.untracked > 0),
+				behind = current.behind or 0,
+				ahead = current.ahead or 0,
+			}
+		end
 
 		local l_width = (M.main_win and vim.api.nvim_win_is_valid(M.main_win)) and vim.api.nvim_win_get_width(M.main_win)
 			or left_width
@@ -2544,7 +2596,9 @@ function M.open_git_center()
 	end, key_opts)
 
 	for _, key in ipairs(M.settings.keys.refresh) do
-		vim.keymap.set("n", key, refresh, key_opts)
+		vim.keymap.set("n", key, function()
+			refresh(true)
+		end, key_opts)
 	end
 end
 
