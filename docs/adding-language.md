@@ -80,6 +80,32 @@ formatters_by_ft = {
 
 ---
 
+### Step 4.5: (Optional) Add a Linter
+
+There is **no `nvim-lint`** in this config. Diagnostics come from LSP servers only, so a linter is added exactly like Step 2 + Step 3 — as a server in [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua):
+
+```lua
+opts = {
+    servers = {
+        eslint = {},   -- JS/TS linting
+        biome = {},    -- JS/TS/JSON/CSS lint + format
+        ruff = {},     -- Python linting
+    },
+}
+
+require("mason-lspconfig").setup({
+    ensure_installed = { "eslint", "biome", "ruff" },
+})
+```
+
+Most linters ship a language server (`eslint`, `biome`, `ruff`, `golangci_lint_ls`, `phpstan` via `intelephense`, ...) — install it in `:Mason` and register it, nothing else needed. The linter picks up the project's own config file (`eslint.config.js`, `biome.json`, `ruff.toml`); no per-project setup here.
+
+> ⚠️ Two linters on the same filetype means duplicate diagnostics. `eslint` and `biome` are both registered here — that's fine only because each one no-ops when its config file is absent from the project. Don't add a third JS linter.
+
+If a linter has **no** language server (e.g. `shellcheck` alone, `markdownlint`), it can't be wired up through this config as-is; `mfussenegger/nvim-lint` would have to be added first.
+
+---
+
 ### Step 5: (Optional) Configure Treesitter Syntax Highlighting in `lua/plugins/lsp/treesitter.lua`
 Open [`lua/plugins/lsp/treesitter.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/treesitter.lua) and add the parser name to `ensure_installed`:
 
@@ -102,6 +128,7 @@ ensure_installed = {
 |---|---|---|
 | **LSP Server Activation** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add to `opts.servers` |
 | **Auto-Installation** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add to `mason-lspconfig` `ensure_installed` |
+| **Linting** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add linter's LSP to `opts.servers` (no `nvim-lint`) |
 | **Formatting** | [`lua/plugins/lsp/formatting.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/formatting.lua) | Add to `formatters_by_ft` |
 | **Syntax Highlighting** | [`lua/plugins/lsp/treesitter.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/treesitter.lua) | Add to `ensure_installed` |
 

@@ -24,6 +24,12 @@ return {
           cterm_color = "166",
           name = "KrsNvim",
         },
+        ["proto"] = {
+          icon = "",
+          color = "#4285f4",
+          cterm_color = "69",
+          name = "Proto",
+        },
       },
     },
     config = function(_, opts)
@@ -36,9 +42,16 @@ return {
           cterm_color = "166",
           name = "KrsNvim",
         },
+        proto = {
+          icon = "",
+          color = "#4285f4",
+          cterm_color = "69",
+          name = "Proto",
+        },
       })
       devicons.set_icon_by_filetype({
         krsnvim = "krsnvim",
+        proto = "proto",
       })
     end,
   },

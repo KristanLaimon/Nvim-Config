@@ -43,6 +43,7 @@ local parsers = {
 	"php",
 	"phpdoc",
 	"blade",
+	"proto",
 }
 
 return {
