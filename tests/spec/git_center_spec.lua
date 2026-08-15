@@ -144,5 +144,49 @@ describe("plugins.krs.git_center", function()
 
 		git_center.close_git_center()
 	end)
+
+	it("resizes the split and clamps within the [0.20, 0.80] bounds", function()
+		local project = require("krs.core.project")
+		local store = require("krs.core.store")
+		local root = require("krs.core.path").normalize(project.root() or vim.fn.getcwd())
+		local cfg_path = project.config_path(git_center.settings.config_filename, root)
+		store.save(cfg_path, { left_ratio = 0.50 })
+
+		git_center.open_git_center()
+		expect(git_center.current_left_ratio).toBe(0.50)
+
+		git_center.resize_split(0.03)
+		expect(git_center.current_left_ratio).toBe(0.53)
+
+		git_center.resize_split(10)
+		expect(git_center.current_left_ratio).toBe(0.80)
+
+		git_center.resize_split(-10)
+		expect(git_center.current_left_ratio).toBe(0.20)
+
+		git_center.close_git_center()
+		store.save(cfg_path, { left_ratio = 0.50 })
+	end)
+
+	it("persists the resized left ratio and restores it on next open", function()
+		local project = require("krs.core.project")
+		local store = require("krs.core.store")
+		local root = require("krs.core.path").normalize(project.root() or vim.fn.getcwd())
+		local cfg_path = project.config_path(git_center.settings.config_filename, root)
+		store.save(cfg_path, { left_ratio = 0.50 })
+
+		git_center.open_git_center()
+		git_center.resize_split(0.03)
+		git_center.close_git_center()
+
+		local saved = store.load(cfg_path, {})
+		expect(saved.left_ratio).toBe(0.53)
+
+		git_center.open_git_center()
+		expect(git_center.current_left_ratio).toBe(0.53)
+		git_center.close_git_center()
+
+		store.save(cfg_path, { left_ratio = 0.50 })
+	end)
 end)
 

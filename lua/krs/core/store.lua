@@ -62,6 +62,45 @@ function M.load(filepath, fallback)
 end
 
 -- ---------------------------------------------------------------------------
+-- Deterministic encoding
+-- ---------------------------------------------------------------------------
+-- `vim.json.encode` walks object tables with `pairs`, whose order depends on
+-- Lua's hash implementation -- the same table can serialize with its keys in
+-- a different order on every run, which shows up as spurious git diffs on
+-- config files that never actually changed. Object keys are sorted here;
+-- arrays keep their natural order since it is meaningful.
+
+--- Encodes `value` as JSON with object keys sorted for stable output.
+--- @param value any
+--- @return string
+local function encode_sorted(value)
+	if type(value) ~= "table" then
+		return vim.json.encode(value)
+	end
+	if next(value) == nil or vim.islist(value) then
+		local parts = {}
+		for i, item in ipairs(value) do
+			parts[i] = encode_sorted(item)
+		end
+		return "[" .. table.concat(parts, ",") .. "]"
+	end
+
+	local keys = {}
+	for key in pairs(value) do
+		table.insert(keys, key)
+	end
+	table.sort(keys, function(a, b)
+		return tostring(a) < tostring(b)
+	end)
+
+	local parts = {}
+	for _, key in ipairs(keys) do
+		table.insert(parts, vim.json.encode(tostring(key)) .. ":" .. encode_sorted(value[key]))
+	end
+	return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- ---------------------------------------------------------------------------
 -- Writing
 -- ---------------------------------------------------------------------------
 
@@ -92,7 +131,7 @@ function M.save(filepath, data)
 	if type(data) ~= "table" then
 		return false, "store.save expects a table, got " .. type(data)
 	end
-	local ok, encoded = pcall(vim.json.encode, data)
+	local ok, encoded = pcall(encode_sorted, data)
 	if not ok then
 		return false, tostring(encoded)
 	end

@@ -104,21 +104,35 @@ end
 -- API
 -- ---------------------------------------------------------------------------
 
---- Snapshot of the repository at `cwd`.
+--- Starts the three git calls a snapshot needs, without waiting for them.
+--- Pass the handle to `info_finish` once other work (e.g. another module's own
+--- git spawns) has also been started, so every process runs concurrently
+--- instead of one round trip waiting for the previous one to finish.
+---
 --- @param cwd string|nil Repository directory. Defaults to the working directory.
---- @return table|nil info nil when `cwd` is not a git repository.
-function M.info(cwd)
+--- @return table|nil handle nil when `cwd` is not a git repository.
+function M.info_start(cwd)
 	cwd = cwd or vim.fn.getcwd()
 	if not git.is_repository(cwd) then
 		return nil
 	end
 
-	-- Started together, collected below: three round trips become one wait.
-	local status_proc = git.spawn({ "status", "--porcelain=v1", "-b" }, cwd)
-	local numstat_proc = git.spawn({ "diff", "--numstat" }, cwd)
-	local numstat_cached_proc = git.spawn({ "diff", "--cached", "--numstat" }, cwd)
+	return {
+		status_proc = git.spawn({ "status", "--porcelain=v1", "-b" }, cwd),
+		numstat_proc = git.spawn({ "diff", "--numstat" }, cwd),
+		numstat_cached_proc = git.spawn({ "diff", "--cached", "--numstat" }, cwd),
+	}
+end
 
-	local status_lines = git.collect(status_proc)
+--- Waits for and parses the calls started by `info_start`.
+--- @param handle table|nil Result of `info_start`.
+--- @return table|nil info nil when `handle` is nil.
+function M.info_finish(handle)
+	if not handle then
+		return nil
+	end
+
+	local status_lines = git.collect(handle.status_proc)
 	local branch, upstream = M.detached_label, nil
 	local files = { staged = {}, unstaged = {}, untracked = {} }
 
@@ -127,7 +141,7 @@ function M.info(cwd)
 		files = M.parse_files(status_lines)
 	end
 
-	local added, deleted = M.sum_numstat(git.collect(numstat_proc), git.collect(numstat_cached_proc))
+	local added, deleted = M.sum_numstat(git.collect(handle.numstat_proc), git.collect(handle.numstat_cached_proc))
 
 	return {
 		branch = branch,
@@ -138,6 +152,14 @@ function M.info(cwd)
 		unstaged = files.unstaged,
 		untracked = files.untracked,
 	}
+end
+
+--- Snapshot of the repository at `cwd`. Blocking convenience wrapper around
+--- `info_start` + `info_finish` for callers with no other work to overlap.
+--- @param cwd string|nil Repository directory. Defaults to the working directory.
+--- @return table|nil info nil when `cwd` is not a git repository.
+function M.info(cwd)
+	return M.info_finish(M.info_start(cwd))
 end
 
 return M

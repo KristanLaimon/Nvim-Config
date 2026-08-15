@@ -75,4 +75,30 @@ describe("krs.core.store", function()
 
 		expect(store.read_file(file)).toBe("hello\nworld")
 	end)
+
+	it("serializes object keys in sorted order regardless of insertion order", function()
+		local file = tmp_dir .. "/order.json"
+
+		local first = {}
+		first.font_size = 14
+		first.font_name = "JetBrainsMono"
+		store.save(file, first)
+		local encoded_a = store.read_file(file)
+
+		local second = {}
+		second.font_name = "JetBrainsMono"
+		second.font_size = 14
+		store.save(file, second)
+		local encoded_b = store.read_file(file)
+
+		expect(encoded_a).toBe(encoded_b)
+		expect(encoded_a).toBe('{"font_name":"JetBrainsMono","font_size":14}')
+	end)
+
+	it("keeps array element order stable while sorting nested object keys", function()
+		local file = tmp_dir .. "/nested.json"
+		store.save(file, { list = { 3, 1, 2 }, z = 1, a = 2 })
+
+		expect(store.read_file(file)).toBe('{"a":2,"list":[3,1,2],"z":1}')
+	end)
 end)

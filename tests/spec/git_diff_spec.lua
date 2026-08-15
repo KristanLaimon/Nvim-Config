@@ -96,8 +96,83 @@ describe("git diff highlighting", function()
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 		diff.apply_highlights(buf, kinds)
 
+		-- header gets one mark; add/delete get two (line background + prefix glyph);
+		-- context gets none since it relies on the buffer's own syntax colours.
+		local expected_marks = 0
+		for _, kind in ipairs(kinds) do
+			if kind == "header" then
+				expected_marks = expected_marks + 1
+			elseif kind == "add" or kind == "delete" then
+				expected_marks = expected_marks + 2
+			end
+		end
+
 		local marks = vim.api.nvim_buf_get_extmarks(buf, diff.namespace, 0, -1, {})
-		expect(#marks).toBe(#kinds)
+		expect(#marks).toBe(expected_marks)
+
+		vim.api.nvim_buf_delete(buf, { force = true })
+	end)
+end)
+
+describe("git diff language resolution", function()
+	it("maps a filename to its tree-sitter language", function()
+		expect(diff.get_file_language("init.lua")).toBe("lua")
+		expect(diff.get_file_language("main.py")).toBe("python")
+	end)
+
+	it("returns nil for unknown or missing filenames", function()
+		expect(diff.get_file_language(nil)).toBeNil()
+		expect(diff.get_file_language("")).toBeNil()
+		expect(diff.get_file_language("noext_weirdname_xyz")).toBeNil()
+	end)
+end)
+
+describe("git diff tree-sitter highlighting", function()
+	it("applies @-prefixed captures on top of diff highlights for a known language", function()
+		diff.setup_highlights()
+
+		local buf = vim.api.nvim_create_buf(false, true)
+		local lines, kinds = diff.format({
+			"@@ -1,1 +1,2 @@",
+			"+local x = 1",
+		}, false)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+		diff.apply_highlights(buf, kinds, "init.lua")
+
+		local marks = vim.api.nvim_buf_get_extmarks(buf, diff.ts_namespace, 0, -1, {})
+		expect(#marks > 0).toBeTruthy()
+
+		vim.api.nvim_buf_delete(buf, { force = true })
+	end)
+
+	it("skips tree-sitter highlighting when the filename has no known language", function()
+		diff.setup_highlights()
+
+		local buf = vim.api.nvim_create_buf(false, true)
+		local lines, kinds = diff.format(SAMPLE, false)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+		diff.apply_highlights(buf, kinds, "noext_weirdname_xyz")
+
+		local marks = vim.api.nvim_buf_get_extmarks(buf, diff.ts_namespace, 0, -1, {})
+		expect(#marks).toBe(0)
+
+		vim.api.nvim_buf_delete(buf, { force = true })
+	end)
+
+	it("clears previous tree-sitter marks before applying new ones", function()
+		diff.setup_highlights()
+
+		local buf = vim.api.nvim_create_buf(false, true)
+		local lines, kinds = diff.format({
+			"@@ -1,1 +1,2 @@",
+			"+local x = 1",
+		}, false)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+		diff.apply_highlights(buf, kinds, "init.lua")
+		diff.apply_highlights(buf, kinds, nil)
+
+		local marks = vim.api.nvim_buf_get_extmarks(buf, diff.ts_namespace, 0, -1, {})
+		expect(#marks).toBe(0)
 
 		vim.api.nvim_buf_delete(buf, { force = true })
 	end)

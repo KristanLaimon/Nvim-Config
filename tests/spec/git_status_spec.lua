@@ -103,3 +103,42 @@ describe("git status sum_numstat", function()
 		expect(deleted).toBe(0)
 	end)
 end)
+
+describe("git status info_start / info_finish", function()
+	it("starts three processes without blocking, then produces the same shape as info()", function()
+		local cwd = vim.fn.getcwd()
+
+		local handle = status.info_start(cwd)
+		expect(type(handle)).toBe("table")
+		expect(handle.status_proc).toBeDefined()
+		expect(handle.numstat_proc).toBeDefined()
+		expect(handle.numstat_cached_proc).toBeDefined()
+
+		local info = status.info_finish(handle)
+		expect(type(info)).toBe("table")
+		expect(type(info.branch)).toBe("string")
+		expect(type(info.staged)).toBe("table")
+		expect(type(info.unstaged)).toBe("table")
+		expect(type(info.untracked)).toBe("table")
+	end)
+
+	it("returns nil from both halves for a non-repository directory", function()
+		local tmp_dir = vim.fn.tempname()
+		vim.fn.mkdir(tmp_dir, "p")
+
+		expect(status.info_start(tmp_dir)).toBeNil()
+		expect(status.info_finish(nil)).toBeNil()
+
+		vim.fn.delete(tmp_dir, "rf")
+	end)
+
+	it("info() is equivalent to info_start() + info_finish()", function()
+		local cwd = vim.fn.getcwd()
+		local via_wrapper = status.info(cwd)
+		local via_split = status.info_finish(status.info_start(cwd))
+
+		expect(via_wrapper.branch).toBe(via_split.branch)
+		expect(#via_wrapper.staged).toBe(#via_split.staged)
+		expect(#via_wrapper.unstaged).toBe(#via_split.unstaged)
+	end)
+end)

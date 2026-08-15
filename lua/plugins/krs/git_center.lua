@@ -81,6 +81,9 @@ M.settings = {
 		--- Switch submodule tabs (left / right).
 		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
 		tab_next = { "<A-l>", "<A-L>", "<M-l>", "<M-L>", "<A-Right>", "<M-Right>" },
+		--- Resize the split between left control panel and right preview pane.
+		resize_left = { "<", ",", "<M-,>", "<A-,>", "<C-w><", "<C-Left>" },
+		resize_right = { ">", ".", "<M-.>", "<A-.>", "<C-w>>", "<C-Right>" },
 		--- Close the panel.
 		close = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>", "q", "<Esc>" },
 		--- Scroll the preview pane.
@@ -110,6 +113,9 @@ M.active_submodule_idx = 1
 --- Project root directory.
 M.root_dir = nil
 
+--- Current left ratio (persisted per project and globally).
+M.current_left_ratio = nil
+
 --- Formatted diffs, keyed "<type>:<file>". Cleared on every refresh.
 M.diff_cache = {}
 
@@ -131,6 +137,8 @@ end
 -- PERSISTENCE & SUBMODULE TARGET RESOLUTION
 -- ============================================================================
 
+local GLOBAL_CONFIG_FILE = vim.fn.stdpath("data") .. "/krs_git_center.json"
+
 --- Resolves the active target table: `{ name, path, is_root, full_path }`.
 --- @return table
 local function get_active_target()
@@ -141,25 +149,74 @@ local function get_active_target()
 	return M.submodules[M.active_submodule_idx] or M.submodules[1]
 end
 
---- Loads the last active submodule tab identifier from `.krsnvim/git-center.json`.
+--- Loads settings from project `.krsnvim/git-center.json` with fallback to global store.
+--- @param root string|nil Project root directory.
+--- @return table
+local function load_git_center_config(root)
+	local project_cfg = root and project.config_path(M.settings.config_filename, root)
+	local data = project_cfg and store.load(project_cfg, nil)
+	if data and type(data) == "table" and next(data) ~= nil then
+		return data
+	end
+	return store.load(GLOBAL_CONFIG_FILE, {})
+end
+
+--- Saves settings to both project `.krsnvim/git-center.json` and global store.
+--- @param root string|nil Project root directory.
+--- @param updates table
+local function save_git_center_config(root, updates)
+	if root then
+		local project_cfg = project.config_path(M.settings.config_filename, root)
+		local data = store.load(project_cfg, {})
+		for k, v in pairs(updates) do
+			data[k] = v
+		end
+		store.save(project_cfg, data)
+	end
+
+	local global_data = store.load(GLOBAL_CONFIG_FILE, {})
+	for k, v in pairs(updates) do
+		global_data[k] = v
+	end
+	store.save(GLOBAL_CONFIG_FILE, global_data)
+end
+
+--- Loads the last active submodule tab identifier.
 --- @param root string Project root directory.
 --- @return string|nil saved_path Submodule relative path (e.g. "." or "plugins/foo").
 local function load_saved_active_tab(root)
-	local cfg_path = project.config_path(M.settings.config_filename, root)
-	local data = store.load(cfg_path, {})
+	local data = load_git_center_config(root)
 	return data.current_tab or data.active_tab
 end
 
---- Saves the active submodule tab identifier to `.krsnvim/git-center.json`.
+--- Saves the active submodule tab identifier.
 --- @param root string Project root directory.
 --- @param target_path string Submodule relative path.
 local function save_active_tab(root, target_path)
-	local cfg_path = project.config_path(M.settings.config_filename, root)
-	store.save(cfg_path, { current_tab = target_path, active_tab = target_path })
+	save_git_center_config(root, { current_tab = target_path, active_tab = target_path })
+end
+
+--- Loads the saved left panel width ratio.
+--- @param root string|nil Project root directory.
+--- @return number ratio Left panel fraction (e.g. 0.50).
+local function load_saved_left_ratio(root)
+	local data = load_git_center_config(root)
+	local ratio = tonumber(data.left_ratio)
+	if ratio and ratio >= 0.15 and ratio <= 0.85 then
+		return ratio
+	end
+	return M.settings.left_ratio
+end
+
+--- Saves the left panel width ratio permanently.
+--- @param root string|nil Project root directory.
+--- @param ratio number Left panel fraction.
+local function save_left_ratio(root, ratio)
+	save_git_center_config(root, { left_ratio = ratio })
 end
 
 -- ============================================================================
--- WINDOW LIFECYCLE
+-- WINDOW LIFECYCLE & RESIZING
 -- ============================================================================
 
 --- True when the Git Center is on screen.
@@ -170,6 +227,52 @@ function M.is_open()
 		or (M.diff_modal_win ~= nil and vim.api.nvim_win_is_valid(M.diff_modal_win))
 end
 
+--- Resizes the horizontal split between the left panel and preview pane.
+--- Persists the preference immediately so it is remembered across sessions.
+--- @param delta number Fraction to adjust left ratio (e.g. -0.03 or 0.03).
+function M.resize_split(delta)
+	if not M.is_open() or not (M.main_win and vim.api.nvim_win_is_valid(M.main_win)) then
+		return
+	end
+
+	local cur_ratio = M.current_left_ratio or M.settings.left_ratio
+	local new_ratio = math.max(0.20, math.min(0.80, cur_ratio + delta))
+	M.current_left_ratio = tonumber(string.format("%.3f", new_ratio))
+
+	if M.root_dir then
+		save_left_ratio(M.root_dir, M.current_left_ratio)
+	end
+
+	local tot_width = math.floor(vim.o.columns * M.settings.width_ratio)
+	local tot_height = math.floor(vim.o.lines * M.settings.height_ratio)
+	local l_width = math.floor(tot_width * M.current_left_ratio)
+	local r_width = tot_width - l_width - 2
+	local s_row = math.floor((vim.o.lines - tot_height) / 2)
+	local s_col = math.floor((vim.o.columns - tot_width) / 2)
+
+	pcall(vim.api.nvim_win_set_config, M.main_win, {
+		relative = "editor",
+		width = l_width,
+		height = tot_height,
+		row = s_row,
+		col = s_col,
+	})
+
+	if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
+		pcall(vim.api.nvim_win_set_config, M.preview_win, {
+			relative = "editor",
+			width = r_width,
+			height = tot_height,
+			row = s_row,
+			col = s_col + l_width + 2,
+		})
+	end
+
+	if M.refresh then
+		M.refresh()
+	end
+end
+
 local is_closing = false
 
 --- Closes every window this module owns and forgets their handles.
@@ -178,6 +281,7 @@ function M.close_git_center()
 		return
 	end
 	is_closing = true
+	M.refresh = nil
 	local diff_win, prev_win, main_win = M.diff_modal_win, M.preview_win, M.main_win
 	M.main_win, M.main_buf = nil, nil
 	M.preview_win, M.preview_buf = nil, nil
@@ -379,6 +483,7 @@ local function build_panel_content(info, width)
 	section_lines[4] = add(" ⚡ [SECTION 4: QUICK ACTIONS & SHORTCUTS] (Press 4)")
 	for _, help in ipairs({
 		"   [Alt+h / Alt+l] Switch Submodule Tab",
+		"   [< / >] Resize Split Width (Persistent)",
 		"   [s] Stage file  |  [S] Stage All",
 		"   [u] Unstage file  |  [U] Unstage All",
 		"   [r] Restore File (Confirm)  |  [R] Restore Section (Confirm)",
@@ -465,7 +570,7 @@ function M.open_diff_modal(target_file, _target_type, target_cwd)
 		})
 
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-		diff.apply_highlights(buf, kinds)
+		diff.apply_highlights(buf, kinds, item.file)
 		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
 	end
 
@@ -543,7 +648,16 @@ function M.open_git_center()
 	end
 
 	M.root_dir = root
-	M.submodules = submodules.list(root)
+
+	-- Root is the active tab far more often than not, so its status is
+	-- fetched right away, before the (usually cached, occasionally spawned)
+	-- submodule list is resolved. `git.spawn`-based calls do not block until
+	-- `:wait()`, so starting this first means it runs alongside the
+	-- submodule discovery below instead of after it.
+	local root_status_handle = status.info_start(root)
+
+	local submodules_targets, finish_submodules = submodules.list_start(root)
+	M.submodules = submodules_targets or finish_submodules()
 
 	local saved_tab_path = load_saved_active_tab(root)
 	M.active_submodule_idx = 1
@@ -557,7 +671,8 @@ function M.open_git_center()
 	end
 
 	local active_target = get_active_target()
-	local info = M.get_git_info(active_target.full_path)
+	local info = (active_target.full_path == root) and status.info_finish(root_status_handle)
+		or M.get_git_info(active_target.full_path)
 	if not info then
 		notify("Cannot read Git status for " .. active_target.name, vim.log.levels.WARN, "Git Center (KRS)")
 		return
@@ -569,9 +684,10 @@ function M.open_git_center()
 	-- ------------------------------------------------------------------
 	-- Windows
 	-- ------------------------------------------------------------------
+	M.current_left_ratio = load_saved_left_ratio(root)
 	local total_width = math.floor(vim.o.columns * M.settings.width_ratio)
 	local total_height = math.floor(vim.o.lines * M.settings.height_ratio)
-	local left_width = math.floor(total_width * M.settings.left_ratio)
+	local left_width = math.floor(total_width * M.current_left_ratio)
 	local right_width = total_width - left_width - 2
 	local start_row = math.floor((vim.o.lines - total_height) / 2)
 	local start_col = math.floor((vim.o.columns - total_width) / 2)
@@ -590,7 +706,7 @@ function M.open_git_center()
 		col = start_col,
 		style = "minimal",
 		border = "rounded",
-		title = " 🐙 Git Center (Alt+h/l Tabs | Ctrl+Shift+J/K Preview | Tab Focus | Esc Close) ",
+		title = " 🐙 Git Center (Alt+h/l Tabs | </> Resize | Ctrl+Shift+J/K Preview | Tab Focus | Esc Close) ",
 		title_pos = "center",
 	})
 
@@ -670,6 +786,7 @@ function M.open_git_center()
 					})
 					vim.bo[preview_buf].modifiable = false
 					vim.api.nvim_buf_clear_namespace(preview_buf, diff.namespace, 0, -1)
+					vim.api.nvim_buf_clear_namespace(preview_buf, diff.ts_namespace, 0, -1)
 					return
 				end
 
@@ -678,13 +795,13 @@ function M.open_git_center()
 				if not M.diff_cache[cache_key] then
 					local raw_lines, is_untracked = raw_diff_for(item.file, item.type, cur_target.full_path)
 					local formatted, kinds = diff.format(raw_lines, is_untracked)
-					M.diff_cache[cache_key] = { lines = formatted, kinds = kinds }
+					M.diff_cache[cache_key] = { lines = formatted, kinds = kinds, file = item.file }
 				end
 
 				local cached = M.diff_cache[cache_key]
 				vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, cached.lines)
 				vim.bo[preview_buf].modifiable = false
-				diff.apply_highlights(preview_buf, cached.kinds)
+				diff.apply_highlights(preview_buf, cached.kinds, cached.file or item.file)
 			end)
 		)
 	end
@@ -708,7 +825,10 @@ function M.open_git_center()
 			return
 		end
 
-		local new_lines, new_line_map, new_sections = build_panel_content(current, left_width)
+		local l_width = (M.main_win and vim.api.nvim_win_is_valid(M.main_win))
+				and vim.api.nvim_win_get_width(M.main_win)
+			or left_width
+		local new_lines, new_line_map, new_sections = build_panel_content(current, l_width)
 		M.line_map = new_line_map
 		section_lines = new_sections
 
@@ -721,6 +841,7 @@ function M.open_git_center()
 		M.diff_cache = {}
 		update_preview()
 	end
+	M.refresh = refresh
 
 	--- Switch active submodule tab by delta (-1 for left, 1 for right).
 	--- @param delta integer -1 or 1
@@ -830,6 +951,24 @@ function M.open_git_center()
 		end, key_opts)
 		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
 			switch_tab(1)
+		end, preview_opts)
+	end
+
+	-- Split resizing keymaps (< / >)
+	for _, key in ipairs(M.settings.keys.resize_left) do
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			M.resize_split(-0.03)
+		end, key_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			M.resize_split(-0.03)
+		end, preview_opts)
+	end
+	for _, key in ipairs(M.settings.keys.resize_right) do
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			M.resize_split(0.03)
+		end, key_opts)
+		vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+			M.resize_split(0.03)
 		end, preview_opts)
 	end
 
