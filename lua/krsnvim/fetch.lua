@@ -670,4 +670,6 @@ function M.head(url, opts)
 	return M.fetch(url, opts)
 end
 
+_G.fetch = M
+
 return M

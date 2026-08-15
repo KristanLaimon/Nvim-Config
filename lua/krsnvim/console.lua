@@ -208,4 +208,6 @@ setmetatable(M, {
 	end,
 })
 
+_G.console = M
+
 return M

@@ -4,10 +4,9 @@ function M.run()
 	local krsnvim = require("krsnvim")
 	local import = krsnvim.import
 	local console = import("console")
-	local debug = import("debug")
 
 	assert(console ~= nil, "import('console') failed")
-	assert(debug ~= nil, "import('debug') failed")
+	assert(_G.console ~= nil, "global _G.console failed")
 
 	-- Test stringify
 	local obj = { name = "krsnvim", count = 5, active = true }
@@ -39,10 +38,7 @@ function M.run()
 	local error_out = console.error("Err msg")
 	assert(error_out:find("ERROR"), "console.error failed")
 
-	local debug_out = debug.log("Debug msg")
-	assert(debug_out:find("Debug msg"), "debug.log failed")
-
-	print("  ✓ krsnvim.console & krsnvim.debug spec passed")
+	print("  ✓ krsnvim.console spec passed")
 end
 
 return M

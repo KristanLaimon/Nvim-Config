@@ -150,8 +150,8 @@ local post_res = fetch.post("https://httpbin.org/post", {
 - `res:text()` -> `string`: Returns raw body text
 - `res:json()` -> `table|nil, err`: Safely parses body as JSON table
 
-### 5. `krsnvim.console` & `krsnvim.debug` — Formatted Logging
-Formatted console output, structured object inspection, and cycle-safe JSON pretty-printing.
+### 5. `krsnvim.console` — Formatted Logging
+Formatted console output, structured object inspection, and cycle-safe JSON pretty-printing. Available globally as `console`.
 
 ```lua
 local console = require("krsnvim.console")
@@ -169,8 +169,6 @@ local json_str = console.json(tbl, "  ") -- Serializes object to pretty JSON str
 -- Direct callable alias
 console("Quick log message")           -- Equivalent to console.log(...)
 ```
-
-`require("krsnvim.debug")` is a direct alias for `krsnvim.console`.
 
 ### 6. `krsnvim.cli` — Argument Parsing & Interactive Menus
 Command-line argument parser, help text generator, and interactive selection UI helper.

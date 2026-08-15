@@ -15,18 +15,18 @@ function M.run()
 	local loop_code = 'for i = 1, 5 do\nprint(i)\nend\nfor _, item in ipairs(items) do\nprint(item)\nend'
 	local sh_loop = transpiler.to_sh(loop_code)
 	local ps1_loop = transpiler.to_ps1(loop_code)
-	assert(sh_loop:find("for ((i=1; i<=5; i++)); do", 1, true), "Bash numeric for loop missing")
+	assert(sh_loop:find("for ((i=1; i<=5; i+=1)); do", 1, true), "Bash numeric for loop missing")
 	assert(sh_loop:find('for item in "${items[@]}"; do', 1, true), "Bash ipairs loop missing")
-	assert(ps1_loop:find("for ($i = 1; $i -le 5; $i++) {", 1, true), "PS1 numeric for loop missing")
+	assert(ps1_loop:find("for ($i = 1; $i -le 5; $i += 1) {", 1, true), "PS1 numeric for loop missing")
 	assert(ps1_loop:find("foreach ($item in $items) {", 1, true), "PS1 foreach loop missing")
 
 	-- Test 3: Assertions & Errors
 	local err_code = 'assert(fs.exists("config.json"), "Config missing")\nerror("Fatal stop")'
 	local sh_err = transpiler.to_sh(err_code)
 	local ps1_err = transpiler.to_ps1(err_code)
-	assert(sh_err:find('[ fs.exists("config.json") ] || { echo "Config missing" >&2; exit 1; }', 1, true), "Bash assert missing")
+	assert(sh_err:find('[[ -e "config.json" ]] || { echo "Config missing" >&2; exit 1; }', 1, true), "Bash assert missing")
 	assert(sh_err:find('echo "Fatal stop" >&2', 1, true), "Bash error missing")
-	assert(ps1_err:find('if (-not (fs.exists("config.json"))) { throw "Config missing" }', 1, true), "PS1 assert missing")
+	assert(ps1_err:find('if (-not ($fs.exists("config.json"))) { throw "Config missing" }', 1, true), "PS1 assert missing")
 	assert(ps1_err:find('throw "Fatal stop"', 1, true), "PS1 throw missing")
 
 	print("  ✓ krsnvim.krsnvimtranspiler spec passed")

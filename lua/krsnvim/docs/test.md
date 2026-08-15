@@ -1,16 +1,21 @@
 # 🧪 krsnvim.test (Vitest / Bun:test inspired Testing Library)
 
-`krsnvim.test` es una librería de pruebas unitarias inspirada en **Vitest** y **bun:test** para scripts en Lua. Requiere importación explícita (sin contaminar el ámbito global `_G`).
+`krsnvim.test` es una librería de pruebas unitarias inspirada en **Vitest** y **bun:test** para scripts en Lua. Proporciona `describe`, `test`/`it` y `expect` de forma global en `_G` y como módulo exportado (`krsnvim.test`).
 
 ---
 
 ## ⚡ Formas de Uso
 
 ```lua
-local t = import("test")
--- O alternativamente:
--- local t = require("krsnvim.test")
+-- `describe`, `test`, `it` y `expect` están disponibles globalmente tras cargar krsnvim:
+describe("Math Operations", function()
+    it("works", function()
+        expect(1 + 1).toBe(2)
+    end)
+end)
 
+-- O importándolos explícitamente:
+local t = import("test")
 local describe, it, expect = t.describe, t.it, t.expect
 ```
 

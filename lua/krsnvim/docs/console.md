@@ -1,4 +1,4 @@
-# 🖨️ `krsnvim.console` & `krsnvim.debug`
+# 🖨️ `krsnvim.console`
 
 Human-readable Console Logging, Object Inspection, and Pretty-JSON Debugging library for `krsnvimscript`.
 
@@ -9,10 +9,7 @@ Human-readable Console Logging, Object Inspection, and Pretty-JSON Debugging lib
 ```lua
 require("krsnvim")
 
--- 1. Import module or use global console / krsnvim.console / krsnvim.debug
-local console = import("console")
-
--- 2. Log strings & complex table objects
+-- 1. Use global console or import("console")
 console.log("User Data:", { name = "Kristan", role = "Developer", tags = { "lua", "nvim" } })
 
 -- 3. Directly call console(...) or console.dir(...)

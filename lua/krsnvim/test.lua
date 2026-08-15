@@ -424,4 +424,9 @@ function M.run()
 	return { passed = total_passed, failed = total_failed, duration = total_time }
 end
 
+_G.describe = M.describe
+_G.test = M.test
+_G.expect = M.expect
+_G.it = M.it
+
 return M

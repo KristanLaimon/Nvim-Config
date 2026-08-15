@@ -4,6 +4,12 @@ function M.run()
 	local t = require("krsnvim.test")
 	local describe, it, expect = t.describe, t.it, t.expect
 
+	assert(type(_G.console) == "table" or type(_G.console) == "function", "global console should be available")
+	assert(type(_G.fetch) == "table" or type(_G.fetch) == "function", "global fetch should be available")
+	assert(type(_G.describe) == "function", "global describe should be available")
+	assert(type(_G.test) == "function", "global test should be available")
+	assert(type(_G.expect) == "function", "global expect should be available")
+
 	describe("Vitest-like Testing Framework (krsnvim.test)", function()
 		it("supports toBe and isNot.toBe", function()
 			expect(5).toBe(5)
