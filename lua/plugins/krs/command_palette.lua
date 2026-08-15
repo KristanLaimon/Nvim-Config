@@ -93,6 +93,7 @@ M.commands = {
 	{ name = "🎮 Discord: Reconnect", cmd = "Cord reconnect", category = "Discord" },
 	{ name = "🎮 Discord: Shutdown", cmd = "Cord shutdown", category = "Discord" },
 	{ name = "🎮 Discord: Status", cmd = "Cord status", category = "Discord" },
+	{ name = "🎮 Discord: Hot-reload Plugin", cmd = "CordReload", category = "Discord" },
 
 	-- --------------------------------------------------------------------------
 	-- 🎨 Tailwind Classes Organizer
