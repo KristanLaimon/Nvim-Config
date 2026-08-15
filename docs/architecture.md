@@ -274,7 +274,7 @@ through `krs.core.store`, whose reads never throw: a corrupt file degrades to a
 default instead of breaking startup.
 
 Global state (caches, not settings) lives under `stdpath("data")`:
-`project_favorites.json`, `wsl_recent_projects.json`, `workspaces/index.json`,
+`project_favorites.json`, `wsl_recent_projects.json`, `command_palette_history.json`, `workspaces/index.json`,
 `krs-specs/` (the empty marker directories), `krs-bun-dap/`.
 
 ---

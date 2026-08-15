@@ -16,6 +16,8 @@
 --   require("plugins.krs.command_palette").add_command({ name = ..., cmd = ... })
 -- ============================================================================
 
+local store = require("krs.core.store")
+
 local M = {}
 
 -- ============================================================================
@@ -27,6 +29,11 @@ M.settings = {
 	picker_width = 0.75,
 	prompt_title = " 🚀🦊 Command Palette (Ctrl+Shift+P) ",
 	results_title = "Available Commands",
+
+	--- Path to global history store for MRU ordering.
+	history_file = vim.fn.stdpath("data") .. "/command_palette_history.json",
+	--- Maximum number of entries remembered in global history.
+	max_history = 100,
 
 	keys = {
 		--- Open the palette. Bound in normal, insert, visual and terminal mode.
@@ -118,7 +125,7 @@ M.commands = {
 }
 
 -- ============================================================================
--- API
+-- API & HISTORY
 -- ============================================================================
 
 --- Appends an entry at runtime, so other modules can contribute commands.
@@ -129,11 +136,103 @@ function M.add_command(item)
 	end
 end
 
+--- Loads the recent command execution history.
+--- @return string[] Array of command names in MRU order (most recent first).
+function M.load_history()
+	local path = M.settings.history_file
+	if not path or path == "" then
+		return {}
+	end
+	local data = store.load(path, { history = {} })
+	if type(data) == "table" and type(data.history) == "table" then
+		return data.history
+	end
+	return {}
+end
+
+--- Saves the command execution history to persistent storage.
+--- @param history string[] Array of command names.
+--- @return boolean ok
+--- @return string|nil err
+function M.save_history(history)
+	local path = M.settings.history_file
+	if not path or path == "" then
+		return false, "No history_file configured"
+	end
+	return store.save(path, { history = history })
+end
+
+--- Records a command execution, moving it to the top of MRU history.
+--- @param name string Command name identifier.
+function M.record_command_use(name)
+	if not name or name == "" then
+		return
+	end
+
+	local history = M.load_history()
+	local new_history = { name }
+	local max_len = M.settings.max_history or 100
+
+	for _, item_name in ipairs(history) do
+		if item_name ~= name and #new_history < max_len then
+			table.insert(new_history, item_name)
+		end
+	end
+
+	M.save_history(new_history)
+end
+
+--- Clears the stored command execution history.
+function M.clear_history()
+	M.save_history({})
+end
+
+--- Returns `M.commands` sorted by MRU history recency (most recent first),
+--- with unvisited commands retaining their original relative declaration order.
+--- @return table[] Array of palette command entries.
+function M.get_sorted_commands()
+	local history = M.load_history()
+	local rank_map = {}
+	for idx, name in ipairs(history) do
+		if not rank_map[name] then
+			rank_map[name] = idx
+		end
+	end
+
+	local items = {}
+	for idx, cmd in ipairs(M.commands) do
+		local rank = (cmd.name and rank_map[cmd.name]) or (100000 + idx)
+		table.insert(items, {
+			cmd = cmd,
+			orig_idx = idx,
+			rank = rank,
+		})
+	end
+
+	table.sort(items, function(a, b)
+		if a.rank ~= b.rank then
+			return a.rank < b.rank
+		end
+		return a.orig_idx < b.orig_idx
+	end)
+
+	local sorted = {}
+	for _, item in ipairs(items) do
+		table.insert(sorted, item.cmd)
+	end
+	return sorted
+end
+
 --- Runs the action of an entry: Ex command, simulated keys, or Lua function.
+--- Also records its usage in history so recent commands move to top.
 --- @param item table|nil Palette entry.
-local function execute_item(item)
+function M.execute_item(item)
 	if not item then
 		return
+	end
+
+	if item.name then
+		M.record_command_use(item.name)
 	end
 
 	if item.cmd then
@@ -148,6 +247,8 @@ local function execute_item(item)
 		item.fn()
 	end
 end
+
+local execute_item = M.execute_item
 
 --- Opens the palette picker.
 function M.open_palette()
@@ -176,7 +277,7 @@ function M.open_palette()
 			}),
 			{
 				finder = finders.new_table({
-					results = M.commands,
+					results = M.get_sorted_commands(),
 					entry_maker = function(entry)
 						local category = entry.category or "General"
 						local shortcut = entry.keys or entry.cmd or ""
@@ -198,7 +299,7 @@ function M.open_palette()
 						actions.close(prompt_bufnr)
 						if selection and selection.value then
 							vim.schedule(function()
-								execute_item(selection.value)
+								M.execute_item(selection.value)
 							end)
 						end
 					end)

@@ -108,3 +108,17 @@ vim.keymap.set({ "n", "i", "v", "t" }, "<C-S-p>", function()
     M.open_palette()
 end, { noremap = true, silent = true, desc = "Open Command Palette" })
 ```
+
+---
+
+## 📜 MRU History & Persistent Sorting
+
+Command executions are automatically saved to global persistent storage using `krs.core.store`.
+
+- **Storage Location:** `stdpath("data") .. "/command_palette_history.json"`
+- **Behavior:**
+  - Whenever a command is executed from the Command Palette, it moves to the top of the history list.
+  - When opening the Command Palette, results are automatically sorted with the most recently used (MRU) commands at the top.
+  - Unvisited commands retain their original relative declaration order below recent commands.
+  - History is stored globally across Neovim sessions.
+

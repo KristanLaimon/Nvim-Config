@@ -112,6 +112,7 @@ M.settings = {
 
 M.main_win, M.main_buf = nil, nil
 M.preview_win, M.preview_buf = nil, nil
+M.tab_win, M.tab_buf = nil, nil
 M.diff_modal_win, M.diff_modal_buf = nil, nil
 
 --- Discovered repository list: [1] = root repository, [2..n] = submodules.
@@ -234,6 +235,7 @@ end
 function M.is_open()
 	return (M.main_win ~= nil and vim.api.nvim_win_is_valid(M.main_win))
 		or (M.preview_win ~= nil and vim.api.nvim_win_is_valid(M.preview_win))
+		or (M.tab_win ~= nil and vim.api.nvim_win_is_valid(M.tab_win))
 		or (M.diff_modal_win ~= nil and vim.api.nvim_win_is_valid(M.diff_modal_win))
 end
 
@@ -257,7 +259,7 @@ function M.resize_split(delta)
 	local tot_height = math.floor(vim.o.lines * M.settings.height_ratio)
 	local l_width = math.floor(tot_width * M.current_left_ratio)
 	local r_width = tot_width - l_width - 2
-	local s_row = math.floor((vim.o.lines - tot_height) / 2)
+	local s_row = math.max(2, math.floor((vim.o.lines - tot_height) / 2))
 	local s_col = math.floor((vim.o.columns - tot_width) / 2)
 
 	pcall(vim.api.nvim_win_set_config, M.main_win, {
@@ -267,6 +269,16 @@ function M.resize_split(delta)
 		row = s_row,
 		col = s_col,
 	})
+
+	if M.tab_win and vim.api.nvim_win_is_valid(M.tab_win) then
+		pcall(vim.api.nvim_win_set_config, M.tab_win, {
+			relative = "editor",
+			width = l_width,
+			height = 1,
+			row = s_row - 2,
+			col = s_col,
+		})
+	end
 
 	if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
 		pcall(vim.api.nvim_win_set_config, M.preview_win, {
@@ -292,13 +304,15 @@ function M.close_git_center()
 	end
 	is_closing = true
 	M.refresh = nil
-	local diff_win, prev_win, main_win = M.diff_modal_win, M.preview_win, M.main_win
+	local diff_win, prev_win, tab_win, main_win = M.diff_modal_win, M.preview_win, M.tab_win, M.main_win
 	M.main_win, M.main_buf = nil, nil
 	M.preview_win, M.preview_buf = nil, nil
+	M.tab_win, M.tab_buf = nil, nil
 	M.diff_modal_win, M.diff_modal_buf = nil, nil
 
 	ui.close(diff_win)
 	ui.close(prev_win)
+	ui.close(tab_win)
 	ui.close(main_win)
 	is_closing = false
 end
@@ -409,6 +423,147 @@ end
 
 --- Renders the control panel.
 ---
+local ns_tabs = vim.api.nvim_create_namespace("KRSGitCenterTabs")
+
+--- Sets up highlight groups for the submodule tab bar attached to Git Center.
+local function setup_tab_highlights()
+	local function get_hl(name)
+		local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+		if ok and hl and next(hl) then
+			return hl
+		end
+		return nil
+	end
+
+	local sel_hl = get_hl("BufferLineBufferSelected") or get_hl("TabLineSel") or get_hl("Title") or { fg = 16777215, bg = 3883602, bold = true }
+	local bg_hl = get_hl("BufferLineBackground") or get_hl("TabLine") or get_hl("Comment") or { fg = 10066329, bg = 1973790 }
+	local fill_hl = get_hl("BufferLineFill") or get_hl("TabLineFill") or get_hl("NormalFloat") or { bg = 1579032 }
+	local sep_hl = get_hl("BufferLineSeparator") or get_hl("FloatBorder") or { fg = 5592405 }
+
+	local active_bg = sel_hl.bg and string.format("#%06x", sel_hl.bg) or "#383c4a"
+	local active_fg = sel_hl.fg and string.format("#%06x", sel_hl.fg) or "#ffffff"
+	local fill_bg = fill_hl.bg and string.format("#%06x", fill_hl.bg) or "#181818"
+	local fill_fg = fill_hl.fg and string.format("#%06x", fill_hl.fg) or "#888888"
+	local inactive_bg = bg_hl.bg and string.format("#%06x", bg_hl.bg) or fill_bg
+	local inactive_fg = bg_hl.fg and string.format("#%06x", bg_hl.fg) or "#999999"
+	local sep_fg = sep_hl.fg and string.format("#%06x", sep_hl.fg) or "#555555"
+
+	vim.api.nvim_set_hl(0, "KRSGitTabActive", {
+		fg = active_fg,
+		bg = active_bg,
+		bold = true,
+	})
+
+	vim.api.nvim_set_hl(0, "KRSGitTabActiveCap", {
+		fg = active_bg,
+		bg = fill_bg,
+	})
+
+	vim.api.nvim_set_hl(0, "KRSGitTabInactive", {
+		fg = inactive_fg,
+		bg = inactive_bg,
+	})
+
+	vim.api.nvim_set_hl(0, "KRSGitTabFill", {
+		bg = fill_bg,
+		fg = fill_fg,
+	})
+
+	vim.api.nvim_set_hl(0, "KRSGitTabSep", {
+		fg = sep_fg,
+		bg = fill_bg,
+	})
+end
+
+M.tab_click_ranges = {}
+
+--- Renders bufferline-style submodule tabs into M.tab_buf.
+--- @param width integer Window width in display cells.
+local function render_tab_bar(width)
+	if not M.tab_buf or not vim.api.nvim_buf_is_valid(M.tab_buf) then
+		return
+	end
+
+	setup_tab_highlights()
+
+	vim.bo[M.tab_buf].modifiable = true
+	vim.api.nvim_buf_clear_namespace(M.tab_buf, ns_tabs, 0, -1)
+
+	local targets = M.submodules
+	if not targets or #targets == 0 then
+		targets = { get_active_target() }
+	end
+
+	M.tab_click_ranges = {}
+	local chunks = {}
+
+	table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
+
+	for idx, item in ipairs(targets) do
+		local is_active = (idx == M.active_submodule_idx)
+		local icon = item.is_root and "🐙" or "📁"
+		local name = item.name or "Root"
+		local label = string.format("%s %s", icon, name)
+
+		if is_active then
+			table.insert(chunks, { text = "", hl = "KRSGitTabActiveCap" })
+			table.insert(chunks, { text = string.format(" %s ● ", label), hl = "KRSGitTabActive", idx = idx })
+			table.insert(chunks, { text = "", hl = "KRSGitTabActiveCap" })
+			table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
+		else
+			table.insert(chunks, { text = string.format("  %s  ", label), hl = "KRSGitTabInactive", idx = idx })
+			if idx < #targets then
+				table.insert(chunks, { text = "│", hl = "KRSGitTabSep" })
+			else
+				table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
+			end
+		end
+	end
+
+	local full_text = ""
+	local highlights = {}
+	local cur_cell = 0
+
+	for _, chunk in ipairs(chunks) do
+		local start_col = #full_text
+		local cell_width = vim.fn.strdisplaywidth(chunk.text)
+		local start_cell = cur_cell
+
+		full_text = full_text .. chunk.text
+		local end_col = #full_text
+		cur_cell = cur_cell + cell_width
+
+		table.insert(highlights, { start_col = start_col, end_col = end_col, hl = chunk.hl })
+
+		if chunk.idx then
+			table.insert(M.tab_click_ranges, {
+				start_col = start_cell,
+				end_col = cur_cell,
+				idx = chunk.idx,
+			})
+		end
+	end
+
+	local text_cells = vim.fn.strdisplaywidth(full_text)
+	if text_cells < width then
+		local pad = string.rep(" ", width - text_cells)
+		local start_col = #full_text
+		full_text = full_text .. pad
+		local end_col = #full_text
+		table.insert(highlights, { start_col = start_col, end_col = end_col, hl = "KRSGitTabFill" })
+	end
+
+	vim.api.nvim_buf_set_lines(M.tab_buf, 0, -1, false, { full_text })
+	vim.bo[M.tab_buf].modifiable = false
+
+	for _, h in ipairs(highlights) do
+		vim.api.nvim_buf_set_extmark(M.tab_buf, ns_tabs, 0, h.start_col, {
+			end_col = h.end_col,
+			hl_group = h.hl,
+		})
+	end
+end
+
 --- @param info table Repository snapshot.
 --- @param width integer Panel width, used for the separators.
 --- @return string[] lines Panel text.
@@ -437,22 +592,6 @@ local function build_panel_content(info, width)
 	local function add_file(prefix, file, file_type)
 		line_map[add("   " .. prefix .. " " .. file)] = { type = file_type, file = file }
 	end
-
-	-- Submodule / Repository Tabs (Bufferline Aesthetic)
-	local tab_tokens = {}
-	for idx, item in ipairs(M.submodules or {}) do
-		if idx == M.active_submodule_idx then
-			table.insert(tab_tokens, string.format("【 %s 】", item.name))
-		else
-			table.insert(tab_tokens, string.format("  %s  ", item.name))
-		end
-	end
-	if #tab_tokens == 0 then
-		local target = get_active_target()
-		table.insert(tab_tokens, string.format("【 %s 】", target.name))
-	end
-	add(" " .. table.concat(tab_tokens, " "))
-	separator("═")
 
 	add(string.format(" 🌿 Branch: %s%s", info.branch, info.upstream and (" (Tracking " .. info.upstream .. ")") or ""))
 	add(string.format(" 📊 Changes: +%d -%d lines", info.added, info.deleted))
@@ -1248,8 +1387,25 @@ function M.open_git_center()
 	local total_height = math.floor(vim.o.lines * M.settings.height_ratio)
 	local left_width = math.floor(total_width * M.current_left_ratio)
 	local right_width = total_width - left_width - 2
-	local start_row = math.floor((vim.o.lines - total_height) / 2)
+	local start_row = math.max(2, math.floor((vim.o.lines - total_height) / 2))
 	local start_col = math.floor((vim.o.columns - total_width) / 2)
+
+	local tab_buf = vim.api.nvim_create_buf(false, true)
+	M.tab_buf = tab_buf
+	vim.bo[tab_buf].buftype = "nofile"
+	vim.bo[tab_buf].bufhidden = "wipe"
+	vim.bo[tab_buf].swapfile = false
+
+	M.tab_win = vim.api.nvim_open_win(tab_buf, false, {
+		relative = "editor",
+		width = left_width,
+		height = 1,
+		row = start_row - 2,
+		col = start_col,
+		style = "minimal",
+		border = "none",
+		focusable = false,
+	})
 
 	local main_buf = vim.api.nvim_create_buf(false, true)
 	M.main_buf = main_buf
@@ -1291,15 +1447,42 @@ function M.open_git_center()
 	vim.api.nvim_set_option_value("wrap", false, { win = M.preview_win })
 
 	-- Closing the panel by any other means still has to clean up the preview and state.
-	for _, win in ipairs({ M.main_win, M.preview_win }) do
-		vim.api.nvim_create_autocmd("WinClosed", {
-			pattern = tostring(win),
-			once = true,
-			callback = function()
-				vim.schedule(M.close_git_center)
-			end,
-		})
+	for _, win in ipairs({ M.main_win, M.preview_win, M.tab_win }) do
+		if win and vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_create_autocmd("WinClosed", {
+				pattern = tostring(win),
+				once = true,
+				callback = function()
+					vim.schedule(M.close_git_center)
+				end,
+			})
+		end
 	end
+
+	render_tab_bar(left_width)
+
+	local opts_tab = { buffer = tab_buf, silent = true, noremap = true }
+	vim.keymap.set("n", "<LeftMouse>", function()
+		local mousepos = vim.fn.getmousepos()
+		local col = mousepos.column - (start_col + 1)
+		for _, range in ipairs(M.tab_click_ranges or {}) do
+			if col >= range.start_col and col < range.end_col then
+				if M.active_submodule_idx ~= range.idx then
+					M.active_submodule_idx = range.idx
+					local target = M.submodules[M.active_submodule_idx]
+					if target then
+						save_active_tab(M.root_dir, target.path)
+						notify("Switched to repository: " .. target.name)
+					end
+					M.diff_cache = {}
+					if M.refresh then
+						M.refresh()
+					end
+				end
+				break
+			end
+		end
+	end, opts_tab)
 
 	local lines, line_map, section_lines = build_panel_content(info, left_width)
 	M.line_map = line_map
@@ -1399,6 +1582,8 @@ function M.open_git_center()
 		vim.api.nvim_buf_set_lines(main_buf, 0, -1, false, new_lines)
 		vim.bo[main_buf].modifiable = false
 		pcall(vim.api.nvim_win_set_cursor, M.main_win, { math.min(cursor[1], #new_lines), cursor[2] })
+
+		render_tab_bar(l_width)
 
 		M.diff_cache = {}
 		update_preview()
