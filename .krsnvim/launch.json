@@ -11,7 +11,30 @@
 			"env": [],
 			"name": "Example KrsNvim",
 			"is_default": true
+		},
+		{
+			"auto_build": false,
+			"args": [],
+			"pre_launch_tasks": [],
+			"entry_point": "tests/run.lua",
+			"id": "profile-run-all-tests",
+			"mode": "run",
+			"runtime": "krsnvimscript",
+			"env": [],
+			"name": "Run all tests",
+			"is_default": false
+		},
+		{
+			"auto_build": false,
+			"args": [],
+			"pre_launch_tasks": [],
+			"entry_point": "tests/krsnvimscript/runner.lua",
+			"id": "profile-run-krsnvimscript-tests",
+			"mode": "run",
+			"runtime": "krsnvimscript",
+			"env": [],
+			"name": "Run krsnvimscript tests",
+			"is_default": false
 		}
 	]
 }
-

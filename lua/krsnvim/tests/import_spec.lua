@@ -1,8 +1,8 @@
 local M = {}
 
 function M.run()
-	require("krsnvim")
-	assert(type(_G.import) == "function", "global import function missing")
+	local krsnvim = require("krsnvim")
+	local import = krsnvim.import
 
 	local json_mod = import("krsnvim.json")
 	assert(type(json_mod.decode) == "function", "import('krsnvim.json') failed")

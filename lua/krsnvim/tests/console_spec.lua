@@ -1,7 +1,8 @@
 local M = {}
 
 function M.run()
-	require("krsnvim")
+	local krsnvim = require("krsnvim")
+	local import = krsnvim.import
 	local console = import("console")
 	local debug = import("debug")
 

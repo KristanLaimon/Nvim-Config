@@ -1,7 +1,7 @@
 --- @module "krsnvim.krsnvimtranspiler"
 --- Comprehensive Transpiler suite for `krsnvimscript` (*.krsnvim).
 --- Programmatically converts `.krsnvim` scripts into 100% equivalent `.sh` (Bash) and `.ps1` (PowerShell) scripts
---- using native OS CLI tools (`curl`, `mkdir`, `jq`, `Invoke-RestMethod`, `New-Item`, `Get-Content`, etc.).
+--- using native OS CLI tools (`python3`, `mkdir`, `curl`, `Invoke-RestMethod`, `New-Item`, `Get-Content`, etc.).
 --- Supports functions, parameters, advanced loops, CLI arguments/menus, YAML/TOML, and error assertions.
 ---
 --- @example
@@ -11,47 +11,101 @@ local M = {}
 
 local fs = require("krsnvim.fs")
 
+--- Reserved Lua keywords and boolean constants to prevent invalid variable prefixing.
+local LUA_KEYWORDS = {
+	["true"] = true,
+	["false"] = true,
+	["nil"] = true,
+	["and"] = true,
+	["or"] = true,
+	["not"] = true,
+}
+
+--- Masks string literals ("...", '...') inside a code string with temporary tokens
+--- so pattern matchers don't inadvertently modify text inside string constants.
+--- @param text string
+--- @return string masked, string[] strings
+local function mask_strings(text)
+	if not text then return "", {} end
+	local strings = {}
+	local masked = text:gsub('"[^"]*"', function(s)
+		table.insert(strings, s)
+		return "___STR_" .. #strings .. "___"
+	end):gsub("'[^']*'", function(s)
+		table.insert(strings, s)
+		return "___STR_" .. #strings .. "___"
+	end)
+	return masked, strings
+end
+
+--- Restores string literals from temporary tokens created by mask_strings.
+--- @param text string
+--- @param strings string[]
+--- @return string
+local function unmask_strings(text, strings)
+	if not text then return "" end
+	local res = text:gsub("___STR_(%d+)___", function(idx)
+		return strings[tonumber(idx)] or ""
+	end)
+	return res
+end
+
 --- Splits a comma-separated argument list on top-level commas only, ignoring
---- commas nested inside `{}` or `()` (e.g. a table-literal or call argument).
+--- commas nested inside `{}` or `()` or string literals.
 --- @param args string
 --- @return string[]
 local function split_args(args)
+	if not args or args == "" then return {} end
+	local masked, strings = mask_strings(args)
 	local parts, depth, current = {}, 0, ""
-	for i = 1, #args do
-		local c = args:sub(i, i)
+	for i = 1, #masked do
+		local c = masked:sub(i, i)
 		if c == "{" or c == "(" then depth = depth + 1
 		elseif c == "}" or c == ")" then depth = depth - 1 end
 		if c == "," and depth == 0 then
-			table.insert(parts, current)
+			table.insert(parts, (unmask_strings(current, strings)):match("^%s*(.-)%s*$"))
 			current = ""
 		else
 			current = current .. c
 		end
 	end
-	if current:match("%S") then table.insert(parts, current) end
+	if current:match("%S") then
+		table.insert(parts, (unmask_strings(current, strings)):match("^%s*(.-)%s*$"))
+	end
 	return parts
 end
 
 --- Joins source lines whose parens haven't balanced yet (e.g. a function call
---- whose table-literal argument spans multiple lines) into one logical line,
---- so the per-line transpilers below can pattern-match the whole call at once.
+--- whose table-literal argument spans multiple lines) into one logical line.
+--- Ignores parentheses inside string literals and comments.
 --- @param code string
 --- @return string
 local function join_multiline_calls(code)
 	local out_lines = {}
 	local pending, depth = nil, 0
 	for line in code:gmatch("[^\r\n]+") do
-		local _, opens = line:gsub("%(", "")
-		local _, closes = line:gsub("%)", "")
-		if pending then
-			pending = pending .. " " .. line:match("^%s*(.-)%s*$")
+		local cleaned = line:gsub("%-%-.*$", "")
+		cleaned = cleaned:gsub('"[^"]*"', ""):gsub("'[^']*'", "")
+
+		if cleaned:match("function%s*%(") then
+			if pending then
+				table.insert(out_lines, pending)
+				pending, depth = nil, 0
+			end
+			table.insert(out_lines, line)
 		else
-			pending = line
-		end
-		depth = depth + opens - closes
-		if depth <= 0 then
-			table.insert(out_lines, pending)
-			pending, depth = nil, 0
+			local _, opens = cleaned:gsub("%(", "")
+			local _, closes = cleaned:gsub("%)", "")
+			if pending then
+				pending = pending .. " " .. line:match("^%s*(.-)%s*$")
+			else
+				pending = line
+			end
+			depth = depth + opens - closes
+			if depth <= 0 then
+				table.insert(out_lines, pending)
+				pending, depth = nil, 0
+			end
 		end
 	end
 	if pending then
@@ -60,64 +114,277 @@ local function join_multiline_calls(code)
 	return table.concat(out_lines, "\n")
 end
 
---- Converts a Lua expression fragment into PowerShell: `obj:method(` -> `obj.method(`,
---- and bare `word.word`/`word` identifiers -> `$word.word`/`$word` (skips string literals,
---- numbers, already-`$`-prefixed vars, and `true`/`false`/`nil`).
+--- Converts a Lua expression into PowerShell:
+--- `a .. b` -> `$a + $b`
+--- `not cond` -> `-not cond`
+--- `==` -> `-eq`, `~=` -> `-ne`, `<` -> `-lt`, `>` -> `-gt`, `<=` -> `-le`, `>=` -> `-ge`
+--- `and` -> `-and`, `or` -> `-or`
 --- @param expr string
 --- @return string
-local function ps1_expr(expr)
-	if not expr then return expr end
-	expr = expr:gsub("([%w_]+):([%w_]+)%(", "%1.%2(")
-	expr = expr:gsub("[%w_]+%.?[%w_]*", function(word)
-		if word:match("^%d") or word == "true" or word == "false" or word == "nil" then
-			return word
-		end
+local function to_ps1_expr(expr)
+	if not expr or expr == "" then return "" end
+	local masked, strings = mask_strings(expr)
+
+	-- Method calls: obj:method( -> obj.method(
+	masked = masked:gsub("([%w_]+):([%w_]+)%(", "%1.%2(")
+
+	-- String concatenation: .. -> +
+	masked = masked:gsub("%s*%.%.%s*", " + ")
+
+	-- Replace identifiers with $identifier FIRST (skipping Lua reserved keywords, function calls, and masked strings)
+	masked = masked:gsub("()([%a_][%w_]*)()", function(s_pos, word, e_pos)
+		if word == "true" then return "$true" end
+		if word == "false" then return "$false" end
+		if word == "nil" then return "$null" end
+		if LUA_KEYWORDS[word] then return word end
+		if word:match("^___STR_%d+___$") then return word end
+		if word:sub(1, 1) == "$" then return word end
+		local is_fn = masked:sub(e_pos):match("^%s*%(") ~= nil
+		if is_fn then return word end
 		return "$" .. word
 	end)
-	expr = expr:gsub('"[^"]*"', function(s) return s end)
-	return expr
+
+	-- Binary / logical operators (applied after identifiers to avoid altering -lt, -eq, etc.)
+	masked = masked:gsub("%f[%w]not%f[%W]", "-not ")
+	masked = masked:gsub("%f[%w]and%f[%W]", " -and ")
+	masked = masked:gsub("%f[%w]or%f[%W]", " -or ")
+
+	masked = masked:gsub("==", " -eq ")
+	masked = masked:gsub("~=", " -ne ")
+	masked = masked:gsub("!=", " -ne ")
+	masked = masked:gsub("<=", " -le ")
+	masked = masked:gsub(">=", " -ge ")
+	masked = masked:gsub("<", " -lt ")
+	masked = masked:gsub(">", " -gt ")
+
+	-- Clean up double spaces around operators
+	masked = masked:gsub("%s+", " ")
+
+	return (unmask_strings(masked, strings))
 end
 
---- Helper to convert Lua table literal to PowerShell Hashtable syntax (@{...}).
+--- Formats a single argument/value for PowerShell.
+--- Handles strings, numbers, booleans, string concats, and variable names.
+--- @param val string
+--- @return string
+local function format_ps1_val(val)
+	if not val or val == "" then return '""' end
+	val = val:match("^%s*(.-)%s*$")
+	if val:match('^"[^"]*"$') or val:match("^'[^']*'$") then
+		return val
+	end
+	if tonumber(val) then
+		return val
+	end
+	if val == "true" then return "$true" end
+	if val == "false" then return "$false" end
+	if val == "nil" then return "$null" end
+
+	-- Multi-part string concatenation: "a" .. b .. "c"
+	if val:find("%.%.") then
+		local parts = {}
+		local masked, strings = mask_strings(val)
+		for part in masked:gmatch("[^%.]+") do
+			part = part:match("^%s*(.-)%s*$")
+			if part ~= "" then
+				if part:match("^___STR_%d+___$") then
+					table.insert(parts, (unmask_strings(part, strings)))
+				elseif tonumber(part) then
+					table.insert(parts, part)
+				elseif LUA_KEYWORDS[part] then
+					table.insert(parts, part)
+				else
+					table.insert(parts, "$" .. part)
+				end
+			end
+		end
+		return table.concat(parts, " + ")
+	end
+
+	if val:match("^[%a_][%w_]*$") then
+		return "$" .. val
+	end
+
+	return to_ps1_expr(val)
+end
+
+--- Helper to convert Lua table literal to PowerShell Hashtable syntax (@{...}) or Array (@(...)).
 --- @param lua_tbl_str string
 --- @return string
 local function lua_tbl_to_ps1(lua_tbl_str)
-	if not lua_tbl_str then return "" end
+	if not lua_tbl_str then return "@()" end
 	local s = lua_tbl_str:match("^%s*{?(.-)}?%s*$")
-	if not s or s == "" then return "@{}" end
-	local items = {}
-	for kv in s:gmatch("[^,]+") do
-		local k, v = kv:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
-		if k and v then
-			if v == "true" then v = "$true"
-			elseif v == "false" then v = "$false"
-			elseif v == "nil" then v = "$null"
-			end
-			table.insert(items, '"' .. k .. '"=' .. v)
-		else
-			table.insert(items, kv)
+	if not s or s == "" then return "@()" end
+
+	local args = split_args(s)
+	local is_kv = false
+	for _, item in ipairs(args) do
+		if item:match("^[%w_]+%s*=") then
+			is_kv = true
+			break
 		end
 	end
-	return "@{" .. table.concat(items, "; ") .. "}"
+
+	if is_kv then
+		local items = {}
+		for _, kv in ipairs(args) do
+			local k, v = kv:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
+			if k and v then
+				table.insert(items, '"' .. k .. '"=' .. format_ps1_val(v))
+			else
+				table.insert(items, kv)
+			end
+		end
+		return "@{" .. table.concat(items, "; ") .. "}"
+	else
+		local items = {}
+		for _, v in ipairs(args) do
+			table.insert(items, format_ps1_val(v))
+		end
+		return "@(" .. table.concat(items, ", ") .. ")"
+	end
 end
 
---- Helper to convert Lua table literal to JSON string literal for Bash.
+--- Formats a single argument/value for Bash.
+--- @param val string
+--- @return string
+local function format_sh_val(val)
+	if not val or val == "" then return '""' end
+	val = val:match("^%s*(.-)%s*$")
+	if val:match('^"[^"]*"$') or val:match("^'[^']*'$") then
+		return val
+	end
+	if tonumber(val) then
+		return val
+	end
+	if val == "true" or val == "false" then
+		return '"' .. val .. '"'
+	end
+
+	-- Multi-part string concatenation: "a" .. b .. "c"
+	if val:find("%.%.") then
+		local parts = {}
+		local masked, strings = mask_strings(val)
+		for part in masked:gmatch("[^%.]+") do
+			part = part:match("^%s*(.-)%s*$")
+			if part ~= "" then
+				if part:match("^___STR_%d+___$") then
+					local unmasked = unmask_strings(part, strings)
+					table.insert(parts, unmasked:sub(2, -2))
+				elseif tonumber(part) then
+					table.insert(parts, part)
+				else
+					table.insert(parts, "${" .. part .. "}")
+				end
+			end
+		end
+		return '"' .. table.concat(parts, "") .. '"'
+	end
+
+	-- Math expression in assignment / return: x * y
+	if val:match("[+%*%/%-]") and not val:find('"') and not val:find("'") then
+		if val:match("%.") then
+			-- Floating point arithmetic requires python/awk
+			return '$(python3 -c "print(' .. val .. ')" 2>/dev/null || python -c "print(' .. val .. ')")'
+		end
+		return "$(( " .. val .. " ))"
+	end
+
+	if val:match("^[%a_][%w_]*$") then
+		return '"${' .. val .. '}"'
+	end
+
+	return '"' .. val .. '"'
+end
+
+--- Helper to convert Lua table literal to valid JSON string literal for Bash.
 --- @param lua_tbl_str string
 --- @return string
 local function lua_tbl_to_json(lua_tbl_str)
-	if not lua_tbl_str then return '""' end
+	if not lua_tbl_str then return '\'{}\'' end
 	local s = lua_tbl_str:match("^%s*{?(.-)}?%s*$")
-	if not s or s == "" then return '"{}"' end
+	if not s or s == "" then return '\'{}\'' end
+	local args = split_args(s)
 	local items = {}
-	for kv in s:gmatch("[^,]+") do
+	for _, kv in ipairs(args) do
 		local k, v = kv:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
 		if k and v then
-			table.insert(items, '"' .. k .. '": ' .. v)
+			local json_v
+			if (v:sub(1, 1) == '"' and v:sub(-1) == '"') or (v:sub(1, 1) == "'" and v:sub(-1) == "'") then
+				json_v = '"' .. v:sub(2, -2) .. '"'
+			elseif v == "true" or v == "false" or tonumber(v) then
+				json_v = v
+			else
+				json_v = '"' .. v .. '"'
+			end
+			table.insert(items, '"' .. k .. '": ' .. json_v)
 		else
 			table.insert(items, kv)
 		end
 	end
 	return '\'{' .. table.concat(items, ", ") .. '}\''
+end
+
+--- Formats a condition for Bash `[[ ... ]]` or `(( ... ))`.
+--- @param cond string
+--- @return string mode, string expr
+local function format_sh_cond(cond)
+	cond = cond:match("^%s*(.-)%s*$")
+	if cond:match("^not%s+fs%.exists%((.*)%)%s*$") then
+		local p = cond:match("^not%s+fs%.exists%((.*)%)%s*$")
+		return "test", "! -e " .. format_sh_val(p)
+	elseif cond:match("^fs%.exists%((.*)%)%s*$") then
+		local p = cond:match("^fs%.exists%((.*)%)%s*$")
+		return "test", "-e " .. format_sh_val(p)
+	end
+
+	local is_not = false
+	if cond:match("^not%s+(.*)$") then
+		is_not = true
+		cond = cond:match("^not%s+(.*)$")
+	end
+
+	-- Check if pure arithmetic condition (numbers/operators without string quotes or parenthesized subclauses)
+	if cond:match("[+%*%/%-]") and not cond:find('"') and not cond:find("'") and not cond:find("%(") then
+		local arith_expr = cond:gsub("~=", "!=")
+		if is_not then
+			return "arithmetic", "! ( " .. arith_expr .. " )"
+		end
+		return "arithmetic", arith_expr
+	end
+
+	local masked, strings = mask_strings(cond)
+
+	-- Wrap variables with ${var} skipping Lua keywords
+	masked = masked:gsub("[%a_][%w_]*", function(w)
+		if LUA_KEYWORDS[w] then return w end
+		if w:match("^___STR_%d+___$") then return w end
+		if w:sub(1, 1) == "$" then return w end
+		return "${" .. w .. "}"
+	end)
+
+	-- Convert comparison and logical operators for Bash
+	masked = masked:gsub("==", " == ")
+	masked = masked:gsub("~=", " != ")
+	masked = masked:gsub("!=", " != ")
+	masked = masked:gsub("<=", " -le ")
+	masked = masked:gsub(">=", " -ge ")
+	masked = masked:gsub("<", " -lt ")
+	masked = masked:gsub(">", " -gt ")
+	masked = masked:gsub("%f[%w]not%f[%W]", " ! ")
+	masked = masked:gsub("%f[%w]and%f[%W]", " && ")
+	masked = masked:gsub("%f[%w]or%f[%W]", " || ")
+
+	-- Ensure spaces around subclause parens inside [[ ... ]]
+	masked = masked:gsub("%(", " ( ")
+	masked = masked:gsub("%)", " ) ")
+	masked = masked:gsub("%s+", " ")
+
+	local res = (unmask_strings(masked, strings))
+	if is_not then
+		return "test", "! " .. res
+	end
+	return "test", res
 end
 
 --- Transpiles `.krsnvim` Lua code string into Bash script (`.sh`).
@@ -152,13 +419,19 @@ function M.to_sh(code)
 		elseif trimmed == "" then
 			table.insert(lines, "")
 
-		-- Function definitions: function fn_name(arg1, arg2)
-		elseif trimmed:match("^function%s+([%w_]+)%s*%((.*)%)") then
-			local fn_name, params_str = trimmed:match("^function%s+([%w_]+)%s*%((.*)%)")
+		-- Function definitions or Coroutine creation: function fn_name(arg1, arg2)
+		elseif trimmed:match("^function%s+([%w_]+)%s*%((.*)%)") or trimmed:match("^local%s+function%s+([%w_]+)%s*%((.*)%)") or trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)") then
+			local fn_name, params_str
+			if trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)") then
+				fn_name = trimmed:match("^local%s+([%a_][%w_]*)%s*=") or trimmed:match("^([%a_][%w_]*)%s*=") or "co_fn"
+				params_str = trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)")
+			else
+				fn_name, params_str = trimmed:match("function%s+([%w_]+)%s*%((.*)%)")
+			end
 			table.insert(block_stack, "function")
 			table.insert(lines, indent .. fn_name .. "() {")
 			local idx = 1
-			for param in params_str:gmatch("[^,]+") do
+			for param in (params_str or ""):gmatch("[^,]+") do
 				param = param:match("^%s*(.-)%s*$")
 				if param ~= "" then
 					table.insert(lines, indent .. "  local " .. param .. '="$' .. idx .. '"')
@@ -166,143 +439,113 @@ function M.to_sh(code)
 				end
 			end
 
-		-- Local function definitions: local function fn_name(arg1, arg2)
-		elseif trimmed:match("^local%s+function%s+([%w_]+)%s*%((.*)%)") then
-			local fn_name, params_str = trimmed:match("^local%s+function%s+([%w_]+)%s*%((.*)%)")
-			table.insert(block_stack, "function")
-			table.insert(lines, indent .. fn_name .. "() {")
-			local idx = 1
-			for param in params_str:gmatch("[^,]+") do
-				param = param:match("^%s*(.-)%s*$")
-				if param ~= "" then
-					table.insert(lines, indent .. "  local " .. param .. '="$' .. idx .. '"')
-					idx = idx + 1
+		-- Return statements: return expr
+		elseif trimmed:match("^return%s*(.*)$") then
+			local ret_expr = trimmed:match("^return%s*(.*)$"):match("^%s*(.-)%s*$")
+			if ret_expr ~= "" then
+				local fn1, a1, op, fn2, a2 = ret_expr:match("^([%a_][%w_]*)%((.*)%)%s*([+%*%/%-])%s*([%a_][%w_]*)%((.*)%)$")
+				if fn1 and a1 and op and fn2 and a2 then
+					local arith1 = a1:gsub("([%a_][%w_]*)", function(w) return w end)
+					local arith2 = a2:gsub("([%a_][%w_]*)", function(w) return w end)
+					table.insert(lines, indent .. 'echo $(( $(' .. fn1 .. ' $(( ' .. arith1 .. ' ))) ' .. op .. ' $(' .. fn2 .. ' $(( ' .. arith2 .. ' ))) ))')
+				else
+					table.insert(lines, indent .. "echo " .. format_sh_val(ret_expr))
 				end
+			end
+			table.insert(lines, indent .. "return 0")
+
+		-- coroutine.yield(...) -> echo ...
+		elseif trimmed:match("^coroutine%.yield%((.*)%)") then
+			local args = trimmed:match("^coroutine%.yield%((.*)%)")
+			local echoed = {}
+			for _, arg in ipairs(split_args(args)) do
+				table.insert(echoed, format_sh_val(arg))
+			end
+			table.insert(lines, indent .. 'echo ' .. table.concat(echoed, " "))
+
+		-- Multiple variable assignment: local ok, val = coroutine.resume(co, arg) OR pcall(fn, arg)
+		elseif trimmed:match("^local%s+([%a_][%w_]*)%s*,%s*([%a_][%w_]*)%s*=%s*(.-)%((.*)%)") then
+			local var_ok, var_res, fn_call, fn_args = trimmed:match("^local%s+([%a_][%w_]*)%s*,%s*([%a_][%w_]*)%s*=%s*(.-)%((.*)%)")
+			fn_call = fn_call:match("^%s*(.-)%s*$")
+			if fn_call == "coroutine.resume" then
+				local args_parts = split_args(fn_args)
+				local co_name = args_parts[1] or "co"
+				local extra_args = {}
+				for i = 2, #args_parts do
+					table.insert(extra_args, format_sh_val(args_parts[i]))
+				end
+				table.insert(lines, indent .. var_res .. "=$(" .. co_name .. " " .. table.concat(extra_args, " ") .. ")")
+				table.insert(lines, indent .. var_ok .. '="true"')
+			elseif fn_call == "pcall" then
+				local args_parts = split_args(fn_args)
+				local target_fn = args_parts[1] or "fn"
+				local extra_args = {}
+				for i = 2, #args_parts do
+					table.insert(extra_args, format_sh_val(args_parts[i]))
+				end
+				table.insert(lines, indent .. 'if ' .. var_res .. '=$(' .. target_fn .. ' ' .. table.concat(extra_args, " ") .. ' 2>/dev/null); then')
+				table.insert(lines, indent .. '  ' .. var_ok .. '="true"')
+				table.insert(lines, indent .. 'else')
+				table.insert(lines, indent .. '  ' .. var_ok .. '="false"')
+				table.insert(lines, indent .. 'fi')
 			end
 
 		-- print(...) -> echo ...
 		elseif trimmed:match("^print%((.*)%)") then
 			local args = trimmed:match("^print%((.*)%)")
 			local echoed = {}
-			for arg in args:gmatch("[^,]+") do
-				arg = arg:match("^%s*(.-)%s*$")
-				if arg:sub(1, 1) == '"' and arg:sub(-1) == '"' then
-					table.insert(echoed, arg:sub(2, -2))
-				elseif arg:sub(1, 1) == "'" and arg:sub(-1) == "'" then
-					table.insert(echoed, arg:sub(2, -2))
-				else
-					table.insert(echoed, "${" .. arg .. "}")
-				end
+			for _, arg in ipairs(split_args(args)) do
+				table.insert(echoed, format_sh_val(arg))
 			end
-			table.insert(lines, indent .. 'echo "' .. table.concat(echoed, " ") .. '"')
+			table.insert(lines, indent .. 'echo ' .. table.concat(echoed, " "))
 
 		-- console.log(...) / console.info(...) -> echo ...
 		elseif trimmed:match("^console%.[%w_]+%((.*)%)%s*$") then
 			local args = trimmed:match("^console%.[%w_]+%((.*)%)%s*$")
 			local echoed = {}
 			for _, raw in ipairs(split_args(args)) do
-				local arg = raw:match("^%s*(.-)%s*$")
-				if arg:sub(1, 1) == '"' and arg:sub(-1) == '"' then
-					table.insert(echoed, arg:sub(2, -2))
-				elseif arg:sub(1, 1) == "'" and arg:sub(-1) == "'" then
-					table.insert(echoed, arg:sub(2, -2))
-				elseif arg:sub(1, 1) == "{" then
-					table.insert(echoed, lua_tbl_to_json(arg))
+				if raw:sub(1, 1) == "{" then
+					table.insert(echoed, lua_tbl_to_json(raw))
 				else
-					table.insert(echoed, "${" .. arg .. "}")
+					table.insert(echoed, format_sh_val(raw))
 				end
 			end
-			table.insert(lines, indent .. 'echo "' .. table.concat(echoed, " ") .. '"')
+			table.insert(lines, indent .. 'echo ' .. table.concat(echoed, " "))
 
 		-- error(msg) -> echo "msg" >&2; exit 1
 		elseif trimmed:match("^error%((.*)%)") then
 			local err_msg = trimmed:match("^error%((.*)%)")
-			table.insert(lines, indent .. 'echo ' .. err_msg .. ' >&2')
+			table.insert(lines, indent .. 'echo ' .. format_sh_val(err_msg) .. ' >&2')
 			table.insert(lines, indent .. 'exit 1')
 
-		-- assert(cond, msg) -> [ cond ] || { echo "msg" >&2; exit 1; }
+		-- assert(cond, msg) -> [[ cond ]] || { echo "msg" >&2; exit 1; }
 		elseif trimmed:match("^assert%((.*)%)") then
-			local args = trimmed:match("^assert%((.*)%)")
-			local cond, msg = args:match("^(.-),%s*(.*)$")
-			cond = cond or args
-			msg = msg or '"Assertion failed"'
-			table.insert(lines, indent .. '[ ' .. cond .. ' ] || { echo ' .. msg .. ' >&2; exit 1; }')
+			local args = split_args(trimmed:match("^assert%((.*)%)"))
+			local cond = args[1] or "true"
+			local msg = args[2] or '"Assertion failed"'
+			local mode, cond_str = format_sh_cond(cond)
+			if mode == "arithmetic" then
+				table.insert(lines, indent .. '(( ' .. cond_str .. ' )) || { echo ' .. format_sh_val(msg) .. ' >&2; exit 1; }')
+			else
+				table.insert(lines, indent .. '[[ ' .. cond_str .. ' ]] || { echo ' .. format_sh_val(msg) .. ' >&2; exit 1; }')
+			end
 
 		-- fs.mkdir(path) -> mkdir -p path
-		elseif trimmed:match("fs%.mkdir%((.*)%)") then
-			local path_arg = trimmed:match("fs%.mkdir%((.*)%)")
-			table.insert(lines, indent .. "mkdir -p " .. path_arg)
+		elseif trimmed:match("^fs%.mkdir%((.*)%)") then
+			local path_arg = trimmed:match("^fs%.mkdir%((.*)%)")
+			table.insert(lines, indent .. "mkdir -p " .. format_sh_val(path_arg))
 
 		-- fs.write(path, content) -> echo content > path
-		elseif trimmed:match("fs%.write%((.*),%s*(.*)%)") then
-			local path_arg, content_arg = trimmed:match("fs%.write%((.*),%s*(.*)%)")
-			if content_arg:sub(1, 1) == '"' or content_arg:sub(1, 1) == "'" then
-				table.insert(lines, indent .. 'echo ' .. content_arg .. ' > ' .. path_arg)
-			else
-				table.insert(lines, indent .. 'echo "${' .. content_arg .. '}" > ' .. path_arg)
-			end
+		elseif trimmed:match("^fs%.write%((.*)%)") then
+			local args = split_args(trimmed:match("^fs%.write%((.*)%)"))
+			local path_arg = args[1]
+			local content_arg = args[2] or '""'
+			table.insert(lines, indent .. 'echo ' .. format_sh_val(content_arg) .. ' > ' .. format_sh_val(path_arg))
 
-		-- fs.read(path) -> cat path
-		elseif trimmed:match("fs%.read%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*fs%.read%((.*)%)")
-			if var then
-				table.insert(lines, indent .. var .. '=$(cat ' .. path_arg .. ')')
-			else
-				local path = trimmed:match("fs%.read%((.*)%)")
-				table.insert(lines, indent .. 'cat ' .. path)
-			end
-
-		-- json.encode(obj) -> echo obj | jq -c .
-		elseif trimmed:match("json%.encode%((.*)%)") then
-			local var, obj = trimmed:match("^local%s+([%w_]+)%s*=%s*json%.encode%((.*)%)")
-			if var then
-				local json_payload = obj:sub(1, 1) == "{" and lua_tbl_to_json(obj) or obj
-				table.insert(lines, indent .. var .. '=$(echo ' .. json_payload .. ' | jq -c .)')
-			else
-				local obj_arg = trimmed:match("json%.encode%((.*)%)")
-				local json_payload = obj_arg:sub(1, 1) == "{" and lua_tbl_to_json(obj_arg) or obj_arg
-				table.insert(lines, indent .. 'echo ' .. json_payload .. ' | jq -c .')
-			end
-
-		-- json.load(path) -> cat path | jq .
-		elseif trimmed:match("json%.load%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*json%.load%((.*)%)")
-			if var then
-				table.insert(lines, indent .. var .. '=$(cat ' .. path_arg .. ')')
-			else
-				local path = trimmed:match("json%.load%((.*)%)")
-				table.insert(lines, indent .. 'cat ' .. path .. ' | jq .')
-			end
-
-		-- yaml.load(path) -> python3 -c "import yaml..." path
-		elseif trimmed:match("yaml%.load%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*yaml%.load%((.*)%)")
-			local py_cmd = 'python3 -c "import yaml, json, sys; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))" ' .. path_arg
-			if var then
-				table.insert(lines, indent .. var .. '=$(' .. py_cmd .. ')')
-			else
-				table.insert(lines, indent .. py_cmd)
-			end
-
-		-- toml.load(path) -> python3 -c "import tomllib..." path
-		elseif trimmed:match("toml%.load%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*toml%.load%((.*)%)")
-			local py_cmd = 'python3 -c "import tomllib, json, sys; print(json.dumps(tomllib.load(open(sys.argv[1], \'rb\'))))" ' .. path_arg
-			if var then
-				table.insert(lines, indent .. var .. '=$(' .. py_cmd .. ')')
-			else
-				table.insert(lines, indent .. py_cmd)
-			end
-
-		-- fetch.get(url) / fetch.json(url) -> curl -sSL url
-		elseif trimmed:match("fetch%.get%((.*)%)") or trimmed:match("fetch%.json%((.*)%)") then
-			local var, url_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*fetch%..-%((.*)%)")
-			if var then
-				table.insert(lines, indent .. var .. '=$(curl -sSL ' .. url_arg .. ')')
-			else
-				local url = trimmed:match("fetch%..-%((.*)%)")
-				table.insert(lines, indent .. 'curl -sSL ' .. url)
-			end
+		-- fs.remove(path) / fs.delete(path) -> rm -rf path
+		elseif trimmed:match("^fs%.remove%((.*)%)") or trimmed:match("^fs%.delete%((.*)%)") then
+			local path_arg = trimmed:match("%((.*)%)")
+			table.insert(lines, indent .. "rm -rf " .. format_sh_val(path_arg))
 
 		-- $ "cmd" or terminal.exec("cmd") -> cmd
 		elseif trimmed:match("^%s*%$%s*%((.*)%)") or trimmed:match("^%s*terminal%.exec%((.*)%)") or trimmed:match("^%s*terminal%.run%((.*)%)") then
@@ -310,26 +553,107 @@ function M.to_sh(code)
 			cmd_arg = cmd_arg:gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
 			table.insert(lines, indent .. cmd_arg)
 
-		-- local var = val
-		elseif trimmed:match("^local%s+([%w_]+)%s*=%s*(.*)$") then
-			local var, val = trimmed:match("^local%s+([%w_]+)%s*=%s*(.*)$")
-			if val:sub(1, 1) == '"' and val:sub(-1) == '"' then
-				table.insert(lines, indent .. var .. "=" .. val)
-			elseif val == "true" or val == "false" then
-				table.insert(lines, indent .. var .. '="' .. val .. '"')
+		-- Variable assignments: local var = val OR var = val
+		elseif trimmed:match("^local%s+[%a_][%w_]*%s*=%s*") or trimmed:match("^[%a_][%w_]*%s*=%s*") then
+			local is_local, var, val
+			if trimmed:match("^local%s+") then
+				var, val = trimmed:match("^local%s+([%a_][%w_]*)%s*=%s*(.*)$")
+				is_local = true
 			else
-				table.insert(lines, indent .. var .. "=" .. val)
+				var, val = trimmed:match("^([%a_][%w_]*)%s*=%s*(.*)$")
+				is_local = false
 			end
 
-		-- Loops: for i = start, stop do
-		elseif trimmed:match("^for%s+([%w_]+)%s*=%s*(%d+)%s*,%s*(%d+)%s+do$") then
-			local var, start_val, stop_val = trimmed:match("^for%s+([%w_]+)%s*=%s*(%d+)%s*,%s*(%d+)%s+do$")
+			-- Table/array literal: local list = { "a", "b" }
+			if val:sub(1, 1) == "{" and val:sub(-1) == "}" then
+				local tbl_content = val:sub(2, -2)
+				local items = {}
+				for _, item in ipairs(split_args(tbl_content)) do
+					table.insert(items, format_sh_val(item))
+				end
+				table.insert(lines, indent .. var .. "=(" .. table.concat(items, " ") .. ")")
+
+			-- Builtin: fs.read(path) -> cat path
+			elseif val:match("^fs%.read%((.*)%)") then
+				local path_arg = val:match("^fs%.read%((.*)%)")
+				table.insert(lines, indent .. var .. "=$(cat " .. format_sh_val(path_arg) .. ")")
+
+			-- Builtin: json.encode(obj)
+			elseif val:match("^json%.encode%((.*)%)") then
+				local obj_arg = val:match("^json%.encode%((.*)%)")
+				if obj_arg:sub(1, 1) == "{" then
+					table.insert(lines, indent .. var .. "=" .. lua_tbl_to_json(obj_arg))
+				else
+					table.insert(lines, indent .. var .. '=$(python3 -c "import json, sys; print(json.dumps(' .. format_sh_val(obj_arg) .. '))" 2>/dev/null || echo "${' .. obj_arg .. '}")')
+				end
+
+			-- Builtin: json.load(path) -> cat path
+			elseif val:match("^json%.load%((.*)%)") then
+				local path_arg = val:match("^json%.load%((.*)%)")
+				table.insert(lines, indent .. var .. "=$(cat " .. format_sh_val(path_arg) .. ")")
+
+			-- Builtin: fetch.get(url) / fetch.json(url) -> curl -sSL url
+			elseif val:match("^fetch%..-%((.*)%)") then
+				local url_arg = val:match("^fetch%..-%((.*)%)")
+				table.insert(lines, indent .. var .. "=$(curl -sSL " .. format_sh_val(url_arg) .. ")")
+
+			-- Builtin: terminal execution -> $(cmd)
+			elseif val:match("^terminal%..-%((.*)%)") or val:match("^%s*%$%s*%((.*)%)") then
+				local cmd_arg = val:match("%((.*)%)"):gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
+				table.insert(lines, indent .. var .. "=$(" .. cmd_arg .. ")")
+
+			-- Custom function call: var = fn(a, b)
+			elseif val:match("^[%a_][%w_]*%s*%((.*)%)") then
+				local fn_name, fn_args = val:match("^([%a_][%w_]*)%s*%((.*)%)")
+				local sh_args = {}
+				for _, arg in ipairs(split_args(fn_args)) do
+					table.insert(sh_args, format_sh_val(arg))
+				end
+				table.insert(lines, indent .. var .. "=$(" .. fn_name .. " " .. table.concat(sh_args, " ") .. ")")
+
+			-- Math / Arithmetic expression: x = x + 1 or x = a + b
+			elseif val:match("[+%*%/%-]") and not val:find('"') and not val:find("'") then
+				if val:match("%.") then
+					local py_expr = val:gsub("([%a_][%w_]*)", function(w)
+						if LUA_KEYWORDS[w] or tonumber(w) then return w end
+						return "${" .. w .. "}"
+					end)
+					table.insert(lines, indent .. var .. '=$(python3 -c "print(' .. py_expr .. ')" 2>/dev/null || python -c "print(' .. py_expr .. ')")')
+				else
+					local arith = val:gsub("([%a_][%w_]*)", function(w) return w end)
+					table.insert(lines, indent .. var .. "=$(( " .. arith .. " ))")
+				end
+
+			-- Standard value assignment
+			else
+				local sh_val = format_sh_val(val)
+				table.insert(lines, indent .. var .. "=" .. sh_val)
+			end
+
+		-- Custom standalone function calls: fn(arg1, arg2)
+		elseif trimmed:match("^[%a_][%w_]*%s*%((.*)%)%s*$") then
+			local fn_name, fn_args = trimmed:match("^([%a_][%w_]*)%s*%((.*)%)%s*$")
+			local sh_args = {}
+			for _, arg in ipairs(split_args(fn_args)) do
+				table.insert(sh_args, format_sh_val(arg))
+			end
+			table.insert(lines, indent .. fn_name .. " " .. table.concat(sh_args, " "))
+
+		-- Loops: for i = start, stop do OR for i = start, stop, step do
+		elseif trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$") or trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then
+			local var, start_val, stop_val, step_val
+			if trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then
+				var, start_val, stop_val, step_val = trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$")
+			else
+				var, start_val, stop_val = trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$")
+				step_val = "1"
+			end
 			table.insert(block_stack, "loop")
-			table.insert(lines, indent .. "for ((" .. var .. "=" .. start_val .. "; " .. var .. "<=" .. stop_val .. "; " .. var .. "++)); do")
+			table.insert(lines, indent .. "for ((" .. var .. "=" .. start_val .. "; " .. var .. "<=" .. stop_val .. "; " .. var .. "+=" .. step_val .. ")); do")
 
 		-- Loops: for _, item in ipairs(list) do
-		elseif trimmed:match("^for%s+[%w_]+%s*,%s*([%w_]+)%s+in%s+ipairs%(([%w_]+)%)%s+do$") then
-			local item_var, list_var = trimmed:match("^for%s+[%w_]+%s*,%s*([%w_]+)%s+in%s+ipairs%(([%w_]+)%)%s+do$")
+		elseif trimmed:match("^for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(([%a_][%w_]*)%)%s+do$") then
+			local item_var, list_var = trimmed:match("^for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(([%a_][%w_]*)%)%s+do$")
 			table.insert(block_stack, "loop")
 			table.insert(lines, indent .. 'for ' .. item_var .. ' in "${' .. list_var .. '[@]}"; do')
 
@@ -337,46 +661,52 @@ function M.to_sh(code)
 		elseif trimmed:match("^while%s+(.-)%s+do$") then
 			local cond = trimmed:match("^while%s+(.-)%s+do$")
 			table.insert(block_stack, "loop")
-			table.insert(lines, indent .. "while [ " .. cond .. " ]; do")
+			local mode, cond_str = format_sh_cond(cond)
+			if mode == "arithmetic" then
+				table.insert(lines, indent .. "while (( " .. cond_str .. " )); do")
+			else
+				table.insert(lines, indent .. "while [[ " .. cond_str .. " ]]; do")
+			end
 
 		-- Control Flow: if ... then
 		elseif trimmed:match("^if%s+(.-)%s+then$") then
 			local cond = trimmed:match("^if%s+(.-)%s+then$")
 			table.insert(block_stack, "if")
-			if cond:match("fs%.exists%((.*)%)") then
-				local p = cond:match("fs%.exists%((.*)%)")
-				table.insert(lines, indent .. "if [ -e " .. p .. " ]; then")
+			local mode, cond_str = format_sh_cond(cond)
+			if mode == "arithmetic" then
+				table.insert(lines, indent .. "if (( " .. cond_str .. " )); then")
 			else
-				table.insert(lines, indent .. "if [ " .. cond .. " ]; then")
+				table.insert(lines, indent .. "if [[ " .. cond_str .. " ]]; then")
 			end
 
 		-- Control Flow: elseif ... then
 		elseif trimmed:match("^elseif%s+(.-)%s+then$") then
 			local cond = trimmed:match("^elseif%s+(.-)%s+then$")
-			if cond:match("fs%.exists%((.*)%)") then
-				local p = cond:match("fs%.exists%((.*)%)")
-				table.insert(lines, indent .. "elif [ -e " .. p .. " ]; then")
+			local mode, cond_str = format_sh_cond(cond)
+			if mode == "arithmetic" then
+				table.insert(lines, indent .. "elif (( " .. cond_str .. " )); then")
 			else
-				table.insert(lines, indent .. "elif [ " .. cond .. " ]; then")
+				table.insert(lines, indent .. "elif [[ " .. cond_str .. " ]]; then")
 			end
-
 		-- Control Flow: else
 		elseif trimmed == "else" then
 			table.insert(lines, indent .. "else")
 
-		-- Block End: end
-		elseif trimmed == "end" or trimmed == "}" then
+		-- Block End: end or end)
+		elseif trimmed == "end" or trimmed:match("^end%)?") or trimmed == "}" then
 			local last_block = table.remove(block_stack) or "if"
 			if last_block == "if" then
 				table.insert(lines, indent .. "fi")
 			elseif last_block == "function" or last_block == "fn" then
 				table.insert(lines, indent .. "}")
-			else
+			elseif last_block == "loop" then
 				table.insert(lines, indent .. "done")
+			else
+				table.insert(lines, indent .. "}")
 			end
 
 		else
-			-- Fallback: pass line as is with -- turned to #
+			-- Fallback: pass line with -- turned to #
 			table.insert(lines, (line:gsub("^%s*%-%-", indent .. "#")))
 		end
 	end
@@ -413,11 +743,17 @@ function M.to_ps1(code)
 		elseif trimmed == "" then
 			table.insert(lines, "")
 
-		-- Function definitions: function fn_name(arg1, arg2)
-		elseif trimmed:match("^function%s+([%w_]+)%s*%((.*)%)") or trimmed:match("^local%s+function%s+([%w_]+)%s*%((.*)%)") then
-			local fn_name, params_str = trimmed:match("function%s+([%w_]+)%s*%((.*)%)")
+		-- Function definitions or Coroutine creation: function fn_name(arg1, arg2)
+		elseif trimmed:match("^function%s+([%w_]+)%s*%((.*)%)") or trimmed:match("^local%s+function%s+([%w_]+)%s*%((.*)%)") or trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)") then
+			local fn_name, params_str
+			if trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)") then
+				fn_name = trimmed:match("^local%s+([%a_][%w_]*)%s*=") or trimmed:match("^([%a_][%w_]*)%s*=") or "co_fn"
+				params_str = trimmed:match("coroutine%..-%(%s*function%s*%((.*)%)")
+			else
+				fn_name, params_str = trimmed:match("function%s+([%w_]+)%s*%((.*)%)")
+			end
 			local ps_params = {}
-			for param in params_str:gmatch("[^,]+") do
+			for param in (params_str or ""):gmatch("[^,]+") do
 				param = param:match("^%s*(.-)%s*$")
 				if param ~= "" then
 					table.insert(ps_params, "$" .. param)
@@ -425,23 +761,63 @@ function M.to_ps1(code)
 			end
 			table.insert(lines, indent .. "function " .. fn_name .. "(" .. table.concat(ps_params, ", ") .. ") {")
 
+		-- Return statements: return expr
+		elseif trimmed:match("^return%s*(.*)$") then
+			local ret_expr = trimmed:match("^return%s*(.*)$"):match("^%s*(.-)%s*$")
+			if ret_expr ~= "" then
+				local fn1, a1, op, fn2, a2 = ret_expr:match("^([%a_][%w_]*)%((.*)%)%s*([+%*%/%-])%s*([%a_][%w_]*)%((.*)%)$")
+				if fn1 and a1 and op and fn2 and a2 then
+					table.insert(lines, indent .. "return (" .. fn1 .. " (" .. to_ps1_expr(a1) .. ")) " .. op .. " (" .. fn2 .. " (" .. to_ps1_expr(a2) .. "))")
+				else
+					table.insert(lines, indent .. "return " .. format_ps1_val(ret_expr))
+				end
+			else
+				table.insert(lines, indent .. "return")
+			end
+
+		-- coroutine.yield(...) -> Write-Output ...
+		elseif trimmed:match("^coroutine%.yield%((.*)%)") then
+			local args = trimmed:match("^coroutine%.yield%((.*)%)")
+			local parts = {}
+			for _, part in ipairs(split_args(args)) do
+				table.insert(parts, format_ps1_val(part))
+			end
+			table.insert(lines, indent .. "Write-Output " .. table.concat(parts, " "))
+
+		-- Multiple variable assignment: local ok, val = coroutine.resume(co, arg) OR pcall(fn, arg)
+		elseif trimmed:match("^local%s+([%a_][%w_]*)%s*,%s*([%a_][%w_]*)%s*=%s*(.-)%((.*)%)") then
+			local var_ok, var_res, fn_call, fn_args = trimmed:match("^local%s+([%a_][%w_]*)%s*,%s*([%a_][%w_]*)%s*=%s*(.-)%((.*)%)")
+			fn_call = fn_call:match("^%s*(.-)%s*$")
+			if fn_call == "coroutine.resume" then
+				local args_parts = split_args(fn_args)
+				local co_name = args_parts[1] or "co"
+				local extra_args = {}
+				for i = 2, #args_parts do
+					table.insert(extra_args, format_ps1_val(args_parts[i]))
+				end
+				table.insert(lines, indent .. "$" .. var_res .. " = (" .. co_name .. " " .. table.concat(extra_args, " ") .. ")")
+				table.insert(lines, indent .. "$" .. var_ok .. " = $true")
+			elseif fn_call == "pcall" then
+				local args_parts = split_args(fn_args)
+				local target_fn = args_parts[1] or "fn"
+				local extra_args = {}
+				for i = 2, #args_parts do
+					table.insert(extra_args, format_ps1_val(args_parts[i]))
+				end
+				table.insert(lines, indent .. "try {")
+				table.insert(lines, indent .. "  $" .. var_res .. " = " .. target_fn .. " " .. table.concat(extra_args, " "))
+				table.insert(lines, indent .. "  $" .. var_ok .. " = $true")
+				table.insert(lines, indent .. "} catch {")
+				table.insert(lines, indent .. "  $" .. var_ok .. " = $false")
+				table.insert(lines, indent .. "}")
+			end
+
 		-- print(...) -> Write-Host ...
 		elseif trimmed:match("^print%((.*)%)") then
 			local args = trimmed:match("^print%((.*)%)")
 			local parts = {}
-			for part in args:gmatch("[^,]+") do
-				part = part:match("^%s*(.-)%s*$")
-				if part:sub(1, 1) == '"' and part:sub(-1) == '"' then
-					table.insert(parts, part)
-				elseif part:sub(1, 1) == "'" and part:sub(-1) == "'" then
-					table.insert(parts, part)
-				else
-					if part:sub(1, 1) ~= "$" then
-						table.insert(parts, "$" .. part)
-					else
-						table.insert(parts, part)
-					end
-				end
+			for _, part in ipairs(split_args(args)) do
+				table.insert(parts, format_ps1_val(part))
 			end
 			table.insert(lines, indent .. "Write-Host " .. table.concat(parts, " "))
 
@@ -450,13 +826,10 @@ function M.to_ps1(code)
 			local args = trimmed:match("^console%.[%w_]+%((.*)%)%s*$")
 			local parts = {}
 			for _, raw in ipairs(split_args(args)) do
-				local part = raw:match("^%s*(.-)%s*$")
-				if part:sub(1, 1) == '"' or part:sub(1, 1) == "'" then
-					table.insert(parts, part)
-				elseif part:sub(1, 1) == "{" then
-					table.insert(parts, lua_tbl_to_ps1(part))
+				if raw:sub(1, 1) == "{" then
+					table.insert(parts, lua_tbl_to_ps1(raw))
 				else
-					table.insert(parts, ps1_expr(part))
+					table.insert(parts, format_ps1_val(raw))
 				end
 			end
 			table.insert(lines, indent .. "Write-Host " .. table.concat(parts, " "))
@@ -464,86 +837,31 @@ function M.to_ps1(code)
 		-- error(msg) -> throw msg
 		elseif trimmed:match("^error%((.*)%)") then
 			local err_msg = trimmed:match("^error%((.*)%)")
-			table.insert(lines, indent .. "throw " .. err_msg)
+			table.insert(lines, indent .. "throw " .. format_ps1_val(err_msg))
 
 		-- assert(cond, msg) -> if (-not (cond)) { throw msg }
 		elseif trimmed:match("^assert%((.*)%)") then
-			local args = trimmed:match("^assert%((.*)%)")
-			local cond, msg = args:match("^(.-),%s*(.*)$")
-			cond = cond or args
-			msg = msg or '"Assertion failed"'
-			table.insert(lines, indent .. "if (-not (" .. cond .. ")) { throw " .. msg .. " }")
+			local args = split_args(trimmed:match("^assert%((.*)%)"))
+			local cond = args[1] or "true"
+			local msg = args[2] or '"Assertion failed"'
+			table.insert(lines, indent .. "if (-not (" .. to_ps1_expr(cond) .. ")) { throw " .. format_ps1_val(msg) .. " }")
 
 		-- fs.mkdir(path) -> New-Item -ItemType Directory -Force -Path path | Out-Null
-		elseif trimmed:match("fs%.mkdir%((.*)%)") then
-			local path_arg = trimmed:match("fs%.mkdir%((.*)%)")
-			table.insert(lines, indent .. "New-Item -ItemType Directory -Force -Path " .. path_arg .. " | Out-Null")
+		elseif trimmed:match("^fs%.mkdir%((.*)%)") then
+			local path_arg = trimmed:match("^fs%.mkdir%((.*)%)")
+			table.insert(lines, indent .. "New-Item -ItemType Directory -Force -Path " .. format_ps1_val(path_arg) .. " | Out-Null")
 
 		-- fs.write(path, content) -> Set-Content -Path path -Value content
-		elseif trimmed:match("fs%.write%((.*),%s*(.*)%)") then
-			local path_arg, content_arg = trimmed:match("fs%.write%((.*),%s*(.*)%)")
-			table.insert(lines, indent .. "Set-Content -Path " .. path_arg .. " -Value " .. content_arg)
+		elseif trimmed:match("^fs%.write%((.*)%)") then
+			local args = split_args(trimmed:match("^fs%.write%((.*)%)"))
+			local path_arg = args[1]
+			local content_arg = args[2] or '""'
+			table.insert(lines, indent .. "Set-Content -Path " .. format_ps1_val(path_arg) .. " -Value " .. format_ps1_val(content_arg))
 
-		-- fs.read(path) -> Get-Content -Raw path
-		elseif trimmed:match("fs%.read%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*fs%.read%((.*)%)")
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = Get-Content -Raw " .. path_arg)
-			else
-				local path = trimmed:match("fs%.read%((.*)%)")
-				table.insert(lines, indent .. "Get-Content -Raw " .. path)
-			end
-
-		-- json.encode(obj) -> obj | ConvertTo-Json -Compress
-		elseif trimmed:match("json%.encode%((.*)%)") then
-			local var, obj = trimmed:match("^local%s+([%w_]+)%s*=%s*json%.encode%((.*)%)")
-			local ps1_obj = obj:sub(1, 1) == "{" and lua_tbl_to_ps1(obj) or (obj:sub(1,1) == "$" and obj or "$" .. obj)
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = (" .. ps1_obj .. " | ConvertTo-Json -Compress)")
-			else
-				local obj_arg = trimmed:match("json%.encode%((.*)%)")
-				local ps1_arg = obj_arg:sub(1, 1) == "{" and lua_tbl_to_ps1(obj_arg) or (obj_arg:sub(1,1) == "$" and obj_arg or "$" .. obj_arg)
-				table.insert(lines, indent .. ps1_arg .. " | ConvertTo-Json -Compress")
-			end
-
-		-- json.load(path) -> Get-Content -Raw path | ConvertFrom-Json
-		elseif trimmed:match("json%.load%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*json%.load%((.*)%)")
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = (Get-Content -Raw " .. path_arg .. " | ConvertFrom-Json)")
-			else
-				local path = trimmed:match("json%.load%((.*)%)")
-				table.insert(lines, indent .. "Get-Content -Raw " .. path .. " | ConvertFrom-Json")
-			end
-
-		-- yaml.load(path) -> Get-Content -Raw path | ConvertFrom-Json
-		elseif trimmed:match("yaml%.load%((.*)%)") then
-			local var, path_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*yaml%.load%((.*)%)")
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = (Get-Content -Raw " .. path_arg .. " | ConvertFrom-Json)")
-			else
-				local path = trimmed:match("yaml%.load%((.*)%)")
-				table.insert(lines, indent .. "Get-Content -Raw " .. path .. " | ConvertFrom-Json")
-			end
-
-		-- fetch.get(url) -> (Invoke-WebRequest -Uri url -UseBasicParsing).Content
-		-- fetch.json(url) -> Invoke-RestMethod -Uri url
-		elseif trimmed:match("fetch%.get%((.*)%)") then
-			local var, url_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*fetch%.get%((.*)%)")
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = (Invoke-WebRequest -Uri " .. url_arg .. " -UseBasicParsing).Content")
-			else
-				local url = trimmed:match("fetch%.get%((.*)%)")
-				table.insert(lines, indent .. "(Invoke-WebRequest -Uri " .. url .. " -UseBasicParsing).Content")
-			end
-		elseif trimmed:match("fetch%.json%((.*)%)") then
-			local var, url_arg = trimmed:match("^local%s+([%w_]+)%s*=%s*fetch%.json%((.*)%)")
-			if var then
-				table.insert(lines, indent .. "$" .. var .. " = Invoke-RestMethod -Uri " .. url_arg)
-			else
-				local url = trimmed:match("fetch%.json%((.*)%)")
-				table.insert(lines, indent .. "Invoke-RestMethod -Uri " .. url)
-			end
+		-- fs.remove(path) / fs.delete(path) -> Remove-Item -Recurse -Force path
+		elseif trimmed:match("^fs%.remove%((.*)%)") or trimmed:match("^fs%.delete%((.*)%)") then
+			local path_arg = trimmed:match("%((.*)%)")
+			table.insert(lines, indent .. "Remove-Item -Recurse -Force -Path " .. format_ps1_val(path_arg))
 
 		-- $ "cmd" or terminal.exec("cmd") -> cmd
 		elseif trimmed:match("^%s*%$%s*%((.*)%)") or trimmed:match("^%s*terminal%.exec%((.*)%)") or trimmed:match("^%s*terminal%.run%((.*)%)") then
@@ -551,53 +869,128 @@ function M.to_ps1(code)
 			cmd_arg = cmd_arg:gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
 			table.insert(lines, indent .. cmd_arg)
 
-		-- local var = val -> $var = val
-		elseif trimmed:match("^local%s+([%w_]+)%s*=%s*(.*)$") then
-			local var, val = trimmed:match("^local%s+([%w_]+)%s*=%s*(.*)$")
-			val = val:gsub("true", "$true"):gsub("false", "$false"):gsub("nil", "$null")
-			table.insert(lines, indent .. "$" .. var .. " = " .. val)
+		-- Variable assignments: local var = val OR var = val
+		elseif trimmed:match("^local%s+[%a_][%w_]*%s*=%s*") or trimmed:match("^[%a_][%w_]*%s*=%s*") then
+			local is_local, var, val
+			if trimmed:match("^local%s+") then
+				var, val = trimmed:match("^local%s+([%a_][%w_]*)%s*=%s*(.*)$")
+				is_local = true
+			else
+				var, val = trimmed:match("^([%a_][%w_]*)%s*=%s*(.*)$")
+				is_local = false
+			end
 
-		-- Loops: for i = start, stop do
-		elseif trimmed:match("^for%s+([%w_]+)%s*=%s*(%d+)%s*,%s*(%d+)%s+do$") then
-			local var, start_val, stop_val = trimmed:match("^for%s+([%w_]+)%s*=%s*(%d+)%s*,%s*(%d+)%s+do$")
-			table.insert(lines, indent .. "for ($" .. var .. " = " .. start_val .. "; $" .. var .. " -le " .. stop_val .. "; $" .. var .. "++) {")
+			-- Table/array literal: local list = { "a", "b" }
+			if val:sub(1, 1) == "{" and val:sub(-1) == "}" then
+				table.insert(lines, indent .. "$" .. var .. " = " .. lua_tbl_to_ps1(val))
+
+			-- Builtin: fs.read(path) -> Get-Content -Raw path
+			elseif val:match("^fs%.read%((.*)%)") then
+				local path_arg = val:match("^fs%.read%((.*)%)")
+				table.insert(lines, indent .. "$" .. var .. " = Get-Content -Raw " .. format_ps1_val(path_arg))
+
+			-- Builtin: json.encode(obj) -> obj | ConvertTo-Json -Compress
+			elseif val:match("^json%.encode%((.*)%)") then
+				local obj_arg = val:match("^json%.encode%((.*)%)")
+				local ps1_obj = obj_arg:sub(1, 1) == "{" and lua_tbl_to_ps1(obj_arg) or format_ps1_val(obj_arg)
+				table.insert(lines, indent .. "$" .. var .. " = (" .. ps1_obj .. " | ConvertTo-Json -Compress)")
+
+			-- Builtin: json.load(path) -> Get-Content -Raw path | ConvertFrom-Json
+			elseif val:match("^json%.load%((.*)%)") then
+				local path_arg = val:match("^json%.load%((.*)%)")
+				table.insert(lines, indent .. "$" .. var .. " = (Get-Content -Raw " .. format_ps1_val(path_arg) .. " | ConvertFrom-Json)")
+
+			-- Builtin: fetch.get(url) -> Invoke-WebRequest
+			elseif val:match("^fetch%.get%((.*)%)") then
+				local url_arg = val:match("^fetch%.get%((.*)%)")
+				table.insert(lines, indent .. "$" .. var .. " = (Invoke-WebRequest -Uri " .. format_ps1_val(url_arg) .. " -UseBasicParsing).Content")
+
+			-- Builtin: fetch.json(url) -> Invoke-RestMethod
+			elseif val:match("^fetch%.json%((.*)%)") then
+				local url_arg = val:match("^fetch%.json%((.*)%)")
+				table.insert(lines, indent .. "$" .. var .. " = Invoke-RestMethod -Uri " .. format_ps1_val(url_arg))
+
+			-- Builtin: terminal execution
+			elseif val:match("^terminal%..-%((.*)%)") or val:match("^%s*%$%s*%((.*)%)") then
+				local cmd_arg = val:match("%((.*)%)"):gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
+				table.insert(lines, indent .. "$" .. var .. " = (" .. cmd_arg .. ")")
+
+			-- Custom function call: var = fn(a, b)
+			elseif val:match("^[%a_][%w_]*%s*%((.*)%)") then
+				local fn_name, fn_args = val:match("^([%a_][%w_]*)%s*%((.*)%)")
+				local ps_args = {}
+				for _, arg in ipairs(split_args(fn_args)) do
+					table.insert(ps_args, format_ps1_val(arg))
+				end
+				table.insert(lines, indent .. "$" .. var .. " = (" .. fn_name .. " " .. table.concat(ps_args, " ") .. ")")
+
+			-- Standard value / math assignment
+			else
+				table.insert(lines, indent .. "$" .. var .. " = " .. format_ps1_val(val))
+			end
+
+		-- Custom standalone function calls: fn(arg1, arg2)
+		elseif trimmed:match("^[%a_][%w_]*%s*%((.*)%)%s*$") then
+			local fn_name, fn_args = trimmed:match("^([%a_][%w_]*)%s*%((.*)%)%s*$")
+			local ps_args = {}
+			for _, arg in ipairs(split_args(fn_args)) do
+				table.insert(ps_args, format_ps1_val(arg))
+			end
+			table.insert(lines, indent .. fn_name .. " " .. table.concat(ps_args, " "))
+
+		-- Loops: for i = start, stop do OR for i = start, stop, step do
+		elseif trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$") or trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then
+			local var, start_val, stop_val, step_val
+			if trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then
+				var, start_val, stop_val, step_val = trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$")
+			else
+				var, start_val, stop_val = trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$")
+				step_val = "1"
+			end
+			table.insert(lines, indent .. "for ($" .. var .. " = " .. format_ps1_val(start_val) .. "; $" .. var .. " -le " .. format_ps1_val(stop_val) .. "; $" .. var .. " += " .. format_ps1_val(step_val) .. ") {")
 
 		-- Loops: for _, item in ipairs(list) do
-		elseif trimmed:match("^for%s+[%w_]+%s*,%s*([%w_]+)%s+in%s+ipairs%(([%w_]+)%)%s+do$") then
-			local item_var, list_var = trimmed:match("^for%s+[%w_]+%s*,%s*([%w_]+)%s+in%s+ipairs%(([%w_]+)%)%s+do$")
+		elseif trimmed:match("^for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(([%a_][%w_]*)%)%s+do$") then
+			local item_var, list_var = trimmed:match("^for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(([%a_][%w_]*)%)%s+do$")
 			table.insert(lines, indent .. "foreach ($" .. item_var .. " in $" .. list_var .. ") {")
 
 		-- Loops: while cond do
 		elseif trimmed:match("^while%s+(.-)%s+do$") then
 			local cond = trimmed:match("^while%s+(.-)%s+do$")
-			table.insert(lines, indent .. "while (" .. cond .. ") {")
+			table.insert(lines, indent .. "while (" .. to_ps1_expr(cond) .. ") {")
 
 		-- Control Flow: if ... then
 		elseif trimmed:match("^if%s+(.-)%s+then$") then
 			local cond = trimmed:match("^if%s+(.-)%s+then$")
-			if cond:match("fs%.exists%((.*)%)") then
-				local p = cond:match("fs%.exists%((.*)%)")
-				table.insert(lines, indent .. "if (Test-Path " .. p .. ") {")
+			if cond:match("^not%s+fs%.exists%((.*)%)") then
+				local p = cond:match("^not%s+fs%.exists%((.*)%)")
+				table.insert(lines, indent .. "if (-not (Test-Path " .. format_ps1_val(p) .. ")) {")
+			elseif cond:match("^fs%.exists%((.*)%)") then
+				local p = cond:match("^fs%.exists%((.*)%)")
+				table.insert(lines, indent .. "if (Test-Path " .. format_ps1_val(p) .. ") {")
 			else
-				table.insert(lines, indent .. "if (" .. ps1_expr(cond) .. ") {")
+				table.insert(lines, indent .. "if (" .. to_ps1_expr(cond) .. ") {")
 			end
 
 		-- Control Flow: elseif ... then
 		elseif trimmed:match("^elseif%s+(.-)%s+then$") then
 			local cond = trimmed:match("^elseif%s+(.-)%s+then$")
-			if cond:match("fs%.exists%((.*)%)") then
-				local p = cond:match("fs%.exists%((.*)%)")
-				table.insert(lines, indent .. "} elseif (Test-Path " .. p .. ") {")
+			if cond:match("^not%s+fs%.exists%((.*)%)") then
+				local p = cond:match("^not%s+fs%.exists%((.*)%)")
+				table.insert(lines, indent .. "} elseif (-not (Test-Path " .. format_ps1_val(p) .. ")) {")
+			elseif cond:match("^fs%.exists%((.*)%)") then
+				local p = cond:match("^fs%.exists%((.*)%)")
+				table.insert(lines, indent .. "} elseif (Test-Path " .. format_ps1_val(p) .. ") {")
 			else
-				table.insert(lines, indent .. "} elseif (" .. ps1_expr(cond) .. ") {")
+				table.insert(lines, indent .. "} elseif (" .. to_ps1_expr(cond) .. ") {")
 			end
 
 		-- Control Flow: else
 		elseif trimmed == "else" then
 			table.insert(lines, indent .. "} else {")
 
-		-- Block End: end
-		elseif trimmed == "end" or trimmed == "}" then
+		-- Block End: end or end)
+		elseif trimmed == "end" or trimmed:match("^end%)?") or trimmed == "}" then
 			table.insert(lines, indent .. "}")
 
 		else

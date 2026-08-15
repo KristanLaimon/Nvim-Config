@@ -1,1 +1,10 @@
 test.sh
+test.ps1
+tests/krsnvimscript/*.sh
+tests/krsnvimscript/*.ps1
+tests/krsnvimscript/json_out
+tests/krsnvimscript/output_test
+tests/krsnvimscript/output_tests
+json_out
+output_test
+output_tests

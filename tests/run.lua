@@ -51,8 +51,16 @@ end
 --- @return integer count Number of spec files loaded.
 --- @return string[] errors Load errors, one per failed spec.
 function M.load_specs(root, filter)
-	local pattern = root .. "/" .. M.spec_dir .. "/*_spec.lua"
-	local files = vim.fn.glob(pattern, false, true)
+	local patterns = {
+		root .. "/" .. M.spec_dir .. "/*_spec.lua",
+		root .. "/tests/krsnvimscript/libraries/*_spec.lua",
+	}
+	local files = {}
+	for _, pat in ipairs(patterns) do
+		for _, f in ipairs(vim.fn.glob(pat, false, true)) do
+			table.insert(files, f)
+		end
+	end
 	table.sort(files)
 
 	local loaded, errors = 0, {}

@@ -3,7 +3,7 @@
 -- Optional usage: local fetch = require("krsnvim.fetch") or local console = import("console")
 print("Hello from test.krsnvim script!")
 local cli = require("krsnvim.terminal");
-
+local fetch = require("krsnvim.fetch")
 
 local res = cli.run("mkdidr ./my-test", {})
 if res.ok then

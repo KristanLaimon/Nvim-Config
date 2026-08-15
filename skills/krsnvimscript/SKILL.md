@@ -13,16 +13,19 @@ Do NOT use it for: application code, plugin code, anything that must run without
 ## Run a script
 
 ```bash
-nvim --headless -c "lua require[[krsnvim]].setup_globals()" -l build.krsnvim
+nvim --headless -l build.krsnvim
 ```
 
 Inside Neovim: `<C-,>` runs/saves current script (or opens Launch Profiles). `<C-S-,>` opens the wiki docs.
 `.krsnvim` files register as filetype `krsnvim` with Lua syntax.
 
-## Globals
+## Imports & Modules
 
-`setup_globals()` injects four globals — no require needed: `krsnvim`, `console`, `fetch`, `import`.
-Everything else: `import("fs")`, `import("json")`, ... Aliases work with or without prefix (`"fs"` == `"krsnvim.fs"`).
+Use `require("krsnvim")` or `require("krsnvim.<module>")`:
+`local krsnvim = require("krsnvim")`
+`local import = krsnvim.import`
+
+`import("fs")`, `import("json")`, ... Aliases work with or without prefix (`"fs"` == `"krsnvim.fs"`).
 
 `import()` also loads data files by extension: `import("package.json")`, `import("config.yaml")`, `import("Cargo.toml")` return parsed tables.
 

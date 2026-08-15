@@ -33,12 +33,9 @@ M.debug = require("krsnvim.debug")
 M.krsnvimtranspiler = require("krsnvim.krsnvimtranspiler")
 M.exporter = M.krsnvimtranspiler
 
---- Sets up global krsnvim references (krsnvim, console, fetch, import) for child script execution processes.
+--- Deprecated: Globals on _G (console, fetch, import, krsnvim) have been removed to avoid scope pollution.
+--- Access modules via `require("krsnvim")` or `require("krsnvim.<module>")`.
 function M.setup_globals()
-	_G.krsnvim = M
-	_G.console = M.console
-	_G.fetch = M.fetch
-	_G.import = M.import
 end
 
 --- Global smart import function for `krsnvimscript`.

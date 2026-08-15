@@ -237,7 +237,7 @@ M.registry = {
 	},
 
 	krsnvimscript = {
-		command = 'nvim --headless -c "lua require[[krsnvim]].setup_globals()" -l',
+		command = 'nvim --headless -l',
 		dap = function(profile, root, ctx)
 			return {
 				type = "krsnvimscript",
