@@ -63,7 +63,6 @@ return {
 		opts = {
 			servers = {
 				buf_ls = {},
-				protolint = {},
 				intelephense = {
 					settings = {
 						intelephense = {
@@ -250,7 +249,6 @@ return {
 			require("mason").setup()
 			require("mason-lspconfig").setup({
 				ensure_installed = {
-					"protolint",
 					"buf_ls",
 					"intelephense",
 					"lua_ls",

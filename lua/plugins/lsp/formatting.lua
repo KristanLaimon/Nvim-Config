@@ -65,6 +65,7 @@ return {
 			formatters_by_ft = {
 				go = { "goimports", "gofumpt" },
 				lua = { "stylua" },
+				proto = { "protolint" },
 				json = { "prettierd", "prettier", "biome", stop_after_first = true },
 				javascript = { "prettierd", "prettier", "biome", stop_after_first = true },
 				typescript = { "prettierd", "prettier", "biome", stop_after_first = true },
