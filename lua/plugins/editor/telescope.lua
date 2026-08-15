@@ -70,8 +70,8 @@ return {
 		"TelescopeFindFilesNoIgnore",
 	},
 	keys = {
-		{ "<C-k>", "<cmd>Telescope find_files<CR>", mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
-		{ "<C-K>", "<cmd>Telescope find_files<CR>", mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-k>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-K>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
 		{ "<C-A-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-A-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-M-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
@@ -135,8 +135,10 @@ return {
 		--- source; outside one, rg/fd apply the ignore rules themselves.
 		local function find_files_gitignore()
 			if in_git_repo() then
-				if not pcall(builtin.git_files, { show_untracked = true }) then
-					builtin.find_files({ no_ignore = false, hidden = true })
+				if not pcall(builtin.git_files, { recurse_submodules = true }) then
+					if not pcall(builtin.git_files, { show_untracked = true }) then
+						builtin.find_files({ no_ignore = false, hidden = true })
+					end
 				end
 			elseif vim.fn.executable("rg") == 1 then
 				builtin.find_files({

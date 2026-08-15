@@ -100,7 +100,7 @@ for _, key in ipairs(M.settings.keys.find_files) do
 		if _G.FindFilesGitignore then
 			_G.FindFilesGitignore()
 		else
-			require("telescope.builtin").find_files({ no_ignore = false })
+			require("telescope.builtin").git_files({ recurse_submodules = true })
 		end
 	end, opts("Find files (respecting .gitignore)"))
 end

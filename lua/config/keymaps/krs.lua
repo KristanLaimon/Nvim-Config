@@ -42,10 +42,10 @@ M.settings = {
 		task_menu = { "<C-S-t>", "<C-S-T>" },
 		task_menu_leader = "<leader>ta",
 		run_default_task = { "<C-S-a>", "<C-S-A>" },
-		--- Toggle the most recent task output. `<C-i>` is excluded from terminal
-		--- mode: it is the same keycode as <Tab>, which terminal jobs need.
-		toggle_last_output = { "<C-`>", "<C-[>" },
-		toggle_last_output_no_terminal = { "<C-i>" },
+		--- Toggle the most recent task output. `<C-i>` is omitted because it shares
+		--- the same keycode as <Tab>, which breaks code indentation in buffers.
+		toggle_last_output = { "<C-`>" },
+		toggle_last_output_no_terminal = {},
 		--- Prefix for per-slot task output toggles; the slot number is appended.
 		task_slot_prefix = "<C-",
 		explorer = "<C-S-f>",
