@@ -99,13 +99,37 @@ function M.run()
 		table.insert(chan_received, async.await(chan:receive()))
 	end)
 
-	-- Wait for all async promises, heavy threads, and multitasks to complete
+	-- 6. JS-style Timers: setTimeout, clearTimeout, setInterval, clearInterval
+	local timeout_fired = false
+	local timeout_arg = nil
+	local timeout_id = setTimeout(function(arg)
+		timeout_fired = true
+		timeout_arg = arg
+	end, 15, "test_arg")
+
+	local cleared_timeout_fired = false
+	local cleared_id = setTimeout(function()
+		cleared_timeout_fired = true
+	end, 20)
+	clearTimeout(cleared_id)
+
+	local interval_ticks = 0
+	local interval_id = setInterval(function()
+		interval_ticks = interval_ticks + 1
+		if interval_ticks >= 3 then
+			clearInterval(interval_id)
+		end
+	end, 10)
+
+	-- Wait for all async promises, heavy threads, multitasks, and JS timers to complete
 	local ok = vim.wait(3000, function()
 		return promise_resolved
 			and await_done
 			and heavy_thread_done
 			and multitasks_done
 			and #chan_received == 2
+			and timeout_fired
+			and interval_ticks >= 3
 	end, 10)
 
 	assert(ok, "Async operations timed out after 3000ms")
@@ -129,7 +153,12 @@ function M.run()
 	assert(#chan_received == 2, "Channel received both async messages")
 	assert(chan_received[1] == "msg_alpha" and chan_received[2] == "msg_beta", "Channel message order matches")
 
-	print("  ✅ async_spec (real tasks, heavy threads, multitasks) passed")
+	assert(timeout_fired == true, "setTimeout fired successfully")
+	assert(timeout_arg == "test_arg", "setTimeout passed extra arguments correctly")
+	assert(cleared_timeout_fired == false, "clearTimeout cancelled timer successfully")
+	assert(interval_ticks >= 3, "setInterval fired multiple times")
+
+	print("  ✅ async_spec (real tasks, heavy threads, multitasks, setTimeout/setInterval) passed")
 end
 
 return M

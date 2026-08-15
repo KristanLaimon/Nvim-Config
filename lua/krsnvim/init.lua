@@ -36,9 +36,17 @@ M.parallel = M.async
 M.krsnvimtranspiler = require("krsnvim.krsnvimtranspiler")
 M.exporter = M.krsnvimtranspiler
 
---- Deprecated: Globals on _G (console, fetch, import, krsnvim) have been removed to avoid scope pollution.
---- Access modules via `require("krsnvim")` or `require("krsnvim.<module>")`.
+M.setTimeout = M.async.setTimeout
+M.clearTimeout = M.async.clearTimeout
+M.setInterval = M.async.setInterval
+M.clearInterval = M.async.clearInterval
+
+--- Setup global functions (setTimeout, clearTimeout, setInterval, clearInterval).
 function M.setup_globals()
+	_G.setTimeout = M.setTimeout
+	_G.clearTimeout = M.clearTimeout
+	_G.setInterval = M.setInterval
+	_G.clearInterval = M.clearInterval
 end
 
 --- Global smart import function for `krsnvimscript`.

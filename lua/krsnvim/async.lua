@@ -696,4 +696,101 @@ function Channel:close()
 	self.waiters = {}
 end
 
+-- ---------------------------------------------------------------------------
+-- JavaScript-style Global Timers (setTimeout, clearTimeout, setInterval, clearInterval)
+-- ---------------------------------------------------------------------------
+
+local next_timer_id = 1
+local active_timers = {}
+
+--- Schedules execution of a function after `ms` milliseconds.
+--- @param callback function Function to execute
+--- @param ms number|nil Delay in milliseconds (defaults to 0)
+--- @param ... any Arguments to pass to callback
+--- @return number id Timer ID handle
+function M.setTimeout(callback, ms, ...)
+	if type(callback) ~= "function" then
+		error("setTimeout: first argument must be a function")
+	end
+	ms = tonumber(ms) or 0
+	if ms < 0 then ms = 0 end
+	local args = { ... }
+	local timer = uv.new_timer()
+	local id = next_timer_id
+	next_timer_id = next_timer_id + 1
+
+	active_timers[id] = timer
+
+	timer:start(ms, 0, vim.schedule_wrap(function()
+		active_timers[id] = nil
+		if timer and not timer:is_closing() then
+			timer:stop()
+			timer:close()
+		end
+		callback(unpack(args))
+	end))
+
+	return id
+end
+
+--- Cancels a timer created by `setTimeout`.
+--- @param id number|table|nil Timer ID returned by `setTimeout`
+function M.clearTimeout(id)
+	if not id then return end
+	local timer = active_timers[id]
+	if timer then
+		active_timers[id] = nil
+		if not timer:is_closing() then
+			timer:stop()
+			timer:close()
+		end
+	elseif type(id) == "userdata" or (type(id) == "table" and type(id.stop) == "function") then
+		pcall(function()
+			if not id:is_closing() then
+				id:stop()
+				id:close()
+			end
+		end)
+	end
+end
+
+--- Repeatedly calls a function with a fixed time delay between each call.
+--- @param callback function Function to execute
+--- @param ms number|nil Delay in milliseconds (defaults to 1)
+--- @param ... any Arguments to pass to callback
+--- @return number id Interval ID handle
+function M.setInterval(callback, ms, ...)
+	if type(callback) ~= "function" then
+		error("setInterval: first argument must be a function")
+	end
+	ms = tonumber(ms) or 1
+	if ms < 1 then ms = 1 end
+	local args = { ... }
+	local timer = uv.new_timer()
+	local id = next_timer_id
+	next_timer_id = next_timer_id + 1
+
+	active_timers[id] = timer
+
+	timer:start(ms, ms, vim.schedule_wrap(function()
+		if active_timers[id] then
+			callback(unpack(args))
+		end
+	end))
+
+	return id
+end
+
+--- Cancels a repeating timer created by `setInterval`.
+--- @param id number|table|nil Interval ID returned by `setInterval`
+function M.clearInterval(id)
+	M.clearTimeout(id)
+end
+
+-- Export global JS-style timer functions on _G
+_G.setTimeout = M.setTimeout
+_G.clearTimeout = M.clearTimeout
+_G.setInterval = M.setInterval
+_G.clearInterval = M.clearInterval
+
 return M

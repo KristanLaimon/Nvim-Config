@@ -625,11 +625,15 @@ function M.to_sh(code)
 			-- Custom function call: var = fn(a, b)
 			elseif val:match("^[%a_][%w_]*%s*%((.*)%)") then
 				local fn_name, fn_args = val:match("^([%a_][%w_]*)%s*%((.*)%)")
-				local sh_args = {}
-				for _, arg in ipairs(split_args(fn_args)) do
-					table.insert(sh_args, format_sh_val(arg))
+				if fn_name == "setTimeout" or fn_name == "setInterval" or fn_name == "clearTimeout" or fn_name == "clearInterval" then
+					table.insert(lines, indent .. var .. '="timer_id"')
+				else
+					local sh_args = {}
+					for _, arg in ipairs(split_args(fn_args)) do
+						table.insert(sh_args, format_sh_val(arg))
+					end
+					table.insert(lines, indent .. var .. "=$(" .. fn_name .. " " .. table.concat(sh_args, " ") .. ")")
 				end
-				table.insert(lines, indent .. var .. "=$(" .. fn_name .. " " .. table.concat(sh_args, " ") .. ")")
 
 			-- Math / Arithmetic expression: x = x + 1 or x = a + b
 			elseif val:match("[+%*%/%-]") and not val:find('"') and not val:find("'") then
@@ -655,6 +659,10 @@ function M.to_sh(code)
 			local ms_arg = trimmed:match("^async%.sleep%s*%((.*)%)") or trimmed:match("^sleep%s*%((.*)%)")
 			local ms_val = format_sh_val(ms_arg)
 			table.insert(lines, indent .. 'python3 -c "import time; time.sleep(' .. ms_val .. '/1000)" 2>/dev/null || sleep 1')
+
+		-- Builtin: JS-style Timers (setTimeout, setInterval, clearTimeout, clearInterval)
+		elseif trimmed:match("^setTimeout%s*%(") or trimmed:match("^setInterval%s*%(") or trimmed:match("^clearTimeout%s*%(") or trimmed:match("^clearInterval%s*%(") then
+			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: async channel & coroutine / task calls
 		elseif trimmed:match("^async%..-%((.*)%)") or trimmed:match("^[%a_][%w_]*:[%a_][%w_]*%s*%((.*)%)") then
@@ -998,11 +1006,15 @@ function M.to_ps1(code)
 			-- Custom function call: var = fn(a, b)
 			elseif val:match("^[%a_][%w_]*%s*%((.*)%)") then
 				local fn_name, fn_args = val:match("^([%a_][%w_]*)%s*%((.*)%)")
-				local ps_args = {}
-				for _, arg in ipairs(split_args(fn_args)) do
-					table.insert(ps_args, format_ps1_val(arg))
+				if fn_name == "setTimeout" or fn_name == "setInterval" or fn_name == "clearTimeout" or fn_name == "clearInterval" then
+					table.insert(lines, indent .. "$" .. var .. ' = "timer_id"')
+				else
+					local ps_args = {}
+					for _, arg in ipairs(split_args(fn_args)) do
+						table.insert(ps_args, format_ps1_val(arg))
+					end
+					table.insert(lines, indent .. "$" .. var .. " = (" .. fn_name .. " " .. table.concat(ps_args, " ") .. ")")
 				end
-				table.insert(lines, indent .. "$" .. var .. " = (" .. fn_name .. " " .. table.concat(ps_args, " ") .. ")")
 
 			-- Standard value / math assignment
 			else
@@ -1014,6 +1026,10 @@ function M.to_ps1(code)
 			local ms_arg = trimmed:match("^async%.sleep%s*%((.*)%)") or trimmed:match("^sleep%s*%((.*)%)")
 			local ms_val = format_ps1_val(ms_arg)
 			table.insert(lines, indent .. "Start-Sleep -Milliseconds " .. ms_val)
+
+		-- Builtin: JS-style Timers (setTimeout, setInterval, clearTimeout, clearInterval)
+		elseif trimmed:match("^setTimeout%s*%(") or trimmed:match("^setInterval%s*%(") or trimmed:match("^clearTimeout%s*%(") or trimmed:match("^clearInterval%s*%(") then
+			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: async channel & coroutine / task calls
 		elseif trimmed:match("^async%..-%((.*)%)") or trimmed:match("^[%a_][%w_]*:[%a_][%w_]*%s*%((.*)%)") then
