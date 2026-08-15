@@ -62,6 +62,8 @@ M.commands = {
 	-- 🌲 File Explorer & Git
 	-- --------------------------------------------------------------------------
 	{ name = "🌳 Toggle File Explorer (Neo-tree)", cmd = "Neotree toggle", category = "Explorer" },
+	{ name = "🐙 Toggle Git Center (Ctrl+Shift+G)", cmd = "GitCenterToggle", category = "Git" },
+	{ name = "🎨 Toggle Git Center Colored Tab Indicators (Default: Plain Text)", cmd = "GitCenterToggleTabColors", category = "Git" },
 	{ name = "🐙 Toggle Git Panel (Neogit)", cmd = "Neogit", category = "Git" },
 
 	-- --------------------------------------------------------------------------
@@ -76,6 +78,7 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 🎨 UI & Configuration
 	-- --------------------------------------------------------------------------
+	{ name = "🎨 Toggle UI Icons Mode (Nerd Font Symbols vs Emojis)", cmd = "ToggleIconsMode", category = "UI" },
 	{ name = "🔍 Increase Font Size", cmd = "FontSizeIncrease", category = "UI" },
 	{ name = "🔍 Decrease Font Size", cmd = "FontSizeDecrease", category = "UI" },
 	{ name = "🔍 Reset Font Size", cmd = "FontSizeReset", category = "UI" },

@@ -34,6 +34,7 @@ local ui = require("krs.core.ui")
 local store = require("krs.core.store")
 local project = require("krs.core.project")
 local path_util = require("krs.core.path")
+local icons = require("krs.core.icons")
 
 local M = {}
 
@@ -66,6 +67,9 @@ M.settings = {
 
 	--- State persistence file name in project `.krsnvim/`.
 	config_filename = "git-center.json",
+
+	--- Submodule tab indicator colors mode (default: false = plain text, true = colored).
+	tab_colored_indicators = false,
 
 	keys = {
 		--- Toggle the Git Center from anywhere.
@@ -118,6 +122,8 @@ M.diff_modal_win, M.diff_modal_buf = nil, nil
 --- Discovered repository list: [1] = root repository, [2..n] = submodules.
 M.submodules = {}
 
+local ns_tabs = vim.api.nvim_create_namespace("krs_git_tabs")
+
 --- Index of currently active submodule repository in `M.submodules`.
 M.active_submodule_idx = 1
 
@@ -164,12 +170,22 @@ end
 --- @param root string|nil Project root directory.
 --- @return table
 local function load_git_center_config(root)
+	local global_data = store.load(GLOBAL_CONFIG_FILE, {})
 	local project_cfg = root and project.config_path(M.settings.config_filename, root)
-	local data = project_cfg and store.load(project_cfg, nil)
-	if data and type(data) == "table" and next(data) ~= nil then
-		return data
+	local project_data = project_cfg and store.load(project_cfg, nil)
+
+	local merged = {}
+	if type(global_data) == "table" then
+		for k, v in pairs(global_data) do
+			merged[k] = v
+		end
 	end
-	return store.load(GLOBAL_CONFIG_FILE, {})
+	if type(project_data) == "table" then
+		for k, v in pairs(project_data) do
+			merged[k] = v
+		end
+	end
+	return merged
 end
 
 --- Saves settings to both project `.krsnvim/git-center.json` and global store.
@@ -423,7 +439,31 @@ end
 
 --- Renders the control panel.
 ---
-local ns_tabs = vim.api.nvim_create_namespace("KRSGitCenterTabs")
+M.submodule_statuses = {}
+
+--- Synchronously or from cache returns submodule status info:
+--- `{ has_changes = bool, behind = int, ahead = int }`
+--- @param target table
+--- @return table
+local function get_target_status(target)
+	if not target or not target.full_path then
+		return { has_changes = false, behind = 0, ahead = 0 }
+	end
+	if M.submodule_statuses[target.path] then
+		return M.submodule_statuses[target.path]
+	end
+	local info = M.get_git_info(target.full_path)
+	if info then
+		local st = {
+			has_changes = info.has_changes or (#info.staged + #info.unstaged + #info.untracked > 0),
+			behind = info.behind or 0,
+			ahead = info.ahead or 0,
+		}
+		M.submodule_statuses[target.path] = st
+		return st
+	end
+	return { has_changes = false, behind = 0, ahead = 0 }
+end
 
 --- Sets up highlight groups for the submodule tab bar attached to Git Center.
 local function setup_tab_highlights()
@@ -439,6 +479,10 @@ local function setup_tab_highlights()
 	local bg_hl = get_hl("BufferLineBackground") or get_hl("TabLine") or get_hl("Comment") or { fg = 10066329, bg = 1973790 }
 	local fill_hl = get_hl("BufferLineFill") or get_hl("TabLineFill") or get_hl("NormalFloat") or { bg = 1579032 }
 	local sep_hl = get_hl("BufferLineSeparator") or get_hl("FloatBorder") or { fg = 5592405 }
+	local ok_hl = get_hl("GitSignsAdd") or get_hl("DiagnosticOk") or get_hl("String") or { fg = 5307003 }
+	local dim_hl = get_hl("Comment") or get_hl("NonText") or { fg = 5132371 }
+	local inc_hl = get_hl("GitSignsChange") or get_hl("DiagnosticInfo") or get_hl("Special") or { fg = 9023482 }
+	local out_hl = get_hl("DiagnosticWarn") or get_hl("Number") or { fg = 16429932 }
 
 	local active_bg = sel_hl.bg and string.format("#%06x", sel_hl.bg) or "#383c4a"
 	local active_fg = sel_hl.fg and string.format("#%06x", sel_hl.fg) or "#ffffff"
@@ -448,39 +492,48 @@ local function setup_tab_highlights()
 	local inactive_fg = bg_hl.fg and string.format("#%06x", bg_hl.fg) or "#999999"
 	local sep_fg = sep_hl.fg and string.format("#%06x", sep_hl.fg) or "#555555"
 
-	vim.api.nvim_set_hl(0, "KRSGitTabActive", {
-		fg = active_fg,
-		bg = active_bg,
-		bold = true,
-	})
+	local dot_changed_fg = ok_hl.fg and string.format("#%06x", ok_hl.fg) or "#50fa7b"
+	local dot_clean_fg = dim_hl.fg and string.format("#%06x", dim_hl.fg) or "#485263"
+	local incoming_fg = inc_hl.fg and string.format("#%06x", inc_hl.fg) or "#8be9fd"
+	local outgoing_fg = out_hl.fg and string.format("#%06x", out_hl.fg) or "#ffb86c"
 
-	vim.api.nvim_set_hl(0, "KRSGitTabActiveCap", {
-		fg = active_bg,
-		bg = fill_bg,
-	})
+	vim.api.nvim_set_hl(0, "KRSGitTabActive", { fg = active_fg, bg = active_bg, bold = true })
+	vim.api.nvim_set_hl(0, "KRSGitTabActiveCap", { fg = active_bg, bg = fill_bg })
+	vim.api.nvim_set_hl(0, "KRSGitTabInactive", { fg = inactive_fg, bg = inactive_bg })
+	vim.api.nvim_set_hl(0, "KRSGitTabFill", { bg = fill_bg, fg = fill_fg })
+	vim.api.nvim_set_hl(0, "KRSGitTabSep", { fg = sep_fg, bg = fill_bg })
+	vim.api.nvim_set_hl(0, "KRSGitTabBorder", { fg = sep_fg, bg = fill_bg })
 
-	vim.api.nvim_set_hl(0, "KRSGitTabInactive", {
-		fg = inactive_fg,
-		bg = inactive_bg,
-	})
+	vim.api.nvim_set_hl(0, "KRSGitTabDotChangedActive", { fg = dot_changed_fg, bg = active_bg, bold = true })
+	vim.api.nvim_set_hl(0, "KRSGitTabDotCleanActive", { fg = dot_clean_fg, bg = active_bg })
+	vim.api.nvim_set_hl(0, "KRSGitTabIncomingActive", { fg = incoming_fg, bg = active_bg, bold = true })
+	vim.api.nvim_set_hl(0, "KRSGitTabOutgoingActive", { fg = outgoing_fg, bg = active_bg, bold = true })
 
-	vim.api.nvim_set_hl(0, "KRSGitTabFill", {
-		bg = fill_bg,
-		fg = fill_fg,
-	})
-
-	vim.api.nvim_set_hl(0, "KRSGitTabSep", {
-		fg = sep_fg,
-		bg = fill_bg,
-	})
-
-	vim.api.nvim_set_hl(0, "KRSGitTabBorder", {
-		fg = sep_fg,
-		bg = fill_bg,
-	})
+	vim.api.nvim_set_hl(0, "KRSGitTabDotChangedInactive", { fg = dot_changed_fg, bg = inactive_bg, bold = true })
+	vim.api.nvim_set_hl(0, "KRSGitTabDotCleanInactive", { fg = dot_clean_fg, bg = inactive_bg })
+	vim.api.nvim_set_hl(0, "KRSGitTabIncomingInactive", { fg = incoming_fg, bg = inactive_bg, bold = true })
+	vim.api.nvim_set_hl(0, "KRSGitTabOutgoingInactive", { fg = outgoing_fg, bg = inactive_bg, bold = true })
 end
 
 M.tab_click_ranges = {}
+
+--- Toggles between plain text indicators and colored indicators for submodule tabs.
+--- Persists preference to project config and stdpath data.
+function M.toggle_colored_tab_indicators()
+	M.settings.tab_colored_indicators = not M.settings.tab_colored_indicators
+	if M.root_dir then
+		save_git_center_config(M.root_dir, { tab_colored_indicators = M.settings.tab_colored_indicators })
+	else
+		save_git_center_config(nil, { tab_colored_indicators = M.settings.tab_colored_indicators })
+	end
+
+	local label = M.settings.tab_colored_indicators and "ENABLED (Colored)" or "DISABLED (Plain Text)"
+	notify("🐙 Git Center: Tab Indicator Colors " .. label)
+
+	if M.is_open() and M.refresh then
+		M.refresh()
+	end
+end
 
 --- Renders bufferline-style submodule tabs into M.tab_buf, directly overlaying top border.
 --- @param left_w integer Inner width of left panel.
@@ -506,18 +559,53 @@ local function render_tab_bar(left_w)
 	table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
 
 	for idx, item in ipairs(targets) do
+		local st = get_target_status(item)
 		local is_active = (idx == M.active_submodule_idx)
-		local icon = item.is_root and "🐙" or "📁"
+		local icon = item.is_root and icons.get("git") or icons.get("dir")
 		local name = item.name or "Root"
 		local label = string.format("%s %s", icon, name)
 
+		local dot_symbol = st.has_changes and icons.get("dot") or icons.get("clean_dot")
+		local inc_symbol = (st.behind > 0) and icons.get("incoming") or ""
+		local out_symbol = (st.ahead > 0) and icons.get("outgoing") or ""
+
+		local base_tab_hl = is_active and "KRSGitTabActive" or "KRSGitTabInactive"
+		local dot_hl = base_tab_hl
+		local inc_hl = base_tab_hl
+		local out_hl = base_tab_hl
+
+		if M.settings.tab_colored_indicators then
+			dot_hl = is_active
+					and (st.has_changes and "KRSGitTabDotChangedActive" or "KRSGitTabDotCleanActive")
+				or (st.has_changes and "KRSGitTabDotChangedInactive" or "KRSGitTabDotCleanInactive")
+
+			inc_hl = is_active and "KRSGitTabIncomingActive" or "KRSGitTabIncomingInactive"
+			out_hl = is_active and "KRSGitTabOutgoingActive" or "KRSGitTabOutgoingInactive"
+		end
+
 		if is_active then
 			table.insert(chunks, { text = "", hl = "KRSGitTabActiveCap" })
-			table.insert(chunks, { text = string.format(" %s ● ", label), hl = "KRSGitTabActive", idx = idx })
+			table.insert(chunks, { text = string.format(" %s ", label), hl = "KRSGitTabActive", idx = idx })
+			table.insert(chunks, { text = dot_symbol, hl = dot_hl, idx = idx })
+			if inc_symbol ~= "" then
+				table.insert(chunks, { text = " " .. inc_symbol, hl = inc_hl, idx = idx })
+			end
+			if out_symbol ~= "" then
+				table.insert(chunks, { text = " " .. out_symbol, hl = out_hl, idx = idx })
+			end
+			table.insert(chunks, { text = " ", hl = "KRSGitTabActive", idx = idx })
 			table.insert(chunks, { text = "", hl = "KRSGitTabActiveCap" })
 			table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
 		else
-			table.insert(chunks, { text = string.format("  %s  ", label), hl = "KRSGitTabInactive", idx = idx })
+			table.insert(chunks, { text = string.format("  %s ", label), hl = "KRSGitTabInactive", idx = idx })
+			table.insert(chunks, { text = dot_symbol, hl = dot_hl, idx = idx })
+			if inc_symbol ~= "" then
+				table.insert(chunks, { text = " " .. inc_symbol, hl = inc_hl, idx = idx })
+			end
+			if out_symbol ~= "" then
+				table.insert(chunks, { text = " " .. out_symbol, hl = out_hl, idx = idx })
+			end
+			table.insert(chunks, { text = "  ", hl = "KRSGitTabInactive", idx = idx })
 			if idx < #targets then
 				table.insert(chunks, { text = "│", hl = "KRSGitTabSep" })
 			else
@@ -1584,6 +1672,8 @@ function M.open_git_center()
 			return
 		end
 
+		M.submodule_statuses = {}
+
 		local l_width = (M.main_win and vim.api.nvim_win_is_valid(M.main_win)) and vim.api.nvim_win_get_width(M.main_win)
 			or left_width
 		local new_lines, new_line_map, new_sections = build_panel_content(current, l_width)
@@ -2111,6 +2201,14 @@ function M.setup()
 	for _, name in ipairs({ "GitCenterReload", "ReloadGitCenter" }) do
 		pcall(vim.api.nvim_create_user_command, name, reload, { desc = "Reload Git Control Center" })
 	end
+
+	pcall(vim.api.nvim_create_user_command, "GitCenterToggleTabColors", function()
+		M.toggle_colored_tab_indicators()
+	end, { desc = "Toggle Git Center Colored Tab Indicators" })
+
+	pcall(vim.api.nvim_create_user_command, "GitCenterToggle", function()
+		M.toggle_git_center()
+	end, { desc = "Toggle Git Control Center" })
 
 	--- Leaves terminal mode first, so the mapping works from a terminal too.
 	local function from_any_mode(fn)

@@ -34,17 +34,22 @@ M.detached_label = "HEAD (Detached)"
 --- @param header string Header line, including the leading `##`.
 --- @return string branch
 --- @return string|nil upstream
+--- @return integer ahead
+--- @return integer behind
 function M.parse_branch(header)
 	if header:sub(1, 2) ~= "##" then
-		return M.detached_label, nil
+		return M.detached_label, nil, 0, 0
 	end
 
 	local info = header:sub(4)
 	local branch, upstream = info:match("^([^%.]+)%.%.%.(%S+)")
+	local ahead = tonumber(header:match("%[.*ahead%s+(%d+)")) or 0
+	local behind = tonumber(header:match("%[.*behind%s+(%d+)")) or 0
+
 	if branch then
-		return branch, upstream
+		return branch, upstream, ahead, behind
 	end
-	return info:match("^([^%s]+)") or info, nil
+	return (info:match("^([^%s]+)") or info), nil, ahead, behind
 end
 
 --- Sorts porcelain status entries into staged, unstaged and untracked.
@@ -133,24 +138,28 @@ function M.info_finish(handle)
 	end
 
 	local status_lines = git.collect(handle.status_proc)
-	local branch, upstream = M.detached_label, nil
+	local branch, upstream, ahead, behind = M.detached_label, nil, 0, 0
 	local files = { staged = {}, unstaged = {}, untracked = {} }
 
 	if #status_lines > 0 then
-		branch, upstream = M.parse_branch(status_lines[1])
+		branch, upstream, ahead, behind = M.parse_branch(status_lines[1])
 		files = M.parse_files(status_lines)
 	end
 
 	local added, deleted = M.sum_numstat(git.collect(handle.numstat_proc), git.collect(handle.numstat_cached_proc))
+	local has_changes = (#files.staged + #files.unstaged + #files.untracked > 0)
 
 	return {
 		branch = branch,
 		upstream = upstream,
+		ahead = ahead,
+		behind = behind,
 		added = added,
 		deleted = deleted,
 		staged = files.staged,
 		unstaged = files.unstaged,
 		untracked = files.untracked,
+		has_changes = has_changes,
 	}
 end
 
