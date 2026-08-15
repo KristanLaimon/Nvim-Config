@@ -29,6 +29,22 @@ local path = require("krs.core.path")
 
 local M = {}
 
+--- Currently active loaded workspace record.
+M.current_workspace = nil
+
+--- Returns the currently active workspace record, or nil.
+--- @return table|nil
+function M.get_active_workspace()
+	return M.current_workspace
+end
+
+--- Sets the active workspace record.
+--- @param ws table|nil
+function M.set_active_workspace(ws)
+	M.current_workspace = ws
+end
+
+
 -- ============================================================================
 -- CONFIGURATION
 -- ============================================================================
@@ -436,6 +452,11 @@ function M.load_workspace(ws_or_identifier)
 
 	target.updated_at = os.time()
 	save_index(index)
+	M.current_workspace = target
+
+	pcall(function()
+		require("plugins.krs.pinned_tabs").restore_pins()
+	end)
 
 	notify("Workspace '" .. target.name .. "' loaded!")
 	return true
@@ -502,6 +523,7 @@ function M.close_to_menu()
 	end
 
 	local function close_all_and_open_alpha()
+		M.current_workspace = nil
 		pcall(vim.cmd, "Neotree close")
 		purge_neotree_buffers()
 		pcall(vim.cmd, "only")

@@ -113,6 +113,40 @@ function _G.Smart_Close_Buffer(target_buf, force)
 		return
 	end
 
+	local bname = vim.api.nvim_buf_get_name(target_buf)
+	local is_deleted = false
+	if bname ~= "" and vim.bo[target_buf].buftype == "" then
+		if _G.Is_File_Deleted then
+			is_deleted = _G.Is_File_Deleted(target_buf)
+		else
+			is_deleted = vim.fn.filereadable(bname) == 0 and not vim.fn.isdirectory(bname)
+		end
+	end
+
+	-- Intercept closing a deleted file buffer when force is false.
+	-- Prompts a clean UI confirmation modal (Enter to continue, Esc to cancel) instead of raw Neovim error / `!` prompt.
+	if is_deleted and not force then
+		local filename = vim.fn.fnamemodify(bname, ":t")
+		if filename == "" then
+			filename = "buffer #" .. target_buf
+		end
+
+		vim.ui.select({
+			"🔥 Close deleted file buffer (" .. filename .. ")",
+			"❌ Cancel (Keep buffer)",
+		}, {
+			prompt = "[D] File was deleted from disk. Close buffer?",
+			format_item = function(item)
+				return item
+			end,
+		}, function(choice)
+			if choice and choice:find("Close") then
+				_G.Smart_Close_Buffer(target_buf, true)
+			end
+		end)
+		return
+	end
+
 	-- Closing the last real buffer would leave an empty editor, so land on the
 	-- dashboard first and only then delete it.
 	if #real_buffers() <= 1 then
@@ -123,7 +157,7 @@ function _G.Smart_Close_Buffer(target_buf, force)
 		pcall(vim.cmd, "BufferLineCyclePrev")
 	end
 
-	pcall(vim.api.nvim_buf_delete, target_buf, { force = force or false })
+	pcall(vim.api.nvim_buf_delete, target_buf, { force = force or is_deleted })
 end
 
 --- Smart quit: closes the smallest sensible thing (see the header for the ladder).

@@ -55,11 +55,8 @@ end
 -- ============================================================================
 
 vim.keymap.set("n", M.settings.keys.hover, function()
-	-- pcall: hover throws E149 when the buffer has no attached server.
-	pcall(function()
-		vim.lsp.buf.hover({ border = M.settings.border })
-	end)
-end, opts("Show hover documentation"))
+	require("plugins.krs.hover_links").show_or_focus_hover()
+end, opts("Show or focus hover documentation"))
 
 vim.keymap.set({ "n", "i", "v" }, M.settings.keys.signature_help, function()
 	if #attached_clients() == 0 then

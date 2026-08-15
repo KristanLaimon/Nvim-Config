@@ -103,6 +103,9 @@ function M.relative_to(path, root)
 	return nil
 end
 
+--- Alias for relative_to.
+M.relative = M.relative_to
+
 --- Directory of the buffer's file, falling back to the current working directory.
 --- Used by every module that needs "where am I" before resolving a project root.
 ---
@@ -139,6 +142,17 @@ end
 --- @return boolean
 function M.is_dir(p)
 	return vim.fn.isdirectory(p) == 1
+end
+
+--- True when the path is an absolute filesystem path.
+--- @param p string|nil
+--- @return boolean
+function M.is_absolute(p)
+	if not p or p == "" then
+		return false
+	end
+	local norm = M.normalize(p)
+	return norm:sub(1, 1) == "/" or norm:match("^%a:") ~= nil
 end
 
 return M

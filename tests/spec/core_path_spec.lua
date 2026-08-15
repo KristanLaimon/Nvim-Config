@@ -26,6 +26,13 @@ describe("krs.core.path.normalize", function()
 		expect(path.normalize(nil)).toBe("")
 		expect(path.normalize("")).toBe("")
 	end)
+
+	it("identifies absolute paths vs relative paths", function()
+		expect(path.is_absolute("C:/Users/test")).toBeTruthy()
+		expect(path.is_absolute("/usr/local/bin")).toBeTruthy()
+		expect(path.is_absolute("src/main.lua")).toBeFalsy()
+		expect(path.is_absolute("")).toBeFalsy()
+	end)
 end)
 
 describe("krs.core.path.join", function()

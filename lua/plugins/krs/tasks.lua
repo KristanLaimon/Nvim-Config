@@ -768,8 +768,8 @@ function M.run_task_item(task_item, root, opts)
 
 	local task_name = (type(task_item) == "table" and (task_item.name or task_item.cmd)) or tostring(task_item)
 
-	-- Re-running a task that is already running restarts it in place, instead of
-	-- filling a second slot with the same output.
+	-- Re-running the SAME task that is currently running toggles it off (kills job & closes window).
+	-- Running a DIFFERENT task opens a new output slot for concurrent execution.
 	local running_slot
 	for i = 1, M.settings.max_slots do
 		local s = M.slots[i]
@@ -787,7 +787,23 @@ function M.run_task_item(task_item, root, opts)
 		end
 	end
 
-	local slot = running_slot or get_free_slot()
+	if running_slot then
+		local s = M.slots[running_slot]
+		s.is_killing = true
+		pcall(vim.fn.jobstop, s.job_id)
+		s.job_id = nil
+		if s.win and vim.api.nvim_win_is_valid(s.win) then
+			pcall(vim.api.nvim_win_close, s.win, true)
+			s.win = nil
+		end
+		notify(string.format("⏹️ Stopped task '%s' (Slot #%d)", task_name, running_slot))
+		if opts.on_done then
+			opts.on_done(1)
+		end
+		return
+	end
+
+	local slot = get_free_slot()
 	if not slot then
 		return abort(
 			string.format(
@@ -796,14 +812,6 @@ function M.run_task_item(task_item, root, opts)
 				M.settings.max_slots
 			)
 		)
-	end
-
-	if running_slot then
-		local s = M.slots[running_slot]
-		s.is_killing_for_restart = true
-		pcall(vim.fn.jobstop, s.job_id)
-		s.job_id = nil
-		notify(string.format("🔄 Killed old running task '%s' (Slot #%d). Rerunning...", task_name, slot))
 	end
 
 	local origin_win = vim.api.nvim_get_current_win()
@@ -998,7 +1006,7 @@ function M.open_task_menu()
 			themes.get_dropdown({
 				prompt_title = " 🛠️ Tasks ("
 					.. vim.fn.fnamemodify(root, ":t")
-					.. ") | [d]=Default [a]=Add [c]=Chain [x]=Delete ",
+					.. ") | [d]=Default [a]=Add [e]=Edit [c]=Chain [x]=Delete ",
 				finder = finders.new_table({
 					results = entries,
 					entry_maker = function(entry)
@@ -1056,6 +1064,88 @@ function M.open_task_menu()
 									table.insert(pdata.custom_tasks, { name = cmd, cmd = cmd })
 									M.save_project_data(root, pdata)
 									M.open_task_menu()
+								end
+							end)
+						end)
+					end)
+
+					map_both("e", function()
+						local value = selected()
+						if not value then
+							return
+						end
+
+						actions.close(prompt_bufnr)
+						vim.schedule(function()
+							local initial_name = value.name
+							local item = type(value.item) == "table" and value.item or { name = value.name, cmd = value.item }
+
+							vim.ui.input({ prompt = "Edit Task Name: ", default = initial_name }, function(new_name)
+								if not new_name or new_name == "" then
+									return
+								end
+
+								if type(item) == "table" and item.chain then
+									local default_chain = table.concat(item.chain, " && ")
+									vim.ui.input({ prompt = "Edit Chained Steps (separated by '&&' or ','): ", default = default_chain }, function(raw_steps)
+										if not raw_steps or raw_steps == "" then
+											return
+										end
+
+										local steps = {}
+										for step in raw_steps:gmatch("[^&,]+") do
+											local clean = vim.trim(step)
+											if clean ~= "" then
+												table.insert(steps, clean)
+											end
+										end
+
+										if #steps > 0 then
+											pdata.custom_tasks = pdata.custom_tasks or {}
+											local updated = false
+											for idx, ct in ipairs(pdata.custom_tasks) do
+												if ct == item or ct.name == initial_name then
+													pdata.custom_tasks[idx] = { name = new_name, chain = steps }
+													updated = true
+													break
+												end
+											end
+											if not updated then
+												table.insert(pdata.custom_tasks, { name = new_name, chain = steps })
+											end
+											M.save_project_data(root, pdata)
+											notify("✏️ Task chain updated: " .. new_name)
+										end
+										M.open_task_menu()
+									end)
+								else
+									local default_cmd = (type(item) == "table" and item.cmd) or (type(item) == "string" and item) or initial_name
+									vim.ui.input({ prompt = "Edit Command: ", default = default_cmd }, function(new_cmd)
+										if not new_cmd or new_cmd == "" then
+											return
+										end
+
+										pdata.custom_tasks = pdata.custom_tasks or {}
+										local updated = false
+										for idx, ct in ipairs(pdata.custom_tasks) do
+											if ct == item or ct.name == initial_name then
+												pdata.custom_tasks[idx] = { name = new_name, cmd = new_cmd }
+												updated = true
+												break
+											end
+										end
+										if not updated then
+											table.insert(pdata.custom_tasks, { name = new_name, cmd = new_cmd })
+										end
+
+										if is_default_entry(value, pdata.default_task) then
+											pdata.default_task = { name = new_name, cmd = new_cmd }
+										end
+
+										M.save_project_data(root, pdata)
+										notify("✏️ Task updated: " .. new_name)
+										M.open_task_menu()
+									end)
 								end
 							end)
 						end)

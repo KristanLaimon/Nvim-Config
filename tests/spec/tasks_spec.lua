@@ -150,6 +150,20 @@ describe("tasks project data persistence", function()
 		expect(loaded.custom_tasks).toEqual({ task })
 	end)
 
+	it("supports editing and updating custom tasks in project data", function()
+		local initial = { name = "Build", cmd = "npm run build" }
+		tasks.save_project_data(root, { custom_tasks = { initial } })
+
+		local pdata = tasks.get_project_data(root)
+		pdata.custom_tasks[1] = { name = "Build Production", cmd = "npm run build:prod" }
+		tasks.save_project_data(root, pdata)
+
+		local updated = tasks.get_project_data(root)
+		expect(#updated.custom_tasks).toBe(1)
+		expect(updated.custom_tasks[1].name).toBe("Build Production")
+		expect(updated.custom_tasks[1].cmd).toBe("npm run build:prod")
+	end)
+
 	it("writes into .krsnvim/ specifically", function()
 		tasks.save_project_data(root, { custom_tasks = {} })
 
@@ -160,6 +174,23 @@ describe("tasks project data persistence", function()
 		write(".nvimkrs", { '{"default_task":{"name":"Legacy","cmd":"make"},"custom_tasks":[]}' })
 
 		expect(tasks.get_project_data(root).default_task.name).toBe("Legacy")
+	end)
+
+	it("toggles off when re-running same active task, and allocates new slot for different task", function()
+		local t1 = { name = "Long Task 1", cmd = "echo t1" }
+		local t2 = { name = "Long Task 2", cmd = "echo t2" }
+
+		tasks.run_task_item(t1, root)
+		local s1 = tasks.slots[1]
+		expect(s1).toBeTruthy()
+
+		-- Running same task t1 again toggles it off
+		tasks.run_task_item(t1, root)
+		expect(tasks.slots[1].job_id).toBeNil()
+
+		-- Running different task t2 allocates slot
+		tasks.run_task_item(t2, root)
+		expect(tasks.slots[1].name).toBe("Long Task 2")
 	end)
 
 	it("prefers .krsnvim/tasks.json over the legacy file", function()

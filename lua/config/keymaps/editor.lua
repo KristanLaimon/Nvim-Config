@@ -42,6 +42,8 @@ M.settings = {
 		explorer = "<C-S-Space>",
 		--- Netrw-style directory listing, kept as an escape hatch.
 		netrw = "<leader>cd",
+		--- Pin active code buffer tab.
+		pin_tab = "<C-p>",
 	},
 
 	--- Window resize step, in cells.
@@ -107,6 +109,11 @@ for _, key in ipairs(M.settings.keys.comment) do
 end
 
 vim.keymap.set({ "n", "v", "i" }, M.settings.keys.save, "<Cmd>w<CR>", opts("Save file"))
+
+vim.keymap.set("n", M.settings.keys.pin_tab, function()
+	require("plugins.krs.pinned_tabs").toggle_pin()
+end, opts("Toggle pin tab (code buffer only)"))
+
 
 -- Clipboard: the OS clipboard, not vim registers, because that is what the rest
 -- of the desktop means by copy and paste.

@@ -20,7 +20,7 @@
 --- @param bufnr integer Buffer behind the tab.
 local function close_buffer(bufnr)
 	if _G.Smart_Close_Buffer then
-		_G.Smart_Close_Buffer(bufnr, true)
+		_G.Smart_Close_Buffer(bufnr, false)
 	else
 		pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
 	end
