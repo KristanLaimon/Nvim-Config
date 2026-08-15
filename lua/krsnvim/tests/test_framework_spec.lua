@@ -65,6 +65,15 @@ function M.run()
 				local x = 1 + 1
 			end).isNot.toThrow()
 		end)
+
+		it("supports calling module directly when named local test", function()
+			local test_mod = require("krsnvim.test")
+			expect(type(test_mod)).toBe("table")
+			-- Module table is callable thanks to __call metamethod
+			test_mod("direct call test", function()
+				expect(100).toBe(100)
+			end)
+		end)
 	end)
 
 	local results = t.run()

@@ -419,24 +419,120 @@ function M.to_sh(code)
 		elseif trimmed == "" then
 			table.insert(lines, "")
 
-		-- Testing Framework: describe("suite", function() ...)
-		elseif trimmed:match("^describe%s*%((.*)%)") then
+		-- Testing Framework Hooks: test.beforeAll, test.afterAll, test.beforeEach, test.afterEach, etc.
+		elseif trimmed:match("^[%w_]*%.?beforeAll%s*%(") or trimmed:match("^[%w_]*%.?afterAll%s*%(") or trimmed:match("^[%w_]*%.?beforeEach%s*%(") or trimmed:match("^[%w_]*%.?afterEach%s*%(") then
+			table.insert(block_stack, "noop")
+
+		-- Testing Framework Suites: describe("suite", function() ...) or test.describe(...)
+		elseif trimmed:match("^describe%s*%(") or trimmed:match("^[%w_]+%.describe%s*%(") then
 			local suite_name = trimmed:match('describe%s*%("%s*(.-)%s*"') or trimmed:match("describe%s*%('%s*(.-)%s*'") or "Test Suite"
 			table.insert(block_stack, "noop")
 			table.insert(lines, indent .. 'echo "📦 Suite: ' .. suite_name .. '"')
 
-		-- Testing Framework: it("test", function() ...) or test("test", function() ...)
-		elseif trimmed:match("^it%s*%((.*)%)") or trimmed:match("^test%s*%((.*)%)") then
-			local test_name = trimmed:match('it%s*%("%s*(.-)%s*"') or trimmed:match('test%s*%("%s*(.-)%s*"') or trimmed:match("it%s*%('%s*(.-)%s*'") or "Test"
+		-- Testing Framework Runner: test.run() or t.run() or run()
+		elseif trimmed:match("^[%w_]+%.run%s*%(") or trimmed:match("^run%s*%(") then
+			table.insert(lines, indent .. "# [krsnvim] " .. trimmed)
+
+		-- Testing Framework Tests: it("test", function() ...) or test("test", function() ...) or test.test(...)
+		elseif trimmed:match("^it%s*%(") or trimmed:match("^test%s*%(") or trimmed:match("^[%w_]+%.it%s*%(") or trimmed:match("^[%w_]+%.test%s*%(") then
+			local test_name = trimmed:match('it%s*%("%s*(.-)%s*"') or trimmed:match('test%s*%("%s*(.-)%s*"') or trimmed:match("it%s*%('%s*(.-)%s*'") or trimmed:match("test%s*%('%s*(.-)%s*'") or "Test"
 			table.insert(block_stack, "noop")
 			table.insert(lines, indent .. 'echo "  ✓ ' .. test_name .. '"')
 
-		-- Testing Framework: expect(val).toBe(...) or expect(val).toEqual(...)
-		elseif trimmed:match("^expect%s*%((.-)%)%.toBe%s*%((.-)%)") or trimmed:match("^expect%s*%((.-)%)%.toEqual%s*%((.-)%)") then
-			local act, exp = trimmed:match("expect%s*%((.-)%)%.toBe%s*%((.-)%)")
-			if not act then act, exp = trimmed:match("expect%s*%((.-)%)%.toEqual%s*%((.-)%)") end
-			if act and exp then
-				table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' != ' .. format_sh_val(exp) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+		-- Testing Framework Assertions: expect(val)...
+		elseif trimmed:match("^expect%s*%(") then
+			local is_inv = trimmed:find("%.isNot%.") or trimmed:find('%["not"%]') or trimmed:find("%.not%.") or trimmed:find("%.not_%.")
+
+			if trimmed:find("%.toBe%s*%(") or trimmed:find("%.toEqual%s*%(") then
+				local act, exp = trimmed:match("expect%s*%((.-)%)%..-toBe%s*%((.-)%)")
+				if not act then act, exp = trimmed:match("expect%s*%((.-)%)%..-toEqual%s*%((.-)%)") end
+				if act and exp then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' == ' .. format_sh_val(exp) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' != ' .. format_sh_val(exp) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toBeTruthy%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ -n ' .. format_sh_val(act) .. ' ] && [ ' .. format_sh_val(act) .. ' != "false" ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ -z ' .. format_sh_val(act) .. ' ] || [ ' .. format_sh_val(act) .. ' == "false" ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toBeFalsy%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ -z ' .. format_sh_val(act) .. ' ] || [ ' .. format_sh_val(act) .. ' == "false" ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ -n ' .. format_sh_val(act) .. ' ] && [ ' .. format_sh_val(act) .. ' != "false" ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toBeNil%s*%(") or trimmed:find("%.toBeNull%s*%(") or trimmed:find("%.toBeUndefined%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ -z ' .. format_sh_val(act) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ -n ' .. format_sh_val(act) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toBeDefined%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ -n ' .. format_sh_val(act) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ -z ' .. format_sh_val(act) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toContain%s*%(") then
+				local act, item = trimmed:match("expect%s*%((.-)%)%..-toContain%s*%((.-)%)")
+				if act and item then
+					local clean_item = item:gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
+					if is_inv then
+						table.insert(lines, indent .. 'if [[ ' .. format_sh_val(act) .. ' == *' .. clean_item .. '* ]]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [[ ' .. format_sh_val(act) .. ' != *' .. clean_item .. '* ]]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toHaveLength%s*%(") then
+				local act, len = trimmed:match("expect%s*%((.-)%)%..-toHaveLength%s*%((.-)%)")
+				if act and len then
+					if is_inv then
+						table.insert(lines, indent .. 'if [ ${#' .. act .. '} -eq ' .. format_sh_val(len) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					else
+						table.insert(lines, indent .. 'if [ ${#' .. act .. '} -ne ' .. format_sh_val(len) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+					end
+				end
+			elseif trimmed:find("%.toBeGreaterThan%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeGreaterThan%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' -le ' .. format_sh_val(num) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+				end
+			elseif trimmed:find("%.toBeGreaterThanOrEqual%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeGreaterThanOrEqual%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' -lt ' .. format_sh_val(num) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+				end
+			elseif trimmed:find("%.toBeLessThan%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeLessThan%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' -ge ' .. format_sh_val(num) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+				end
+			elseif trimmed:find("%.toBeLessThanOrEqual%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeLessThanOrEqual%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if [ ' .. format_sh_val(act) .. ' -gt ' .. format_sh_val(num) .. ' ]; then echo "❌ Expect failed"; exit 1; fi')
+				end
+			elseif trimmed:find("%.toThrow") then
+				local fn = trimmed:match("expect%s*%((.-)%)%..-toThrow")
+				if fn then
+					table.insert(lines, indent .. 'if ' .. format_sh_val(fn) .. ' 2>/dev/null; then echo "❌ Expect failed: expected error"; exit 1; fi')
+				end
 			end
 
 		-- Function definitions or Coroutine creation: function fn_name(arg1, arg2)
@@ -665,7 +761,7 @@ function M.to_sh(code)
 			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: async channel & coroutine / task calls
-		elseif trimmed:match("^async%..-%((.*)%)") or trimmed:match("^[%a_][%w_]*:[%a_][%w_]*%s*%((.*)%)") then
+		elseif trimmed:match("^async%..-%((.*)%)") then
 			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: dofile(path) / loadfile(path) -> nvim -l path or bash path.sh
@@ -695,14 +791,21 @@ function M.to_sh(code)
 			local path_arg = trimmed:match("^os%.remove%s*%((.*)%)")
 			table.insert(lines, indent .. "rm -f " .. format_sh_val(path_arg))
 
-		-- Custom standalone function calls: fn(arg1, arg2)
-		elseif trimmed:match("^[%a_][%w_]*%s*%((.*)%)%s*$") then
-			local fn_name, fn_args = trimmed:match("^([%a_][%w_]*)%s*%((.*)%)%s*$")
-			local sh_args = {}
-			for _, arg in ipairs(split_args(fn_args)) do
-				table.insert(sh_args, format_sh_val(arg))
+		-- Custom standalone function calls or method calls: fn(arg1, arg2) or obj.fn(arg1, arg2) or obj:fn(arg1, arg2)
+		elseif trimmed:match("^[%a_][%w_%.%:]*%s*%((.*)%)%s*$") then
+			local fn_name, fn_args = trimmed:match("^([%a_][%w_%.%:]*)%s*%((.*)%)%s*$")
+			if fn_name == "setTimeout" or fn_name == "setInterval" or fn_name == "clearTimeout" or fn_name == "clearInterval" then
+				table.insert(lines, indent .. "# " .. trimmed)
+			elseif fn_name:sub(1, 6) == "async." or fn_name:sub(1, 8) == "coroutine" then
+				table.insert(lines, indent .. "# " .. trimmed)
+			else
+				local sh_args = {}
+				for _, arg in ipairs(split_args(fn_args)) do
+					table.insert(sh_args, format_sh_val(arg))
+				end
+				local safe_fn = fn_name:gsub("[%.:]", "_")
+				table.insert(lines, indent .. safe_fn .. " " .. table.concat(sh_args, " "))
 			end
-			table.insert(lines, indent .. fn_name .. " " .. table.concat(sh_args, " "))
 
 		-- Loops: for i = start, stop do OR for i = start, stop, step do
 		elseif trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$") or trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then
@@ -759,7 +862,7 @@ function M.to_sh(code)
 
 		-- Block End: end or end)
 		elseif trimmed == "end" or trimmed:match("^end%)?") or trimmed == "}" then
-			local last_block = table.remove(block_stack) or "if"
+			local last_block = table.remove(block_stack)
 			if last_block == "if" then
 				table.insert(lines, indent .. "fi")
 			elseif last_block == "function" or last_block == "fn" then
@@ -768,7 +871,7 @@ function M.to_sh(code)
 				table.insert(lines, indent .. "done")
 			elseif last_block == "noop" then
 				-- noop block: skip emitting closing token
-			else
+			elseif last_block then
 				table.insert(lines, indent .. "}")
 			end
 
@@ -811,24 +914,120 @@ function M.to_ps1(code)
 		elseif trimmed == "" then
 			table.insert(lines, "")
 
-		-- Testing Framework: describe("suite", function() ...)
-		elseif trimmed:match("^describe%s*%((.*)%)") then
+		-- Testing Framework Hooks: test.beforeAll, test.afterAll, test.beforeEach, test.afterEach, etc.
+		elseif trimmed:match("^[%w_]*%.?beforeAll%s*%(") or trimmed:match("^[%w_]*%.?afterAll%s*%(") or trimmed:match("^[%w_]*%.?beforeEach%s*%(") or trimmed:match("^[%w_]*%.?afterEach%s*%(") then
+			table.insert(block_stack, "noop")
+
+		-- Testing Framework Suites: describe("suite", function() ...) or test.describe(...)
+		elseif trimmed:match("^describe%s*%(") or trimmed:match("^[%w_]+%.describe%s*%(") then
 			local suite_name = trimmed:match('describe%s*%("%s*(.-)%s*"') or trimmed:match("describe%s*%('%s*(.-)%s*'") or "Test Suite"
 			table.insert(block_stack, "noop")
 			table.insert(lines, indent .. 'Write-Host "📦 Suite: ' .. suite_name .. '"')
 
-		-- Testing Framework: it("test", function() ...) or test("test", function() ...)
-		elseif trimmed:match("^it%s*%((.*)%)") or trimmed:match("^test%s*%((.*)%)") then
-			local test_name = trimmed:match('it%s*%("%s*(.-)%s*"') or trimmed:match('test%s*%("%s*(.-)%s*"') or trimmed:match("it%s*%('%s*(.-)%s*'") or "Test"
+		-- Testing Framework Runner: test.run() or t.run() or run()
+		elseif trimmed:match("^[%w_]+%.run%s*%(") or trimmed:match("^run%s*%(") then
+			table.insert(lines, indent .. "# [krsnvim] " .. trimmed)
+
+		-- Testing Framework Tests: it("test", function() ...) or test("test", function() ...) or test.test(...)
+		elseif trimmed:match("^it%s*%(") or trimmed:match("^test%s*%(") or trimmed:match("^[%w_]+%.it%s*%(") or trimmed:match("^[%w_]+%.test%s*%(") then
+			local test_name = trimmed:match('it%s*%("%s*(.-)%s*"') or trimmed:match('test%s*%("%s*(.-)%s*"') or trimmed:match("it%s*%('%s*(.-)%s*'") or trimmed:match("test%s*%('%s*(.-)%s*'") or "Test"
 			table.insert(block_stack, "noop")
 			table.insert(lines, indent .. 'Write-Host "  ✓ ' .. test_name .. '"')
 
-		-- Testing Framework: expect(val).toBe(...) or expect(val).toEqual(...)
-		elseif trimmed:match("^expect%s*%((.-)%)%.toBe%s*%((.-)%)") or trimmed:match("^expect%s*%((.-)%)%.toEqual%s*%((.-)%)") then
-			local act, exp = trimmed:match("expect%s*%((.-)%)%.toBe%s*%((.-)%)")
-			if not act then act, exp = trimmed:match("expect%s*%((.-)%)%.toEqual%s*%((.-)%)") end
-			if act and exp then
-				table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -ne ' .. format_ps1_val(exp) .. ') { Write-Error "Expect failed"; exit 1 }')
+		-- Testing Framework Assertions: expect(val)...
+		elseif trimmed:match("^expect%s*%(") then
+			local is_inv = trimmed:find("%.isNot%.") or trimmed:find('%["not"%]') or trimmed:find("%.not%.") or trimmed:find("%.not_%.")
+
+			if trimmed:find("%.toBe%s*%(") or trimmed:find("%.toEqual%s*%(") then
+				local act, exp = trimmed:match("expect%s*%((.-)%)%..-toBe%s*%((.-)%)")
+				if not act then act, exp = trimmed:match("expect%s*%((.-)%)%..-toEqual%s*%((.-)%)") end
+				if act and exp then
+					if is_inv then
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -eq ' .. format_ps1_val(exp) .. ') { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -ne ' .. format_ps1_val(exp) .. ') { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toBeTruthy%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ') { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if (-not (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toBeFalsy%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if (-not (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ') { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toBeNil%s*%(") or trimmed:find("%.toBeNull%s*%(") or trimmed:find("%.toBeUndefined%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if ($null -eq (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if ($null -ne (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toBeDefined%s*%(") then
+				local act = trimmed:match("expect%s*%((.-)%)%.")
+				if act then
+					if is_inv then
+						table.insert(lines, indent .. 'if ($null -ne (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if ($null -eq (' .. format_ps1_val(act) .. ')) { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toContain%s*%(") then
+				local act, item = trimmed:match("expect%s*%((.-)%)%..-toContain%s*%((.-)%)")
+				if act and item then
+					local clean_item = item:gsub('^"', ''):gsub('"$', ''):gsub("^'", ''):gsub("'$", '')
+					if is_inv then
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -like "*' .. clean_item .. '*") { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -notlike "*' .. clean_item .. '*") { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toHaveLength%s*%(") then
+				local act, len = trimmed:match("expect%s*%((.-)%)%..-toHaveLength%s*%((.-)%)")
+				if act and len then
+					if is_inv then
+						table.insert(lines, indent .. 'if ((' .. format_ps1_val(act) .. ').Count -eq ' .. format_ps1_val(len) .. ') { Write-Error "Expect failed"; exit 1 }')
+					else
+						table.insert(lines, indent .. 'if ((' .. format_ps1_val(act) .. ').Count -ne ' .. format_ps1_val(len) .. ') { Write-Error "Expect failed"; exit 1 }')
+					end
+				end
+			elseif trimmed:find("%.toBeGreaterThan%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeGreaterThan%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -le ' .. format_ps1_val(num) .. ') { Write-Error "Expect failed"; exit 1 }')
+				end
+			elseif trimmed:find("%.toBeGreaterThanOrEqual%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeGreaterThanOrEqual%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -lt ' .. format_ps1_val(num) .. ') { Write-Error "Expect failed"; exit 1 }')
+				end
+			elseif trimmed:find("%.toBeLessThan%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeLessThan%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -ge ' .. format_ps1_val(num) .. ') { Write-Error "Expect failed"; exit 1 }')
+				end
+			elseif trimmed:find("%.toBeLessThanOrEqual%s*%(") then
+				local act, num = trimmed:match("expect%s*%((.-)%)%..-toBeLessThanOrEqual%s*%((.-)%)")
+				if act and num then
+					table.insert(lines, indent .. 'if (' .. format_ps1_val(act) .. ' -gt ' .. format_ps1_val(num) .. ') { Write-Error "Expect failed"; exit 1 }')
+				end
+			elseif trimmed:find("%.toThrow") then
+				local fn = trimmed:match("expect%s*%((.-)%)%..-toThrow")
+				if fn then
+					table.insert(lines, indent .. 'try { ' .. format_ps1_val(fn) .. '; Write-Error "Expect failed: expected error"; exit 1 } catch {}')
+				end
 			end
 
 		-- Function definitions or Coroutine creation: function fn_name(arg1, arg2)
@@ -1032,7 +1231,7 @@ function M.to_ps1(code)
 			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: async channel & coroutine / task calls
-		elseif trimmed:match("^async%..-%((.*)%)") or trimmed:match("^[%a_][%w_]*:[%a_][%w_]*%s*%((.*)%)") then
+		elseif trimmed:match("^async%..-%((.*)%)") then
 			table.insert(lines, indent .. "# " .. trimmed)
 
 		-- Builtin: dofile(path) / loadfile(path) -> nvim -l path or pwsh path.ps1
@@ -1062,14 +1261,25 @@ function M.to_ps1(code)
 			local path_arg = trimmed:match("^os%.remove%s*%((.*)%)")
 			table.insert(lines, indent .. "Remove-Item -Force " .. format_ps1_val(path_arg))
 
-		-- Custom standalone function calls: fn(arg1, arg2)
-		elseif trimmed:match("^[%a_][%w_]*%s*%((.*)%)%s*$") then
-			local fn_name, fn_args = trimmed:match("^([%a_][%w_]*)%s*%((.*)%)%s*$")
-			local ps_args = {}
-			for _, arg in ipairs(split_args(fn_args)) do
-				table.insert(ps_args, format_ps1_val(arg))
+		-- Custom standalone function calls or method calls: fn(arg1, arg2) or obj.fn(arg1, arg2) or obj:fn(arg1, arg2)
+		elseif trimmed:match("^[%a_][%w_%.%:]*%s*%((.*)%)%s*$") then
+			local fn_name, fn_args = trimmed:match("^([%a_][%w_%.%:]*)%s*%((.*)%)%s*$")
+			if fn_name == "setTimeout" or fn_name == "setInterval" or fn_name == "clearTimeout" or fn_name == "clearInterval" then
+				table.insert(lines, indent .. "# " .. trimmed)
+			elseif fn_name:sub(1, 6) == "async." or fn_name:sub(1, 8) == "coroutine" then
+				table.insert(lines, indent .. "# " .. trimmed)
+			else
+				local ps_args = {}
+				for _, arg in ipairs(split_args(fn_args)) do
+					table.insert(ps_args, format_ps1_val(arg))
+				end
+				if fn_name:find("%.") or fn_name:find(":") then
+					local ps_target = "$" .. fn_name:gsub(":", ".")
+					table.insert(lines, indent .. ps_target .. "(" .. table.concat(ps_args, ", ") .. ")")
+				else
+					table.insert(lines, indent .. fn_name .. " " .. table.concat(ps_args, " "))
+				end
 			end
-			table.insert(lines, indent .. fn_name .. " " .. table.concat(ps_args, " "))
 
 		-- Loops: for i = start, stop do OR for i = start, stop, step do
 		elseif trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s+do$") or trimmed:match("^for%s+([%a_][%w_]*)%s*=%s*(.-)%s*,%s*(.-)%s*,%s*(.-)%s+do$") then

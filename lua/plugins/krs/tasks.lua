@@ -70,6 +70,7 @@ M.settings = {
 	--- Environment forced on every task process, so output is UTF-8 on Windows too.
 	--- A task's own env (opts.env) wins over these defaults.
 	forced_env = {
+		PYTHONUTF8 = "1",
 		PYTHONIOENCODING = "utf-8",
 		NODE_IO_ENCODING = "utf-8",
 		LANG = "en_US.UTF-8",

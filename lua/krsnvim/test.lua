@@ -342,6 +342,48 @@ function M.afterAll(fn)
 end
 
 -- ----------------------------------------------------------------------------
+-- Icon & UTF-8 Configuration
+-- ----------------------------------------------------------------------------
+local is_windows = (vim and vim.fn and vim.fn.has("win32") == 1) or os.getenv("OS") == "Windows_NT"
+
+--- Default icons used in test output reporting.
+M.icons = {
+	runner = "🧪",
+	suite = "📦",
+	pass = "✓",
+	fail = "❌",
+}
+
+--- ASCII fallback icons for environments where multibyte emojis are unsupported or disabled.
+M.ascii_icons = {
+	runner = "[TEST]",
+	suite = "[SUITE]",
+	pass = "✓",
+	fail = "×",
+}
+
+--- Set ASCII mode for test reporting icons.
+--- @param use_ascii boolean
+function M.set_ascii_mode(use_ascii)
+	M.use_ascii = use_ascii
+end
+
+local function init_utf8()
+	if is_windows then
+		pcall(os.execute, "chcp 65001 >nul 2>&1")
+	end
+end
+
+local function get_icon(key)
+	local env_no_emoji = os.getenv("KRS_NO_EMOJI") == "1" or os.getenv("NO_EMOJI") == "1"
+	local use_ascii = M.use_ascii or env_no_emoji
+	if use_ascii then
+		return M.ascii_icons[key] or ""
+	end
+	return M.icons[key] or ""
+end
+
+-- ----------------------------------------------------------------------------
 -- Test Suite Execution & Output Formatting
 -- ----------------------------------------------------------------------------
 
@@ -358,6 +400,7 @@ end
 --- end)
 --- test_runner.run()
 function M.run()
+	init_utf8()
 	local total_passed = 0
 	local total_failed = 0
 	local get_time = function()
@@ -369,12 +412,17 @@ function M.run()
 
 	local start_time = get_time()
 
+	local icon_runner = get_icon("runner")
+	local icon_suite = get_icon("suite")
+	local icon_pass = get_icon("pass")
+	local icon_fail = get_icon("fail")
+
 	print("\n==========================================")
-	print(" 🧪 Running krsnvim.test Test Runner")
+	print(string.format(" %s Running krsnvim.test Test Runner", icon_runner))
 	print("==========================================")
 
 	for _, suite in ipairs(state.suites) do
-		print("\n 📦 " .. suite.name)
+		print(string.format("\n %s %s", icon_suite, suite.name))
 
 		for _, fn in ipairs(suite.before_all) do
 			pcall(fn)
@@ -391,10 +439,10 @@ function M.run()
 
 			if ok then
 				total_passed = total_passed + 1
-				print(string.format("   ✓ %s (%dms)", t.name, elapsed))
+				print(string.format("   %s %s (%dms)", icon_pass, t.name, elapsed))
 			else
 				total_failed = total_failed + 1
-				print(string.format("   ❌ %s (%dms)", t.name, elapsed))
+				print(string.format("   %s %s (%dms)", icon_fail, t.name, elapsed))
 				print("      Error: " .. tostring(err))
 			end
 
@@ -423,6 +471,13 @@ function M.run()
 
 	return { passed = total_passed, failed = total_failed, duration = total_time }
 end
+
+-- Make the module table directly callable: test(...) -> test.test(...) / M.test(...)
+setmetatable(M, {
+	__call = function(_, ...)
+		return M.test(...)
+	end,
+})
 
 _G.describe = M.describe
 _G.test = M.test
