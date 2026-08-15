@@ -173,7 +173,7 @@ map_all_modes(M.settings.keys.run_script, function()
 
 	vim.cmd("silent! write")
 	local relative = vim.fn.fnamemodify(buf_name, ":.")
-	local cmd = 'nvim --headless -l ' .. vim.fn.shellescape(relative)
+	local cmd = 'nvim --headless -c "lua package.path = vim.fn.stdpath(\'config\') .. \'/lua/?.lua;\' .. vim.fn.stdpath(\'config\') .. \'/lua/?/init.lua;\' .. package.path; require(\'krsnvim\')" -l ' .. vim.fn.shellescape(relative)
 	require("plugins.krs.tasks").run_custom_command(cmd, nil, nil, vim.fn.fnamemodify(buf_name, ":t"))
 end, "Run current .krsnvim file with krsnvimscript")
 

@@ -237,7 +237,7 @@ M.registry = {
 	},
 
 	krsnvimscript = {
-		command = 'nvim --headless -l',
+		command = 'nvim --headless -c "lua package.path = vim.fn.stdpath(\'config\') .. \'/lua/?.lua;\' .. vim.fn.stdpath(\'config\') .. \'/lua/?/init.lua;\' .. package.path; require(\'krsnvim\')" -l',
 		dap = function(profile, root, ctx)
 			return {
 				type = "krsnvimscript",

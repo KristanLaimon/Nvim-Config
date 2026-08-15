@@ -3,7 +3,13 @@ return function(dap)
 		callback({
 			type = "executable",
 			command = "nvim",
-			args = { "--headless", "-c", "lua dofile('" .. (config.program or "") .. "')" },
+			args = {
+				"--headless",
+				"-c",
+				"lua package.path = vim.fn.stdpath('config') .. '/lua/?.lua;' .. vim.fn.stdpath('config') .. '/lua/?/init.lua;' .. package.path; require('krsnvim'); dofile('"
+					.. (config.program or "")
+					.. "')",
+			},
 		})
 	end
 
