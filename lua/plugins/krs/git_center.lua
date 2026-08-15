@@ -273,10 +273,10 @@ function M.resize_split(delta)
 	if M.tab_win and vim.api.nvim_win_is_valid(M.tab_win) then
 		pcall(vim.api.nvim_win_set_config, M.tab_win, {
 			relative = "editor",
-			width = l_width,
+			width = l_width + 2,
 			height = 1,
-			row = s_row - 2,
-			col = s_col,
+			row = s_row - 1,
+			col = s_col - 1,
 		})
 	end
 
@@ -473,13 +473,18 @@ local function setup_tab_highlights()
 		fg = sep_fg,
 		bg = fill_bg,
 	})
+
+	vim.api.nvim_set_hl(0, "KRSGitTabBorder", {
+		fg = sep_fg,
+		bg = fill_bg,
+	})
 end
 
 M.tab_click_ranges = {}
 
---- Renders bufferline-style submodule tabs into M.tab_buf.
---- @param width integer Window width in display cells.
-local function render_tab_bar(width)
+--- Renders bufferline-style submodule tabs into M.tab_buf, directly overlaying top border.
+--- @param left_w integer Inner width of left panel.
+local function render_tab_bar(left_w)
 	if not M.tab_buf or not vim.api.nvim_buf_is_valid(M.tab_buf) then
 		return
 	end
@@ -497,6 +502,7 @@ local function render_tab_bar(width)
 	M.tab_click_ranges = {}
 	local chunks = {}
 
+	table.insert(chunks, { text = "╭", hl = "KRSGitTabBorder" })
 	table.insert(chunks, { text = " ", hl = "KRSGitTabFill" })
 
 	for idx, item in ipairs(targets) do
@@ -544,14 +550,20 @@ local function render_tab_bar(width)
 		end
 	end
 
+	local target_cells = left_w + 1
 	local text_cells = vim.fn.strdisplaywidth(full_text)
-	if text_cells < width then
-		local pad = string.rep(" ", width - text_cells)
+	if text_cells < target_cells then
+		local pad = string.rep("─", target_cells - text_cells)
 		local start_col = #full_text
 		full_text = full_text .. pad
 		local end_col = #full_text
-		table.insert(highlights, { start_col = start_col, end_col = end_col, hl = "KRSGitTabFill" })
+		table.insert(highlights, { start_col = start_col, end_col = end_col, hl = "KRSGitTabBorder" })
 	end
+
+	local start_col_r = #full_text
+	full_text = full_text .. "╮"
+	local end_col_r = #full_text
+	table.insert(highlights, { start_col = start_col_r, end_col = end_col_r, hl = "KRSGitTabBorder" })
 
 	vim.api.nvim_buf_set_lines(M.tab_buf, 0, -1, false, { full_text })
 	vim.bo[M.tab_buf].modifiable = false
@@ -1396,17 +1408,6 @@ function M.open_git_center()
 	vim.bo[tab_buf].bufhidden = "wipe"
 	vim.bo[tab_buf].swapfile = false
 
-	M.tab_win = vim.api.nvim_open_win(tab_buf, false, {
-		relative = "editor",
-		width = left_width,
-		height = 1,
-		row = start_row - 2,
-		col = start_col,
-		style = "minimal",
-		border = "none",
-		focusable = false,
-	})
-
 	local main_buf = vim.api.nvim_create_buf(false, true)
 	M.main_buf = main_buf
 	vim.bo[main_buf].buftype = "nofile"
@@ -1423,6 +1424,18 @@ function M.open_git_center()
 		border = "rounded",
 		title = " 🐙 Git Center (Alt+h/l Tabs | </> Resize | Ctrl+Shift+J/K Preview | Tab Focus | Esc Close) ",
 		title_pos = "center",
+	})
+
+	M.tab_win = vim.api.nvim_open_win(tab_buf, false, {
+		relative = "editor",
+		width = left_width + 2,
+		height = 1,
+		row = start_row - 1,
+		col = start_col - 1,
+		style = "minimal",
+		border = "none",
+		focusable = false,
+		zindex = 60,
 	})
 
 	local preview_buf = vim.api.nvim_create_buf(false, true)
@@ -1464,7 +1477,7 @@ function M.open_git_center()
 	local opts_tab = { buffer = tab_buf, silent = true, noremap = true }
 	vim.keymap.set("n", "<LeftMouse>", function()
 		local mousepos = vim.fn.getmousepos()
-		local col = mousepos.column - (start_col + 1)
+		local col = mousepos.column - start_col
 		for _, range in ipairs(M.tab_click_ranges or {}) do
 			if col >= range.start_col and col < range.end_col then
 				if M.active_submodule_idx ~= range.idx then
