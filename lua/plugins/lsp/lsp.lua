@@ -313,57 +313,61 @@ return {
 				return vim.uri_from_fname(path)
 			end
 
-			opts.servers.yamlls = opts.servers.yamlls or {}
-			opts.servers.yamlls.settings = {
-				yaml = {
-					schemaStore = {
-						enable = false,
-						url = "",
+			local ok_schemastore, schemastore = pcall(require, "schemastore")
+			if ok_schemastore then
+				opts.servers.yamlls = opts.servers.yamlls or {}
+				opts.servers.yamlls.settings = {
+					yaml = {
+						schemaStore = {
+							enable = false,
+							url = "",
+						},
+						schemas = schemastore.yaml.schemas(),
 					},
-					schemas = require("schemastore").yaml.schemas(),
-				},
-			}
+				}
 
-			opts.servers.jsonls.settings = {
-				json = {
-					schemas = require("schemastore").json.schemas({
-						select = {
-							"tsconfig.json",
-							"package.json",
-							"prettierrc.json",
-							".eslintrc",
-							"jsconfig.json",
-							"babelrc.json",
-							"Turborepo",
-							"biome.json",
-						},
-						replace = {
-							["tsconfig.json"] = get_schema_uri("json", "tsconfig.json"),
-							["package.json"] = get_schema_uri("json", "package.json"),
-							-- ["prettierrc.json"] = get_schema_uri("json", "prettierrc.json"),
-							[".eslintrc"] = get_schema_uri("json", "eslintrc.json"),
-							["jsconfig.json"] = get_schema_uri("json", "jsconfig.json"),
-							["babelrc.json"] = get_schema_uri("json", "babelrc.json"),
-							["Turborepo"] = get_schema_uri("json", "turbo.json"),
-						},
-						extra = {
-							{
-								name = "prettierrc.json",
-								description = "Prettier configuration schema",
-								fileMatch = { "prettierrc.json", "prettier.config.json", ".prettierrc.astro.json" },
-								url = get_schema_uri("json", "prettierrc.json"),
+				opts.servers.jsonls = opts.servers.jsonls or {}
+				opts.servers.jsonls.settings = {
+					json = {
+						schemas = schemastore.json.schemas({
+							select = {
+								"tsconfig.json",
+								"package.json",
+								"prettierrc.json",
+								".eslintrc",
+								"jsconfig.json",
+								"babelrc.json",
+								"Turborepo",
+								"biome.json",
 							},
-							{
-								name = "biome.json",
-								description = "Biome configuration schema",
-								fileMatch = { "biome.json", "biome.jsonc" },
-								url = get_schema_uri("json", "biome.json"),
+							replace = {
+								["tsconfig.json"] = get_schema_uri("json", "tsconfig.json"),
+								["package.json"] = get_schema_uri("json", "package.json"),
+								-- ["prettierrc.json"] = get_schema_uri("json", "prettierrc.json"),
+								[".eslintrc"] = get_schema_uri("json", "eslintrc.json"),
+								["jsconfig.json"] = get_schema_uri("json", "jsconfig.json"),
+								["babelrc.json"] = get_schema_uri("json", "babelrc.json"),
+								["Turborepo"] = get_schema_uri("json", "turbo.json"),
 							},
-						},
-					}),
-					validate = { enable = true },
-				},
-			}
+							extra = {
+								{
+									name = "prettierrc.json",
+									description = "Prettier configuration schema",
+									fileMatch = { "prettierrc.json", "prettier.config.json", ".prettierrc.astro.json" },
+									url = get_schema_uri("json", "prettierrc.json"),
+								},
+								{
+									name = "biome.json",
+									description = "Biome configuration schema",
+									fileMatch = { "biome.json", "biome.jsonc" },
+									url = get_schema_uri("json", "biome.json"),
+								},
+							},
+						}),
+						validate = { enable = true },
+					},
+				}
+			end
 
 			opts.servers.taplo.settings = {
 				even_better_toml = {
