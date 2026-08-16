@@ -1,5 +1,7 @@
 # 🌬️ Tailwind Organizer (`plugins.krs.tailwind_organizer`)
 
+[← Back to Wiki Index](index.md)
+
 Sorts `class="…"` / `className="…"` attributes into stable, readable rows — on save, or on demand.
 
 The point isn't alphabetising for its own sake: it's that a 30-class element becomes diffable and scannable, with layout on one row, looks on the next, and each breakpoint on its own.

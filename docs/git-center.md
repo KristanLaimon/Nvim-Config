@@ -1,5 +1,7 @@
 # 🐙 Interactive Git Control Center (`plugins.krs.git_center`)
 
+[← Back to Wiki Index](index.md)
+
 The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git interface with live VSCode-style diff previews, branch status tracking, and one-key staging/commit/push operations.
 
 ---

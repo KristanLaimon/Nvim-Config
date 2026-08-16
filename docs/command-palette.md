@@ -1,5 +1,7 @@
 # Command Palette Configuration Guide
 
+[← Back to Wiki Index](index.md)
+
 This guide explains how the VSCode-style Command Palette works and how to modify, add, or remove commands in this Neovim configuration.
 
 ---

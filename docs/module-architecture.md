@@ -1,5 +1,7 @@
 # 🧩 Module Architecture
 
+[← Back to Wiki Index](index.md)
+
 How the custom modules in `lua/plugins/krs/` are wired into lazy.nvim, and the two lazy.nvim internals that shape the layout.
 
 > For the bigger picture — the four layers, the startup sequence and where new code belongs — see [Architecture](architecture.md).

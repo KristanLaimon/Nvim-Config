@@ -12,7 +12,7 @@ COMMANDS=(
   "nvim:neovim"
   "git:git"
   "rg:ripgrep"
-  "fd:fd-find:fd"
+  "fd:fd-find:fdfind"
   "chafa:chafa"
   "gcc:gcc"
   "node:nodejs-lts:nodejs"
@@ -57,6 +57,10 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "mingw"* ]]; 
     scoop bucket add main 2>/dev/null || true
     scoop bucket add extras 2>/dev/null || true
     for pkg in "${MISSING_PKGS[@]}"; do
+      case "$pkg" in
+        fd-find) pkg="fd" ;;
+        golang) pkg="go" ;;
+      esac
       scoop install "$pkg" || true
     done
   else

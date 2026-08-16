@@ -2693,7 +2693,8 @@ _G.GitCenter = M
 return setmetatable({
 	name = "krs_git_center",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "GitCenter", "GitCenterStage", "GitCenterCommit", "GitCenterPush", "GitCenterDiff" },
+	keys = { { "<C-S-g>", mode = { "n", "i" }, desc = "Open Git Control Center" } },
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"sindrets/diffview.nvim",

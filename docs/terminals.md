@@ -1,5 +1,7 @@
 # 🖥️ Multi-Terminal Manager (`plugins.krs.terminal`)
 
+[← Back to Wiki Index](index.md)
+
 The **Lazy-Loading Multi-Terminal Manager** manages up to 9 independent terminal buffers with instant switching, split height persistence, and clean window focus navigation.
 
 ---

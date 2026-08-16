@@ -300,7 +300,8 @@ _G.NugetManager = M
 return setmetatable({
 	name = "krs_nuget_manager",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "NugetManager",
+	keys = { { "<leader>ng", mode = "n", desc = "Nuget Package Manager" } },
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

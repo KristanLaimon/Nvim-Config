@@ -1,5 +1,7 @@
 # 🛠️ Languages, LSP, Formatters & Parsers
 
+[← Back to Wiki Index](index.md)
+
 Mason, `mason-lspconfig`, `mason-conform` and `mason-nvim-dap` install everything below on first start — no manual `:MasonInstall`.
 
 Config files: `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp/formatting.lua` (Conform), `lua/plugins/lsp/treesitter.lua` (parsers), `lua/plugins/editor/dap.lua` (debug adapters).

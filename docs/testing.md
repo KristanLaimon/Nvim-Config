@@ -1,5 +1,7 @@
 # 🧪 Testing
 
+[← Back to Wiki Index](index.md)
+
 This configuration has a test suite. It exists because a Neovim config fails at
 the worst possible moment — on startup, in the middle of something else — and a
 typo in a plugin file is invisible until then.

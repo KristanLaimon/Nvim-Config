@@ -1,5 +1,7 @@
 # 📦 Plugin Inventory
 
+[← Back to Wiki Index](index.md)
+
 Everything installed, split between the custom modules written for this config and the third-party plugins they sit on top of.
 
 See [Module Architecture](module-architecture.md) for how the custom ones are wired.

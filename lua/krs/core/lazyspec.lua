@@ -28,6 +28,9 @@ local M = {}
 --- Parent directory holding one empty marker directory per local spec.
 M.specs_root = vim.fn.stdpath("data") .. "/krs-specs"
 
+--- In-memory cache of verified directories to avoid redundant disk I/O.
+local created_dirs = {}
+
 -- ---------------------------------------------------------------------------
 -- API
 -- ---------------------------------------------------------------------------
@@ -39,9 +42,14 @@ M.specs_root = vim.fn.stdpath("data") .. "/krs-specs"
 --- @return string dir Absolute path to this module's marker directory.
 function M.for_module()
 	local source = debug.getinfo(2, "S").source:sub(2)
-	local dir = M.specs_root .. "/" .. vim.fn.fnamemodify(source, ":t:r")
-	if vim.fn.isdirectory(dir) == 0 then
-		vim.fn.mkdir(dir, "p")
+	local mod_name = vim.fn.fnamemodify(source, ":t:r")
+	local dir = M.specs_root .. "/" .. mod_name
+	if not created_dirs[mod_name] then
+		created_dirs[mod_name] = true
+		local uv = vim.uv or vim.loop
+		if not uv.fs_stat(dir) then
+			uv.fs_mkdir(dir, 448)
+		end
 	end
 	return dir
 end

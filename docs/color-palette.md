@@ -1,5 +1,7 @@
 # Color Palette & Theme Configuration Guide
 
+[← Back to Wiki Index](index.md)
+
 This guide explains how to manage, customize, and extend colorschemes in this Neovim configuration.
 
 ---

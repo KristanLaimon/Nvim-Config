@@ -1,5 +1,7 @@
 # 🏛️ Architecture
 
+[← Back to Wiki Index](index.md)
+
 How this configuration is put together: the layers, what may depend on what, how
 startup runs, and where to add things.
 

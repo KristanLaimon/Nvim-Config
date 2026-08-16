@@ -147,5 +147,5 @@ _G.PhpToolsModal = M
 return setmetatable({
 	name = "krs_php_tools_modal",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "PHPCheckTools",
 }, { __index = M })

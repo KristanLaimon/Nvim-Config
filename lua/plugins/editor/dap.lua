@@ -20,6 +20,25 @@
 return {
 	{
 		"mfussenegger/nvim-dap",
+		cmd = {
+			"DapToggleBreakpoint",
+			"DapContinue",
+			"DapStepOver",
+			"DapStepInto",
+			"DapStepOut",
+			"DapTerminate",
+			"DapRestart",
+			"DapShowLog",
+			"DapSetLogLevel",
+		},
+		keys = {
+			{ "<F5>", desc = "Debug: Start/Continue" },
+			{ "<F10>", desc = "Debug: Step Over" },
+			{ "<F11>", desc = "Debug: Step Into" },
+			{ "<F12>", desc = "Debug: Step Out" },
+			{ "<C-b>", desc = "Toggle Breakpoint" },
+			{ "<A-h>", desc = "Conditional Breakpoint" },
+		},
 		dependencies = {
 			"rcarriga/nvim-dap-ui",
 			"nvim-neotest/nvim-nio",

@@ -1,5 +1,7 @@
 # 📶 Dynamic Z-Index Stack Manager (`krs.core.z_index`)
 
+[← Back to Wiki Index](index.md)
+
 The **Dynamic Z-Index Stack Manager** (`lua/krs/core/z_index.lua`) provides a centralized, in-memory Z-Index registry for floating UI components and modals in KrsVim.
 
 ---

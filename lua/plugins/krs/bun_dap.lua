@@ -237,6 +237,6 @@ _G.BunDap = M
 return setmetatable({
 	name = "krs_bun_dap",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "KrsBunDapInstall",
 	config = M.setup,
 }, { __index = M })

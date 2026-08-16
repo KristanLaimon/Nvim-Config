@@ -92,17 +92,7 @@ return {
 					},
 				},
 				taplo = {},
-				yamlls = {
-					settings = {
-						yaml = {
-							schemaStore = {
-								enable = false,
-								url = "",
-							},
-							schemas = require("schemastore").yaml.schemas(),
-						},
-					},
-				},
+				yamlls = {},
 				jsonls = {},
 				tsgo = {
 					-- nvim 0.11+ signature: (bufnr, on_dir). Must CALL on_dir; return value is ignored.
@@ -322,6 +312,17 @@ return {
 				local path = vim.fs.normalize(vim.fn.stdpath("config") .. "/schemas/" .. category .. "/" .. filename)
 				return vim.uri_from_fname(path)
 			end
+
+			opts.servers.yamlls = opts.servers.yamlls or {}
+			opts.servers.yamlls.settings = {
+				yaml = {
+					schemaStore = {
+						enable = false,
+						url = "",
+					},
+					schemas = require("schemastore").yaml.schemas(),
+				},
+			}
 
 			opts.servers.jsonls.settings = {
 				json = {

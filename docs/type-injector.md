@@ -1,5 +1,7 @@
 # 💉 Type Injector (`plugins.krs.type_injector`)
 
+[← Back to Wiki Index](index.md)
+
 Turns type definitions on and off **per project**, for Lua and for TypeScript/JavaScript, from one picker — without editing `.luarc.json` or `tsconfig.json` by hand, and without dumping every schema you own into every project.
 
 ---

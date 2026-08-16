@@ -276,11 +276,10 @@ function M.setup()
 	end
 end
 
-M.setup()
-
 return setmetatable({
 	name = "krs_sneak_peek",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "SneakPeek", "SneakPeekClose" },
+	keys = { { "<C-S-o>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" } },
 	config = M.setup,
 }, { __index = M })

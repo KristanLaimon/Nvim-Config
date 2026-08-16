@@ -232,15 +232,18 @@ local function setup_path_env()
 
 	local candidates = is_windows and settings.path_candidates.windows(env) or settings.path_candidates.unix(env)
 
-	-- `pairs`, not `ipairs`: an unset environment variable leaves a nil hole in
-	-- the list, and ipairs would stop at the first one and skip every toolchain
-	-- after it.
+	local seen = {}
 	for _, candidate in pairs(candidates) do
-		local stat = candidate ~= "" and uv.fs_stat(candidate) or nil
-		if stat and stat.type == "directory" then
+		if type(candidate) == "string" and candidate ~= "" then
 			local normalized = is_windows and candidate:gsub("/", "\\") or candidate
-			if not path:find(normalized, 1, true) then
-				path = normalized .. separator .. path
+			if not seen[normalized] then
+				seen[normalized] = true
+				if not path:find(normalized, 1, true) then
+					local stat = uv.fs_stat(normalized)
+					if stat and stat.type == "directory" then
+						path = normalized .. separator .. path
+					end
+				end
 			end
 		end
 	end

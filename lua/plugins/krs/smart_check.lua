@@ -239,8 +239,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.SmartCheck = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
@@ -248,6 +246,7 @@ M.setup()
 return setmetatable({
 	name = "krs_smart_check",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "SmartCheck",
+	keys = { { "<leader>sc", mode = "n", desc = "Smart Check Project" } },
 	config = M.setup,
 }, { __index = M })

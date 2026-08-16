@@ -743,8 +743,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.FileExplorer = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
@@ -752,7 +750,11 @@ M.setup()
 return setmetatable({
 	name = "krs_file_explorer",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "TelescopeFileBrowserDesktop", "TelescopeFileBrowserWSL" },
+	keys = {
+		{ "<C-S-f>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
+		{ "<leader>fw", mode = "n", desc = "WSL File Explorer" },
+	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

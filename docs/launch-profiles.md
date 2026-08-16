@@ -1,5 +1,7 @@
 # 🚀 Launch Profiles (`plugins.krs.launch_profiles`)
 
+[← Back to Wiki Index](index.md)
+
 Per-project entry points — "what does F5 actually run here?" — stored in `.krsnvim/launch.json`. A profile carries a runtime, an entry point, args, env, pre-launch tasks, and a mode: run it in a terminal slot, or debug it under DAP.
 
 This is the layer *above* [Debug Adapters](debug-adapters.md): it builds a DAP configuration for you instead of making you write one.

@@ -502,6 +502,11 @@ _G.TailwindOrganizer = M
 return setmetatable({
 	name = "krs_tailwind_organizer",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "TailwindOrganize",
+	event = { "BufReadPost", "BufNewFile" },
+	keys = {
+		{ "<leader>tw", mode = "n", desc = "Organize Tailwind Classes" },
+		{ "<leader>tt", mode = "n", desc = "Toggle Tailwind Auto-Organize" },
+	},
 	config = M.setup,
 }, { __index = M })

@@ -348,7 +348,8 @@ _G.CommandPalette = M
 return setmetatable({
 	name = "krs_command_palette",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = "CommandPalette",
+	keys = { { "<C-S-p>", mode = { "n", "i" }, desc = "Open Command Palette" } },
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

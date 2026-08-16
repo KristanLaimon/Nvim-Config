@@ -1,5 +1,7 @@
 # 🎛️ Editor Quality of Life
 
+[← Back to Wiki Index](index.md)
+
 The small modules — each one file in `lua/plugins/krs/`, each fixing one specific annoyance.
 
 ---

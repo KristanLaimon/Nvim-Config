@@ -1,5 +1,7 @@
 # 🗂️ Workspaces & Session Manager (`plugins.krs.workspaces`)
 
+[← Back to Wiki Index](index.md)
+
 The **Workspaces Manager** allows saving, loading, restoring, and switching full project session states in Neovim.
 
 ---

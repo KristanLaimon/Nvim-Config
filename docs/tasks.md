@@ -1,5 +1,7 @@
 # 🛠️ Per-Project Task Runner & Executor (`plugins.krs.tasks`)
 
+[← Back to Wiki Index](index.md)
+
 The **KRS Task Runner** provides automatic project build detection, custom task chains, background task slots, and error popups for seamless development workflows.
 
 ---

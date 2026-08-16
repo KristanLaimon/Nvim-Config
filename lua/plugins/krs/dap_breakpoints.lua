@@ -497,16 +497,17 @@ function M.setup()
 		end,
 	})
 
-	-- Signs get re-verified (and can flip to "rejected") during a session, so sync
-	-- when it ends instead of only at VimLeavePre.
-	local ok_dap, dap = pcall(require, "dap")
-	if ok_dap then
-		for _, event in ipairs({ "event_terminated", "event_exited" }) do
-			dap.listeners.after[event]["krs_breakpoints"] = function()
-				M.save_breakpoints()
+	local function attach_dap_listeners()
+		if package.loaded["dap"] then
+			local dap = require("dap")
+			for _, event in ipairs({ "event_terminated", "event_exited" }) do
+				dap.listeners.after[event]["krs_breakpoints"] = function()
+					M.save_breakpoints()
+				end
 			end
 		end
 	end
+	attach_dap_listeners()
 
 	vim.api.nvim_create_autocmd("VimLeavePre", {
 		group = group,

@@ -83,7 +83,7 @@ local settings = {
 
 return {
 	"ahmedkhalf/project.nvim",
-	event = "VeryLazy",
+	cmd = { "Telescope projects", "ProjectRoot" },
 	keys = {
 		{ settings.key, "<cmd>Telescope projects<CR>", desc = "Telescope recent projects" },
 	},

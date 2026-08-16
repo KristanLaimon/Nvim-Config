@@ -1,5 +1,7 @@
 # Local TOML Schemas Management Guide
 
+[← Back to Wiki Index](index.md)
+
 This guide explains how offline, 100% local TOML schema validation and autocompletion are configured in Neovim using the `taplo` LSP server and local schema files stored in `schemas/toml/`.
 
 ---

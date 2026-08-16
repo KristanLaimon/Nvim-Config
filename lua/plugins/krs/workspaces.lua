@@ -882,8 +882,6 @@ function M.setup()
 	end
 end
 
-M.setup()
-
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.Workspaces = M
 
@@ -894,7 +892,14 @@ _G.Workspaces = M
 return setmetatable({
 	name = "krs_workspaces",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "WorkspaceSelect", "Workspaces", "WorkspaceSave", "WorkspaceManage", "WorkspaceClose", "WorkspaceMenu" },
+	keys = {
+		{ "<C-S-w>", mode = { "n", "i" }, desc = "Select Workspace" },
+		{ "<leader>ws", mode = "n", desc = "Select Workspace" },
+		{ "<leader>ww", mode = "n", desc = "Save Workspace" },
+		{ "<leader>wm", mode = "n", desc = "Manage Workspaces" },
+		{ "<C-S-m>", mode = { "n", "i" }, desc = "Close Workspace" },
+	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"nvim-telescope/telescope.nvim",

@@ -39,6 +39,17 @@ Return to the dashboard from anywhere with `<C-S-m>`; closing the last open buff
 
 ---
 
+## ⚡ Quick Setup
+
+After cloning into `%LOCALAPPDATA%\nvim` (Windows) or `~/.config/nvim` (Linux/macOS):
+
+- **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
+- **Linux / WSL / Git Bash**: `./setup.sh`
+
+These idempotent scripts automatically install missing external dependencies (`ripgrep`, `fd`, `gcc`, `chafa`, Node.js, Bun, Go, .NET SDK). If you don't run them right away, KrsVim will still run with [graceful fallbacks](docs/installation.md#⚡-what-if-you-havent-run-setupps1-or-setupsh).
+
+---
+
 ## 📚 Documentation
 
 Everything else — install, keybinds, debugging, launch profiles, custom modules — lives in the wiki:

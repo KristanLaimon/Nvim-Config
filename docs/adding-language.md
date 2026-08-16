@@ -1,5 +1,7 @@
 # 🌐 Adding a New Language / LSP to Neovim Config
 
+[← Back to Wiki Index](index.md)
+
 This guide outlines the exact step-by-step procedure for adding new programming language support, Language Servers (LSPs), Treesitter syntax highlighting, and auto-formatters to this Neovim setup.
 
 ---

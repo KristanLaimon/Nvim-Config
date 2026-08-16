@@ -1,5 +1,7 @@
 # Local JSON Schemas Management Guide
 
+[← Back to Wiki Index](index.md)
+
 This guide explains how offline, 100% local JSON schema validation and autocompletion are configured in Neovim using `jsonls`, `schemastore.nvim`, and local JSON schema files stored in `schemas/json/`.
 
 ---

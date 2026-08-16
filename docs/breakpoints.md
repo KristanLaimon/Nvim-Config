@@ -1,5 +1,7 @@
 # 🔴 Breakpoints (`plugins.krs.dap_breakpoints`)
 
+[← Back to Wiki Index](index.md)
+
 Breakpoints survive restarts, and can be *disabled* without being deleted — a concept nvim-dap doesn't have.
 
 ---

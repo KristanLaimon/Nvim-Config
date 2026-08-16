@@ -1,5 +1,7 @@
 # 🐞 Debug Adapters: How Debugging Actually Works in Neovim
 
+[← Back to Wiki Index](index.md)
+
 A from-scratch guide to wiring **any** debugger into this config, written around a real
 worked example: making `bun` stop on breakpoints (`lua/plugins/krs/bun_dap.lua`).
 

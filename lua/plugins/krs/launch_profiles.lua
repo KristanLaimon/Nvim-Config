@@ -858,6 +858,10 @@ _G.LaunchProfiles = M
 return setmetatable({
 	name = "krs_launch_profiles",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "LaunchProfiles", "LaunchProfilesRun", "LaunchProfilesDebug" },
+	keys = {
+		{ "<C-S-s>", mode = { "n", "i" }, desc = "Open Launch Profiles" },
+		{ "<C-S-q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile" },
+	},
 	config = M.setup,
 }, { __index = M })
