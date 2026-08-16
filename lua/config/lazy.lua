@@ -121,9 +121,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
 				end
 			end
 			ms = math.floor(ms * 100 + 0.5) / 100
-			local msg = string.format("⚡ Loaded %d/%d plugins in %.2f ms", stats.loaded, stats.count, ms)
-			vim.notify(msg, vim.log.levels.INFO, { title = "Startup Complete" })
 		end)
 	end,
 })
+
+-- Initialize KRS Automated Incremental System Setup
+require("krs.core.installer").init()
 

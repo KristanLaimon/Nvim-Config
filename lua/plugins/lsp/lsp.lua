@@ -62,7 +62,7 @@ return {
 		},
 		opts = {
 			servers = {
-				buf_ls = {},
+				buf_ls = { enabled = false },
 				intelephense = {
 					settings = {
 						intelephense = {
@@ -238,8 +238,8 @@ return {
 			-- 1. Initialize Mason
 			require("mason").setup()
 			require("mason-lspconfig").setup({
+				automatic_installation = false,
 				ensure_installed = {
-					"buf_ls",
 					"intelephense",
 					"lua_ls",
 					"jsonls",

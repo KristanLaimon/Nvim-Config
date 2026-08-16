@@ -115,7 +115,12 @@ end
 --- @return string[] cmd
 local function system_open_command(filepath)
 	if vim.fn.has("win32") == 1 then
-		return { "cmd.exe", "/c", "start", '""', filepath }
+		local win_path = filepath:gsub("/", "\\")
+		if path.is_dir(filepath) then
+			return { "explorer.exe", win_path }
+		else
+			return { "cmd.exe", "/c", "start", "", win_path }
+		end
 	end
 	if vim.fn.has("wsl") == 1 then
 		return { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
@@ -148,17 +153,18 @@ function M.open_with_system_app(filepath)
 		end
 
 		filepath = filepath:gsub("[/\\]+$", "")
+		local is_directory = path.is_dir(filepath)
 		local cmd = system_open_command(filepath)
 
-		vim.system(cmd, { detach = true }, function(result)
+		vim.system(cmd, { detach = true, stdout = false, stderr = false }, function(result)
 			-- The Windows launchers return non-zero for reasons that are not
 			-- failures (start returns as soon as it hands off), so only report
 			-- errors from the POSIX openers.
-			if result.code ~= 0 and cmd[1] ~= "cmd.exe" and cmd[1] ~= "explorer.exe" then
+			if result and result.code and result.code ~= 0 and cmd[1] ~= "cmd.exe" and cmd[1] ~= "explorer.exe" then
 				vim.schedule(function()
 					vim.notify(
 						"Failed to open: "
-							.. (result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
+							.. (result.stderr and result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
 						vim.log.levels.ERROR,
 						{ title = M.settings.notify_title }
 					)
@@ -166,7 +172,14 @@ function M.open_with_system_app(filepath)
 			end
 		end)
 
-		vim.notify("🎬 Opening with OS default program: " .. vim.fn.fnamemodify(filepath, ":t"), vim.log.levels.INFO, {
+		local name = vim.fn.fnamemodify(filepath, ":t")
+		if name == "" then
+			name = filepath
+		end
+		local msg = is_directory and ("📂 Opening folder in File Explorer: " .. name)
+			or ("🎬 Opening with OS default program: " .. name)
+
+		vim.notify(msg, vim.log.levels.INFO, {
 			title = M.settings.notify_title,
 		})
 	end)
@@ -200,7 +213,12 @@ end
 
 --- Opens the project root in the OS file explorer.
 function M.open_project_root_in_explorer()
-	M.open_with_system_app(vim.fn.getcwd())
+	local project = require("krs.core.project")
+	local root = project.root()
+	if not root or root == "" then
+		root = vim.fn.getcwd()
+	end
+	M.open_with_system_app(root)
 end
 
 -- ============================================================================

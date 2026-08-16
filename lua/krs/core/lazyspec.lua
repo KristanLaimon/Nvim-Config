@@ -46,9 +46,8 @@ function M.for_module()
 	local dir = M.specs_root .. "/" .. mod_name
 	if not created_dirs[mod_name] then
 		created_dirs[mod_name] = true
-		local uv = vim.uv or vim.loop
-		if not uv.fs_stat(dir) then
-			uv.fs_mkdir(dir, 448)
+		if vim.fn.isdirectory(dir) == 0 then
+			pcall(vim.fn.mkdir, dir, "p")
 		end
 	end
 	return dir

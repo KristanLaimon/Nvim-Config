@@ -186,6 +186,32 @@ return {
 			return p:gsub("\\", "/"):match("^//wsl") ~= nil
 		end
 
+		--- Ensures project.nvim history is loaded synchronously before reading.
+		--- `history.read_projects_from_history()` runs asynchronously, causing
+		--- `history.recent_projects` to be nil on initial picker open.
+		local function ensure_history_loaded()
+			if history.recent_projects == nil then
+				local ok, path_module = pcall(require, "project_nvim.utils.path")
+				if ok and path_module.historyfile then
+					local file = io.open(path_module.historyfile, "r")
+					if file then
+						local content = file:read("*a")
+						file:close()
+						if content and content ~= "" then
+							local loaded = {}
+							for line in content:gmatch("[^\r\n]+") do
+								local trimmed = vim.trim(line)
+								if trimmed ~= "" then
+									table.insert(loaded, trimmed)
+								end
+							end
+							history.recent_projects = loaded
+						end
+					end
+				end
+			end
+		end
+
 		-- ------------------------------------------------------------------
 		-- Project list
 		-- ------------------------------------------------------------------
@@ -194,6 +220,7 @@ return {
 		--- duplicates removed.
 		--- @return string[] paths
 		local function collect_projects()
+			ensure_history_loaded()
 			local wsl = wsl_module()
 			local projects, seen = {}, {}
 
