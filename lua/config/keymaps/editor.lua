@@ -36,8 +36,8 @@ M.settings = {
 		window_left = "<C-h>",
 		window_right = "<C-l>",
 		--- Cycle buffers.
-		buffer_prev = { "<A-h>", "<A-Left>" },
-		buffer_next = { "<A-l>", "<A-Right>" },
+		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
+		buffer_next = { "<A-l>", "<M-l>", "<A-Right>", "<M-Right>" },
 		--- Toggle the neo-tree sidebar.
 		explorer = "<C-S-Space>",
 		--- Netrw-style directory listing, kept as an escape hatch.
@@ -169,7 +169,7 @@ local function safe_buf_navigate(command)
 		if vim.bo.filetype == "neo-tree" then
 			return
 		end
-		vim.cmd(command)
+		pcall(vim.cmd, command)
 	end
 end
 

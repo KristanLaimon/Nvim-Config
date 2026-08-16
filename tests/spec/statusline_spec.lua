@@ -14,8 +14,34 @@ describe("plugins.krs.statusline_picker", function()
 		expect(statusline.format_mode("COMMAND")).toBe("󰘳 COMMAND")
 	end)
 
+	it("returns formatted LSP status string", function()
+		expect(statusline.lsp_status()).toBeDefined()
+		expect(type(statusline.lsp_status())).toBe("string")
+	end)
+
+	it("cleans up raw terminal URLs into readable badges", function()
+		expect(statusline.format_filename("term://~\\AppData\\Local\\nvim//14964:C:\\PROGRA~1\\Git\\bin\\bash.exe")).toBe("󰞷 Terminal (bash)")
+		expect(statusline.format_filename("term://code//5120:powershell.exe")).toBe("󰞷 Terminal (powershell)")
+		expect(statusline.format_filename("lua/config/options.lua")).toBe("lua/config/options.lua")
+	end)
+
+	it("formats multi-terminal labels with process title (Terminal #number - process)", function()
+		vim.b.krs_term_num = 2
+		vim.b.term_title = nil
+		expect(statusline.format_filename("term://code//5120:powershell.exe")).toBe("󰞷 Terminal #2 - powershell")
+
+		vim.b.term_title = "claude"
+		expect(statusline.format_filename("term://code//5120:powershell.exe")).toBe("󰞷 Terminal #2 - claude")
+
+		vim.b.term_title = "Administrator: Windows PowerShell"
+		expect(statusline.format_filename("term://code//5120:powershell.exe")).toBe("󰞷 Terminal #2 - powershell")
+
+		vim.b.krs_term_num = nil
+		vim.b.term_title = nil
+	end)
+
 	it("returns valid lualine options for all supported themes", function()
-		local themes = { "nvchad_pills", "nvchad_blocks", "nagatoro_classic", "vscode", "minimal" }
+		local themes = { "nvchad_pills", "nvchad_blocks", "nvchad_round", "nagatoro_classic", "vscode", "minimal" }
 		for _, name in ipairs(themes) do
 			local cfg = statusline.get_lualine_config(name)
 			expect(cfg).toBeDefined()

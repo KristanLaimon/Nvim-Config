@@ -17,11 +17,38 @@ M.settings = {
 
 M.available_themes = {
 	nvchad_pills = "NvChad Pills (Rounded Statusline)",
-	nvchad_blocks = "NvChad Blocks (Blocky Statusline)",
+	nvchad_blocks = "NvChad Blocks (Slanted Powerline)",
+	nvchad_round = "NvChad Round (Curved Slants)",
 	nagatoro_classic = "Nagatoro Classic (Minimal & Clean)",
 	vscode = "VSCode Modern (Flat Bar)",
 	minimal = "Minimalist (Compact)",
 }
+
+--- Formats active LSP clients into NvChad statusline string.
+--- @return string lsp_info
+function M.lsp_status()
+	if not vim.lsp then
+		return " No LSP"
+	end
+	local get_clients = vim.lsp.get_clients or vim.lsp.get_active_clients
+	if not get_clients then
+		return " No LSP"
+	end
+	local clients = get_clients({ bufnr = 0 })
+	if not clients or #clients == 0 then
+		return " No LSP"
+	end
+	local names = {}
+	for _, client in ipairs(clients) do
+		if client.name and client.name ~= "null-ls" and client.name ~= "copilot" then
+			table.insert(names, client.name)
+		end
+	end
+	if #names == 0 then
+		return " Active"
+	end
+	return " " .. table.concat(names, ", ")
+end
 
 --- Formats editor mode into NvChad style pill string.
 --- @param mode_str string
@@ -48,6 +75,83 @@ function M.format_mode(mode_str)
 	return modes[mode_str] or (" " .. mode_str)
 end
 
+--- Extracts a clean, concise process title from vim.b.term_title or raw terminal URL.
+--- @param str string Raw buffer name or term:// string
+--- @return string|nil title
+function M.get_term_title(str)
+	local title = vim.b and vim.b.term_title
+	if type(title) == "string" and title ~= "" and not title:find("^term://") then
+		title = title:gsub("^Administrator:%s*", "")
+		title = title:gsub("^Windows PowerShell", "powershell")
+		if title:find("[/\\]") then
+			title = vim.fn.fnamemodify(title, ":t")
+		end
+		title = title:gsub("%.[eE][xX][eE]$", "")
+		title = vim.trim(title)
+		if #title > 30 then
+			title = title:sub(1, 27) .. "..."
+		end
+		if title ~= "" then
+			return title
+		end
+	end
+
+	if str then
+		local shell_path = str:match("//%d+:(.*)$") or str:match(".*:(.*)$")
+		if shell_path and shell_path ~= "" then
+			local shell_name = vim.fn.fnamemodify(shell_path, ":t"):gsub("%.[eE][xX][eE]$", "")
+			if shell_name ~= "" then
+				return shell_name
+			end
+		end
+	end
+
+	return nil
+end
+
+--- Formats filename for statusline, simplifying raw terminal URLs (term://...) into clean labels.
+--- @param str string
+--- @return string formatted
+function M.format_filename(str)
+	if not str or str == "" then
+		return "[No Name]"
+	end
+
+	local is_term = false
+	if vim.bo and vim.bo.buftype == "terminal" then
+		is_term = true
+	elseif str:find("^term://") then
+		is_term = true
+	end
+
+	if is_term then
+		local title = M.get_term_title(str)
+
+		if vim.b and vim.b.krs_task_name then
+			if title and title ~= "" and title ~= vim.b.krs_task_name then
+				return "🖥️ Task: " .. tostring(vim.b.krs_task_name) .. " - " .. title
+			end
+			return "🖥️ Task: " .. tostring(vim.b.krs_task_name)
+		end
+
+		if vim.b and vim.b.krs_term_num then
+			local num = tostring(vim.b.krs_term_num)
+			if title and title ~= "" then
+				return "󰞷 Terminal #" .. num .. " - " .. title
+			end
+			return "󰞷 Terminal #" .. num
+		end
+
+		if title and title ~= "" then
+			return "󰞷 Terminal (" .. title .. ")"
+		end
+
+		return "󰞷 Terminal"
+	end
+
+	return str
+end
+
 --- Retrieves current statusline theme selection.
 --- @return string theme_name
 function M.get_current_theme()
@@ -59,23 +163,59 @@ end
 --- @param theme_name string
 --- @return table lualine_options
 function M.get_lualine_config(theme_name)
+	M.setup()
 	theme_name = theme_name or M.get_current_theme()
+
+	local common_diagnostics = {
+		"diagnostics",
+		symbols = { error = " ", warn = " ", info = "󰋼 ", hint = "󰌵 " },
+	}
+
+	local common_diff = {
+		"diff",
+		symbols = { added = " ", modified = "󰝤 ", removed = " " },
+	}
+
+	local common_filename = {
+		"filename",
+		file_status = true,
+		path = 1,
+		fmt = M.format_filename,
+		symbols = { modified = " 󰏫", readonly = " 󰌾", unnamed = "[No Name]", newfile = "[New]" },
+	}
 
 	if theme_name == "nvchad_blocks" then
 		return {
 			options = {
 				theme = "auto",
 				globalstatus = true,
-				component_separators = { left = "|", right = "|" },
-				section_separators = { left = "", right = "" },
+				component_separators = { left = "", right = "" },
+				section_separators = { left = "", right = "" },
 			},
 			sections = {
 				lualine_a = { { "mode", fmt = M.format_mode } },
-				lualine_b = { { "branch", icon = "" }, "diff", "diagnostics" },
-				lualine_c = { { "filename", file_status = true, path = 1 } },
-				lualine_x = { "encoding", "fileformat", "filetype" },
-				lualine_y = { "progress" },
-				lualine_z = { { "location", icon = "" } },
+				lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
+				lualine_c = { common_filename },
+				lualine_x = { M.lsp_status, "filetype" },
+				lualine_y = { "encoding", "fileformat" },
+				lualine_z = { { "location", icon = "" }, "progress" },
+			},
+		}
+	elseif theme_name == "nvchad_round" then
+		return {
+			options = {
+				theme = "auto",
+				globalstatus = true,
+				component_separators = { left = "", right = "" },
+				section_separators = { left = "", right = "" },
+			},
+			sections = {
+				lualine_a = { { "mode", fmt = M.format_mode } },
+				lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
+				lualine_c = { common_filename },
+				lualine_x = { M.lsp_status, "filetype" },
+				lualine_y = { "encoding" },
+				lualine_z = { { "location", icon = "" }, "progress" },
 			},
 		}
 	elseif theme_name == "vscode" then
@@ -88,9 +228,9 @@ function M.get_lualine_config(theme_name)
 			},
 			sections = {
 				lualine_a = { "mode" },
-				lualine_b = { { "branch", icon = "" }, "diagnostics" },
-				lualine_c = { { "filename", path = 1 } },
-				lualine_x = { "filetype" },
+				lualine_b = { { "branch", icon = "" }, common_diagnostics },
+				lualine_c = { common_filename },
+				lualine_x = { M.lsp_status, "filetype" },
 				lualine_y = { "progress" },
 				lualine_z = { "location" },
 			},
@@ -105,9 +245,9 @@ function M.get_lualine_config(theme_name)
 			},
 			sections = {
 				lualine_a = { "mode" },
-				lualine_b = { { "filename", path = 1 } },
+				lualine_b = { common_filename },
 				lualine_c = {},
-				lualine_x = { "branch" },
+				lualine_x = { { "branch", icon = "" }, M.lsp_status },
 				lualine_y = { "filetype" },
 				lualine_z = { "location" },
 			},
@@ -119,8 +259,8 @@ function M.get_lualine_config(theme_name)
 				globalstatus = true,
 			},
 			sections = {
-				lualine_a = { { "branch", icon = "🌿" }, "diff", "diagnostics" },
-				lualine_b = { { "filename", file_status = true, path = 1 } },
+				lualine_a = { { "branch", icon = "🌿" }, common_diff, common_diagnostics },
+				lualine_b = { common_filename },
 				lualine_c = {},
 				lualine_x = {
 					{
@@ -144,16 +284,16 @@ function M.get_lualine_config(theme_name)
 		options = {
 			theme = "auto",
 			globalstatus = true,
-			component_separators = { left = "", right = "" },
-			section_separators = { left = "", right = "" },
+			component_separators = { left = "", right = "" },
+			section_separators = { left = "", right = "" },
 		},
 		sections = {
 			lualine_a = { { "mode", fmt = M.format_mode } },
-			lualine_b = { { "branch", icon = "" }, "diff", "diagnostics" },
-			lualine_c = { { "filename", file_status = true, path = 1 } },
-			lualine_x = { "encoding", "fileformat", "filetype" },
-			lualine_y = { "progress" },
-			lualine_z = { { "location", icon = "" } },
+			lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
+			lualine_c = { common_filename },
+			lualine_x = { M.lsp_status, "filetype" },
+			lualine_y = { "encoding" },
+			lualine_z = { { "location", icon = "" }, "progress" },
 		},
 	}
 end
@@ -195,6 +335,14 @@ function M.setup()
 		return
 	end
 	M._did_setup = true
+
+	local group = vim.api.nvim_create_augroup("KrsStatuslineTermTitle", { clear = true })
+	vim.api.nvim_create_autocmd({ "TermOpen", "TermClose", "TermRequest", "TermEnter", "TermLeave" }, {
+		group = group,
+		callback = function()
+			vim.cmd("redrawstatus")
+		end,
+	})
 
 	vim.api.nvim_create_user_command("KrsStatuslineTheme", function(opts)
 		if opts.args and opts.args ~= "" then

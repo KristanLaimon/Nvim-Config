@@ -1317,7 +1317,6 @@ return setmetatable({
 	keys = {
 		{ "<C-S-t>", mode = { "n", "i" }, desc = "Project Task Menu" },
 		{ "<C-S-a>", mode = { "n", "i" }, desc = "Run Default Project Task" },
-		{ "<C-S-x>", mode = { "n", "i" }, desc = "Kill Active Task" },
 		{ "<C-S-e>", mode = { "n", "i" }, desc = "Restart Active Task" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },

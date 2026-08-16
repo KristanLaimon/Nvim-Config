@@ -13,6 +13,9 @@
 --   Add new namespaces to the list below rather than removing the class.
 -- ============================================================================
 
+---@class vim.g
+---@field [string] any
+
 ---@class vim
 ---@field api table Neovim API functions (`nvim_*`).
 ---@field fn table Vimscript function bridge.
@@ -21,7 +24,7 @@
 ---@field diagnostic table Diagnostic framework.
 ---@field treesitter table Treesitter integration.
 ---@field keymap table Keymap helpers (`set`, `del`).
----@field g table Global variables.
+---@field g vim.g Global variables.
 ---@field b table Buffer-scoped variables.
 ---@field w table Window-scoped variables.
 ---@field t table Tabpage-scoped variables.

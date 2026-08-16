@@ -47,8 +47,8 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<C-S-h>` / `<C-S-j>` / `<C-S-k>` / `<C-S-l>` | n, i, v | Find a file and open it in a split (left / down / up / right) |
 | `<C-Left>` / `<C-Right>` | n | Widen / narrow the window |
 | `<C-Up>` / `<C-Down>` | n | Taller / shorter |
-| `gt` / `<A-l>` / `<A-Right>` | n | Next buffer |
-| `gT` / `<A-h>` / `<A-Left>` | n | Previous buffer |
+| `gt` / `<A-l>` / `<M-l>` / `<A-Right>` / `<M-Right>` | n | Next buffer |
+| `gT` / `<A-h>` / `<M-h>` / `<A-Left>` / `<M-Left>` | n | Previous buffer |
 | `<C-A-Left>` / `<C-A-Right>` | n | Move the current tab left / right |
 | `<leader>bh` / `<leader>bl` | n | Move the current tab left / right (leader variant) |
 
@@ -181,7 +181,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | Shortcut / Command | Action |
 | :--- | :--- |
 | `<leader>th` / `:KrsThemePicker` | Nagatoro & NvChad Theme Picker with live preview ([`color-palette.md`](color-palette.md)) |
-| `:KrsStatuslineTheme` | Pick Statusline Theme (`nvchad_pills`, `nvchad_blocks`, `vscode`, `minimal`) |
+| `:KrsStatuslineTheme` | Pick Statusline Theme (`nvchad_pills`, `nvchad_blocks`, `nvchad_round`, `vscode`, `minimal`) |
 | `<leader>tr` / `:KrsToggleReferences` | Toggle LSP Reference Counts / CodeLens (Default: ON) ([`languages.md`](languages.md)) |
 | `<C-S-d>` / `:KrsWiki` | Open Documentation Center & Wiki Modal ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
 

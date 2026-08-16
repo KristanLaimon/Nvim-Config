@@ -2697,7 +2697,13 @@ return setmetatable({
 	name = "krs_git_center",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "GitCenter", "GitCenterStage", "GitCenterCommit", "GitCenterPush", "GitCenterDiff" },
-	keys = { { "<C-S-g>", mode = { "n", "i", "v", "t" }, desc = "Open Git Control Center" } },
+	keys = {
+		{ "<C-S-g>", mode = { "n", "i", "v", "t" }, desc = "Open Git Control Center" },
+		{ "<C-S-x>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
+		{ "<C-S-X>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
+		{ "<A-s>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
+		{ "<M-s>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
+	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"sindrets/diffview.nvim",

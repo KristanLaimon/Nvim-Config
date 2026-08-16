@@ -398,11 +398,14 @@ function M.open_desktop_explorer(opts, on_select_cb)
 				actions.close(prompt_bufnr)
 				vim.schedule(function()
 					vim.ui.input({ prompt = "Rename to: ", default = item.name }, function(new_name)
-						if not new_name or new_name == "" or new_name == item.name then
-							return
+						local target_path = path.join(curr_dir, new_name)
+						local ok_ren, err_ren = os.rename(item.path, target_path)
+						if ok_ren then
+							require("krs.core.buffer_rename").update_buffers_path(item.path, target_path)
+							vim.notify("✏️ Renamed to: " .. new_name, vim.log.levels.INFO)
+						else
+							vim.notify("Error renaming: " .. tostring(err_ren), vim.log.levels.ERROR)
 						end
-						os.rename(item.path, path.join(curr_dir, new_name))
-						vim.notify("✏️ Renamed to: " .. new_name, vim.log.levels.INFO)
 						M.open_desktop_explorer({ path = curr_dir })
 					end)
 				end)
@@ -607,6 +610,7 @@ function M.open_move_picker(opts)
 
 				local ok, err = os.rename(source_path, dest_path)
 				if ok then
+					require("krs.core.buffer_rename").update_buffers_path(source_path, dest_path)
 					vim.notify("🚚 Moved '" .. source_name .. "' to:\n" .. target_dir, vim.log.levels.INFO, { title = "Move File" })
 					pcall(function()
 						require("neo-tree.sources.manager").refresh("filesystem")

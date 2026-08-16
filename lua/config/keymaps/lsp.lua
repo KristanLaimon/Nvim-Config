@@ -195,8 +195,8 @@ local function rename_file(old_path)
 				return
 			end
 
-			vim.cmd("edit " .. vim.fn.fnameescape(new_path))
-			vim.cmd("bdelete " .. vim.fn.fnameescape(old_path))
+			require("krs.core.buffer_rename").update_buffers_path(old_path, new_path)
+			vim.notify("Renamed file: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO)
 		end,
 	})
 end

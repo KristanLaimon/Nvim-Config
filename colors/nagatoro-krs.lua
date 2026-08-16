@@ -28,7 +28,7 @@ local p = {
 	bg_selected = "#5d3e2f", -- Active selection / focus background
 	fg = "#F8F8F2", -- Official Editor Foreground
 	fg_muted = "#bbbbbb", -- Muted text
-	comment = "#5b574a", -- Muted Olive Gray Comment (Italic)
+	comment = "#6f7a82", -- Soft Slate Cyan/Gray Comment (High contrast for transparent windows)
 
 	-- Nagatoro Token Colors
 	keyword = "#6d7fd4", -- Official Nagatoro Keyword Blue/Indigo

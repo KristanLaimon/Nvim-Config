@@ -37,7 +37,6 @@ return {
 			{ "<F11>", desc = "Debug: Step Into" },
 			{ "<F12>", desc = "Debug: Step Out" },
 			{ "<C-b>", desc = "Toggle Breakpoint" },
-			{ "<A-h>", desc = "Conditional Breakpoint" },
 		},
 		dependencies = {
 			"rcarriga/nvim-dap-ui",

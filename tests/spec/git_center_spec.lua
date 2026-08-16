@@ -29,6 +29,11 @@ describe("plugins.krs.git_center", function()
 		expect(type(git_center.settings.keys)).toBe("table")
 	end)
 
+	it("includes Ctrl+Shift+X in stage_all key settings and spec", function()
+		expect(git_center.settings.keys.stage_all).toContain("<C-S-x>")
+		expect(git_center.settings.keys.stage_all).toContain("<C-S-X>")
+	end)
+
 	it("toggles open and closed cleanly", function()
 		expect(git_center.is_open()).toBeFalsy()
 

@@ -395,12 +395,14 @@ function M.setup()
 	})
 
 	for n = 1, M.settings.count do
-		vim.keymap.set({ "n", "i", "t" }, M.settings.keys.select_prefix .. n .. ">", function()
-			if vim.api.nvim_get_mode().mode == "t" then
-				pcall(vim.cmd, "stopinsert")
-			end
-			M.select_terminal(n)
-		end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
+		for _, prefix in ipairs({ M.settings.keys.select_prefix, "<M-" }) do
+			vim.keymap.set({ "n", "i", "t" }, prefix .. n .. ">", function()
+				if vim.api.nvim_get_mode().mode == "t" then
+					pcall(vim.cmd, "stopinsert")
+				end
+				M.select_terminal(n)
+			end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
+		end
 	end
 
 	for _, key in ipairs(M.settings.keys.toggle) do
@@ -410,6 +412,11 @@ function M.setup()
 			desc = "Toggle Selected Terminal",
 		})
 	end
+	vim.keymap.set({ "n", "i", "t" }, "<M-;>", M.toggle_selected_terminal, {
+		noremap = true,
+		silent = true,
+		desc = "Toggle Selected Terminal",
+	})
 
 	vim.keymap.set("t", M.settings.keys.close, function()
 		pcall(vim.cmd, "stopinsert")

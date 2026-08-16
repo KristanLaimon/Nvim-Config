@@ -25,6 +25,7 @@ The language is inferred from the current filetype; from any other buffer it ask
 schemas-langs/
 ├── lua/
 │   ├── vim_nvim/       -- Neovim API
+│   ├── neovide/        -- Neovide GUI globals (vim.g)
 │   ├── love/           -- LÖVE
 │   └── koreader/
 └── typescript_javascript/

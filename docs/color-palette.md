@@ -33,8 +33,9 @@ KrsVim ships with a set of complete, hand-crafted themes matching the `nagatoro-
 ## 📊 NvChad Statusline & Statusline Theme Picker
 
 Run `:KrsStatuslineTheme` (or select from Command Palette `<C-Shift-P>`) to switch statusline layouts:
-- `nvchad_pills` (Rounded pill blocks with mode icons ` NORMAL`)
-- `nvchad_blocks` (Square block separators)
+- `nvchad_pills` (Rounded pill blocks with mode icons ` NORMAL`, Git diff icons, LSP server info ` lua_ls`, and diagnostics)
+- `nvchad_blocks` (Slanted powerline block separators `` ``)
+- `nvchad_round` (Curved slant separators `` ``)
 - `nagatoro_classic` (Minimal classic layout)
 - `vscode` (Flat VSCode style)
 - `minimal` (Compact)

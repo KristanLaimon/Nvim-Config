@@ -46,3 +46,11 @@ vim.api.nvim_create_user_command("KrsTest", function(command)
 	local runner = dofile(root .. "/tests/run.lua")
 	runner.run(root, command.args ~= "" and command.args or nil)
 end, { nargs = "?", desc = "Run the KRS unit test suite (optionally filtered by spec name)" })
+
+-- If nvim is being run inside neovide wrapper
+if vim.g.neovide then
+	vim.g.neovide_window_blurred = true
+	vim.g.neovide_transparency = 0.48
+	vim.g.neovide_normal_opacity = 0.48
+	-- vim.g.neovide_show_border = true
+end

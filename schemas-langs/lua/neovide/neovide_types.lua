@@ -1,0 +1,74 @@
+---@meta
+-- ============================================================================
+-- Neovide GUI Global Type Definitions -- injected by KRS Type Injector.
+-- ============================================================================
+-- Options and global variables supported by Neovide (https://neovide.dev).
+-- Setting these in `vim.g` configures Neovide's animations, visuals, input,
+-- window padding, transparency, and runtime features.
+-- ============================================================================
+
+---@class vim.g
+---@field neovide? boolean Whether Neovim is running inside Neovide GUI.
+---@field neovide_version? string Version string of Neovide.
+---@field neovide_channel_id? integer Channel ID for Neovide RPC communications.
+---@field neovide_scale_factor? number UI scale factor (default: 1.0).
+---@field neovide_refresh_rate? integer Target rendering refresh rate in Hz (e.g. 60, 120, 144).
+---@field neovide_refresh_rate_idle? integer Refresh rate when idle in Hz (e.g. 5).
+---@field neovide_no_idle? boolean Disable idling and continuously render frames.
+---@field neovide_detach_on_quit? 'always_quit'|'always_detach'|'prompt'|boolean Remote session quit/detach strategy.
+---@field neovide_confirm_quit? boolean Show confirmation dialog before closing Neovide.
+---@field neovide_fullscreen? boolean Enable or disable fullscreen mode.
+---@field neovide_remember_window_size? boolean Remember and restore window dimensions on startup.
+---@field neovide_profiler? boolean Enable performance profiler overlay.
+---@field neovide_has_mouse_grid_detection? boolean Mouse grid detection flag.
+---@field neovide_transparency? number Window transparency opacity (0.0 transparent to 1.0 opaque).
+---@field neovide_opacity? number Window opacity level (0.0 to 1.0).
+---@field neovide_normal_opacity? number Opacity of the normal text background surface (0.0 to 1.0).
+---@field neovide_window_blurred? boolean Enable window background blur / acrylic / vibrancy effect.
+---@field neovide_theme? 'auto'|'dark'|'light'|'current_theme' Theme mode for window decorations.
+---@field neovide_text_gamma? number Text rendering gamma correction value.
+---@field neovide_text_contrast? number Text rendering contrast adjustment.
+---@field neovide_underline_stroke_scale? number Scale factor for underline stroke thickness.
+---@field neovide_hide_mouse_when_typing? boolean Hide mouse pointer while typing.
+---@field neovide_padding_top? integer Top internal window padding in pixels.
+---@field neovide_padding_bottom? integer Bottom internal window padding in pixels.
+---@field neovide_padding_left? integer Left internal window padding in pixels.
+---@field neovide_padding_right? integer Right internal window padding in pixels.
+---@field neovide_scroll_animation_length? number Scroll animation duration in seconds (0 to disable).
+---@field neovide_scroll_animation_far_lines? integer Line distance threshold to skip scroll animation.
+---@field neovide_cursor_animation_length? number Cursor animation duration in seconds (0 to disable).
+---@field neovide_cursor_trail_size? number Length of cursor movement trail (0.0 to 1.0).
+---@field neovide_cursor_antialiasing? boolean Enable antialiasing for cursor shape rendering.
+---@field neovide_cursor_animate_in_insert_mode? boolean Animate cursor movements while typing in Insert mode.
+---@field neovide_cursor_animate_command_line? boolean Animate cursor transition to/from command line.
+---@field neovide_cursor_unfocused_outline? boolean Draw outline cursor when window loses focus.
+---@field neovide_cursor_vfx_mode? 'railgun'|'torpedo'|'pixiedust'|'sonicboom'|'ripple'|'wireframe'|''|string Cursor particle effect mode.
+---@field neovide_cursor_particles? 'railgun'|'torpedo'|'pixiedust'|'sonicboom'|'ripple'|'wireframe'|'None'|string Alias for cursor particle effect mode.
+---@field neovide_cursor_vfx_opacity? number Cursor particle opacity (0.0 to 1.0).
+---@field neovide_cursor_particle_opacity? number Alias for cursor particle opacity.
+---@field neovide_cursor_vfx_particle_lifetime? number Lifetime of cursor particles in seconds.
+---@field neovide_cursor_particle_lifetime? number Alias for particle lifetime in seconds.
+---@field neovide_cursor_vfx_particle_density? number Particle density multiplier.
+---@field neovide_cursor_particle_density? number Alias for particle density multiplier.
+---@field neovide_cursor_vfx_particle_speed? number Particle movement speed multiplier.
+---@field neovide_cursor_particle_speed? number Alias for particle movement speed.
+---@field neovide_cursor_vfx_particle_phase? number Particle movement phase offset.
+---@field neovide_cursor_particle_phase? number Alias for particle phase offset.
+---@field neovide_cursor_vfx_particle_curl? number Particle movement curl factor.
+---@field neovide_cursor_particle_curl? number Alias for particle curl factor.
+---@field neovide_floating_shadow? boolean Enable drop shadows under floating windows.
+---@field neovide_floating_z_height? number Virtual Z-height offset for floating window shadow.
+---@field neovide_floating_corner_radius? number Corner radius for floating windows.
+---@field neovide_floating_blur_amount_x? number Blur amount on X axis for floating window backgrounds.
+---@field neovide_floating_blur_amount_y? number Blur amount on Y axis for floating window backgrounds.
+---@field neovide_light_angle_degrees? number Light source angle in degrees for drop shadow rendering.
+---@field neovide_light_radius? number Light source distance for drop shadow rendering.
+---@field neovide_input_macos_option_key_is_meta? 'both'|'only_left'|'only_right'|'none'|boolean macOS Option key behavior mapping to Meta.
+---@field neovide_input_macos_alt_is_meta? 'both'|'only_left'|'only_right'|'none'|boolean Alias for macOS Option key to Meta mapping.
+---@field neovide_input_ime? boolean Enable IME (Input Method Editor) integration.
+---@field neovide_touch_deadzone? number Touch drag gesture deadzone in pixels.
+---@field neovide_touch_drag_timeout? number Touch drag timeout duration in seconds.
+
+---@class vim
+---@field g vim.g Global variables.
+vim = vim or {}

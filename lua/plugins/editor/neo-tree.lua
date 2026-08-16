@@ -336,6 +336,7 @@ return {
 								local renamed, err = os.rename(old_path, new_path)
 
 								if renamed then
+									require("krs.core.buffer_rename").update_buffers_path(old_path, new_path)
 									vim.notify("Renamed: " .. old_name .. " ➜ " .. new_name, vim.log.levels.INFO, {
 										title = "Neo-tree",
 									})
@@ -446,6 +447,32 @@ return {
 						visible = true,
 						hide_dotfiles = false,
 						hide_gitignored = false,
+					},
+				},
+				event_handlers = {
+					{
+						event = "file_renamed",
+						handler = function(args)
+							require("krs.core.buffer_rename").update_buffers_path(args.source, args.destination)
+						end,
+					},
+					{
+						event = "file_moved",
+						handler = function(args)
+							require("krs.core.buffer_rename").update_buffers_path(args.source, args.destination)
+						end,
+					},
+					{
+						event = "dir_renamed",
+						handler = function(args)
+							require("krs.core.buffer_rename").update_buffers_path(args.source, args.destination)
+						end,
+					},
+					{
+						event = "dir_moved",
+						handler = function(args)
+							require("krs.core.buffer_rename").update_buffers_path(args.source, args.destination)
+						end,
 					},
 				},
 			})
