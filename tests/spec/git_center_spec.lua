@@ -309,6 +309,7 @@ describe("plugins.krs.git_center", function()
 	end)
 
 	it("registers user commands GitLog and GitHistory", function()
+		git_center.setup()
 		expect(vim.fn.exists(":GitLog")).toBe(2)
 		expect(vim.fn.exists(":GitHistory")).toBe(2)
 	end)

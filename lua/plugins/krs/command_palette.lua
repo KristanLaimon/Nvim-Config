@@ -69,6 +69,7 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 🧠 LSP, Diagnostics & Type Injection
 	-- --------------------------------------------------------------------------
+	{ name = "👁️ Toggle LSP Reference Counts / CodeLens (Default: ON)", cmd = "KrsToggleReferences", category = "LSP" },
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
@@ -78,6 +79,9 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 🎨 UI & Configuration
 	-- --------------------------------------------------------------------------
+	{ name = "📚 Open Documentation Center & Wiki (Ctrl+Shift+D)", cmd = "KrsWiki", category = "UI" },
+	{ name = "🎨 Open Nagatoro & NvChad Theme Picker", cmd = "KrsThemePicker", category = "UI" },
+	{ name = "📊 Open Statusline Theme Picker (NvChad Pills, Blocks, etc.)", cmd = "KrsStatuslineTheme", category = "UI" },
 	{ name = "🎨 Toggle UI Icons Mode (Nerd Font Symbols vs Emojis)", cmd = "ToggleIconsMode", category = "UI" },
 	{ name = "🔍 Increase Font Size", cmd = "FontSizeIncrease", category = "UI" },
 	{ name = "🔍 Decrease Font Size", cmd = "FontSizeDecrease", category = "UI" },
@@ -320,6 +324,11 @@ end
 
 --- Registers `:CommandPalette` and the open keys.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	if vim.fn.exists(":CommandPalette") == 0 then
 		vim.api.nvim_create_user_command("CommandPalette", function()
 			M.open_palette()
@@ -336,8 +345,6 @@ function M.setup()
 	end
 end
 
-M.setup()
-
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.CommandPalette = M
 
@@ -349,7 +356,7 @@ return setmetatable({
 	name = "krs_command_palette",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "CommandPalette",
-	keys = { { "<C-S-p>", mode = { "n", "i" }, desc = "Open Command Palette" } },
+	keys = { { "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" } },
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

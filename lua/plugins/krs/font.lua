@@ -127,6 +127,11 @@ end
 
 --- Applies the saved size and binds the commands and keys.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	M.apply_font_size(M.current_size)
 
 	local commands = {
@@ -155,8 +160,6 @@ function M.setup()
 		end
 	end
 end
-
-M.setup()
 
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.FontManager = M

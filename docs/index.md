@@ -24,6 +24,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | Page | Contents |
 | :--- | :--- |
 | ⚙️ [**Installation & Dependencies**](installation.md) | Setup scripts (`setup.ps1` / `setup.sh`), Scoop/APT commands, health checks & graceful fallbacks |
+| 🎓 [**How-To & Customization Guide**](how-to-customize-editor.md) | Step-by-step guide for adding plugins, local modules, new languages, themes, and terminals |
 | 🛠️ [**Languages, LSP & Formatting**](languages.md) | Mason servers, Conform formatters, Treesitter parsers & completion tuning |
 | 🌐 [**Adding a Language / LSP**](adding-language.md) | Step-by-step guide for adding new language servers, formatters & debuggers |
 | 📦 [**Plugin Inventory**](plugins.md) | Comprehensive listing of third-party plugins and custom `krs` modules |
@@ -61,6 +62,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | :--- | :--- |
 | 🏛️ [**Architecture Overview**](architecture.md) | Four-layer architecture, startup sequence & dependency graph |
 | 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` modules self-register with `lazy.nvim` |
+| 🔌 [**Creating Local Plugins**](how-to-create-local-plugin.md) | Step-by-step guide for creating custom local features in `lua/plugins/krs/` |
 | 📶 [**Dynamic Z-Index Manager**](z-index.md) | Centralized Z-index stack manager (`krs.core.z_index`) for floating windows |
 | 🧪 [**Testing Suite**](testing.md) | Running unit & integration tests (`:KrsTest`, `tests/run.lua`) |
 

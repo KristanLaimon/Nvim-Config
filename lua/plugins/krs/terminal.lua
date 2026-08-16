@@ -373,6 +373,11 @@ end
 --- Binds selection, toggling, closing and clipboard keys, and starts the
 --- autocmd that remembers a resized terminal's height.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	sync_terminals()
 
 	vim.api.nvim_create_autocmd("WinResized", {
@@ -435,8 +440,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.TerminalManager = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
@@ -444,6 +447,9 @@ M.setup()
 return setmetatable({
 	name = "krs_terminal",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "TerminalToggle", "TerminalSelect" },
+	keys = {
+		{ "<C-;>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal" },
+	},
 	config = M.setup,
 }, { __index = M })

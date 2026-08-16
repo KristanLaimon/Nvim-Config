@@ -1220,6 +1220,11 @@ end
 --- Registers `:TaskRunner`, `:TaskMenu`, `:TaskRestart`, `:TaskKill`,
 --- `:TaskRunDefault` and every keymap from `M.settings.keys`.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local commands = {
 		TaskRunner = { M.open_task_menu, "Open KRS Project Task Runner" },
 		TaskMenu = { M.open_task_menu, "Open KRS Project Task Runner" },
@@ -1301,8 +1306,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.ProjectTasks = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC -- `__index` exposes the module through `require`
 -- ============================================================================
@@ -1310,7 +1313,13 @@ M.setup()
 return setmetatable({
 	name = "krs_tasks",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "TaskMenu", "TaskRunner", "TaskRestart", "TaskKill", "TaskRunDefault" },
+	keys = {
+		{ "<C-S-t>", mode = { "n", "i" }, desc = "Project Task Menu" },
+		{ "<C-S-a>", mode = { "n", "i" }, desc = "Run Default Project Task" },
+		{ "<C-S-x>", mode = { "n", "i" }, desc = "Kill Active Task" },
+		{ "<C-S-e>", mode = { "n", "i" }, desc = "Restart Active Task" },
+	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = function()
 		M.setup()

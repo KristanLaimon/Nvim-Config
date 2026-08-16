@@ -59,9 +59,25 @@ No autocmd or pattern edits needed. For a full new language (server + formatter 
 
 ---
 
-## ⚡ Completion (blink.cmp)
+## 👁️ LSP Reference Counter & CodeLens (`plugins.krs.lsp_references`)
 
-`blink.cmp` replaces `nvim-cmp`. Two behaviours are deliberately tuned:
+KrsVim displays reference counts (`󰌹 3 references`, `1 reference`) above functions, methods, classes, and structs across all supported languages:
+
+- **Default State**: **ON** by default.
+- **Toggle Command**: Run `:KrsToggleReferences` or press `<leader>tr`.
+- **Command Palette**: Accessible inside Command Palette (`<C-Shift-P>`) under `👁️ Toggle LSP Reference Counts / CodeLens (Default: ON)`.
+- **Zero Complexity for New Languages**: Any language server attached to Neovim (such as `vtsls`/`tsserver`, `gopls`, `rust-analyzer`, `intelephense`, `pyright`, `clangd`, `omnisharp`, `lua_ls`) automatically streams code lenses according to standard LSP specs.
+
+---
+
+## ⚡ Completion (blink.cmp & Colorify)
+
+`blink.cmp` powers autocompletion with NvChad layout:
+- **Left Column**: Kind icon pill (` 󰊕 `, ` 󰩫 `, ` 󰀫 `, ` 󰌋 `, ` 󰌗 `) styled with dedicated background & accent colors (`CmpKindBg_*`) from the active theme.
+- **Color Items**: CSS & Tailwind hex/RGB colors render a preview rectangle badge (` ██ `) using the exact hex color with luminance contrast text (`CmpColor_<hex>`).
+- **Right Column**: Kind label (`<Snippet>`, `<Function>`, `<Variable>`, etc.).
+
+Two behaviours are tuned:
 
 **Completion is off entirely** in the `krsinputmodal` filetype (so the [input modal](input-modal.md) stays a plain text field) and in any buffer setting `vim.b.completion = false`.
 

@@ -50,20 +50,22 @@ These idempotent scripts automatically install missing external dependencies (`r
 
 ---
 
-## 📚 Documentation
+## 📚 Documentation & Help
 
 Everything else — install, keybinds, debugging, launch profiles, custom modules — lives in the wiki:
 
-**➡️ [docs/index.md](docs/index.md)**
-
-Open it inside the editor with `w` on the dashboard, or `:NvimWiki`.
+- **Documentation Center Modal**: Press `<C-S-d>` (or run `:KrsWiki` / `:NvimWiki`) from anywhere to open the interactive Wiki Reader.
+- **➡️ [docs/index.md](docs/index.md)** (Full Wiki Index)
+- **➡️ [docs/how-to-customize-editor.md](docs/how-to-customize-editor.md)** (Complete How-To & Customization Guide with Examples)
 
 Start here if you are reading the code:
 
 | Page | What it answers |
 |---|---|
+| 🎓 [How-To & Customization Guide](docs/how-to-customize-editor.md) | Step-by-step guide for adding plugins, local modules, languages, themes, and terminals |
 | 🏛️ [Architecture](docs/architecture.md) | The layers, what may depend on what, startup order, where new code goes |
 | 🧩 [Module Architecture](docs/module-architecture.md) | How a file in `lua/plugins/krs/` is both a module and a lazy.nvim spec |
+| 🔌 [Creating Local Plugins](docs/how-to-create-local-plugin.md) | Building custom features in `lua/plugins/krs/` using the dual spec-module metatable |
 | 🧪 [Testing](docs/testing.md) | Running the suite and writing a spec |
 
 ---

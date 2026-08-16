@@ -794,6 +794,11 @@ end
 --- Registers the commands and re-applies the project's types whenever one of the
 --- supported language servers attaches.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local commands = {
 		TypeInjector = { M.open_menu, "Open KRS Modular Type Injector Menu" },
 		KrsTypes = { M.open_menu, "Open KRS Modular Type Injector Menu" },
@@ -830,8 +835,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.TypeInjector = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
@@ -839,6 +842,7 @@ M.setup()
 return setmetatable({
 	name = "krs_type_injector",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "TypeInjector", "KrsTypes", "KrsGitignoreGenerated" },
+	event = { "LspAttach" },
 	config = M.setup,
 }, { __index = M })

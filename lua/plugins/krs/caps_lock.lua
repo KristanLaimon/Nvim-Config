@@ -201,6 +201,11 @@ end
 
 --- Wires focus-aware timers, autocmds, and user commands.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local group = vim.api.nvim_create_augroup("KRS_CapsLockWarning", { clear = true })
 
 	vim.api.nvim_create_autocmd("FocusGained", {
@@ -244,15 +249,14 @@ end
 
 _G.CapsLock = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
 
 M.name = "krs_caps_lock"
 M.dir = require("krs.core.lazyspec").for_module()
-M.lazy = false
+M.event = "VeryLazy"
+M.cmd = "CapsLockCheck"
 M.config = M.setup
 
 return M

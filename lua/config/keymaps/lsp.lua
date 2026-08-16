@@ -91,8 +91,8 @@ end, opts("Quick Fix / Code Actions (Dropdown at Caret)"))
 -- ============================================================================
 
 --- Jumps to the definition under the cursor.
---- Telescope is preferred so several matches can be previewed; the jump list is
---- marked first, so `<C-o>` always comes back here.
+--- If only 1 definition result is found, it goes straight to it.
+--- If 2 or more results are found, it opens Telescope lsp_definitions picker.
 local function goto_definition()
 	vim.cmd("normal! m'")
 
@@ -105,16 +105,63 @@ local function goto_definition()
 	end
 
 	local has_telescope, builtin = pcall(require, "telescope.builtin")
-	if has_telescope then
-		builtin.lsp_definitions({ jump_type = "never", reuse_win = true, show_line = true })
-	else
-		vim.lsp.buf.definition()
+
+	local status, err = pcall(function()
+		vim.lsp.buf.definition({
+			on_list = function(options)
+				if not options or not options.items or #options.items == 0 then
+					vim.notify("No definition found", vim.log.levels.WARN, { title = "LSP" })
+					return
+				end
+
+				if #options.items == 1 then
+					local item = options.items[1]
+					if item.filename and item.filename ~= "" then
+						if item.filename ~= vim.api.nvim_buf_get_name(0) then
+							vim.cmd("edit " .. vim.fn.fnameescape(item.filename))
+						end
+						pcall(vim.api.nvim_win_set_cursor, 0, { item.lnum, math.max(0, item.col - 1) })
+					end
+				else
+					if has_telescope then
+						builtin.lsp_definitions({ reuse_win = true, show_line = true })
+					else
+						vim.lsp.buf.definition()
+					end
+				end
+			end,
+		})
+	end)
+
+	if not status then
+		if has_telescope then
+			builtin.lsp_definitions({ reuse_win = true, show_line = true })
+		else
+			vim.lsp.buf.definition()
+		end
 	end
 end
+
+M.goto_definition = goto_definition
+
+--- Handles Shift + Left Click: moves cursor to mouse position and jumps to definition.
+local function goto_definition_at_mouse()
+	local mouse_pos = vim.fn.getmousepos()
+	if mouse_pos and mouse_pos.winid > 0 and vim.api.nvim_win_is_valid(mouse_pos.winid) then
+		vim.api.nvim_set_current_win(mouse_pos.winid)
+		pcall(vim.api.nvim_win_set_cursor, mouse_pos.winid, { mouse_pos.line, math.max(0, mouse_pos.column - 1) })
+	end
+	goto_definition()
+end
+
+M.goto_definition_at_mouse = goto_definition_at_mouse
 
 for _, key in ipairs(M.settings.keys.goto_definition) do
 	vim.keymap.set({ "n", "i", "v" }, key, goto_definition, opts("Go to definition"))
 end
+
+vim.keymap.set({ "n", "i", "v" }, "<S-LeftMouse>", goto_definition_at_mouse, opts("Shift + Click: Go to definition"))
+
 
 -- ============================================================================
 -- RENAME

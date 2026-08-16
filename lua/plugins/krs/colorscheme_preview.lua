@@ -45,6 +45,11 @@ end
 
 --- Installs the two command-line listeners.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local group = vim.api.nvim_create_augroup(M.settings.augroup, { clear = true })
 
 	vim.api.nvim_create_autocmd("CmdlineChanged", {
@@ -78,8 +83,6 @@ end
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.ColorschemePreview = M
 
-M.setup()
-
 -- ============================================================================
 -- LAZY.NVIM SPEC
 -- ============================================================================
@@ -87,6 +90,6 @@ M.setup()
 return setmetatable({
 	name = "krs_colorscheme_preview",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	event = "CmdlineEnter",
 	config = M.setup,
 }, { __index = M })

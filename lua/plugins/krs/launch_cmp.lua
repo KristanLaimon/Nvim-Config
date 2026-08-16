@@ -167,5 +167,5 @@ _G.LaunchCmp = M
 return setmetatable({
 	name = "krs_launch_cmp",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	lazy = true,
 }, { __index = M })

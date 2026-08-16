@@ -245,6 +245,7 @@ function M.attach_hover_keymaps(bufnr, winid)
 	local opts = { buffer = bufnr, noremap = true, silent = true }
 
 	vim.keymap.set("n", "<CR>", M.follow_link_at_cursor, opts)
+	vim.keymap.set("n", "<C-k>", M.follow_link_at_cursor, opts)
 	vim.keymap.set("n", "gx", M.follow_link_at_cursor, opts)
 	vim.keymap.set("n", "K", M.follow_link_at_cursor, opts)
 	vim.keymap.set("n", "q", M.close_hover, opts)
@@ -276,6 +277,11 @@ end
 
 --- Initializes LSP hover handler wrapper.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local orig_hover = vim.lsp.handlers["textDocument/hover"]
 	if orig_hover then
 		vim.lsp.handlers["textDocument/hover"] = function(err, result, ctx, config)
@@ -292,11 +298,9 @@ function M.setup()
 	end
 end
 
-M.setup()
-
 return setmetatable({
 	name = "krs_hover_links",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	event = { "LspAttach" },
 	config = M.setup,
 }, { __index = M })

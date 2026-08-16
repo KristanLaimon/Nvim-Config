@@ -8,50 +8,48 @@ This guide explains how to manage, customize, and extend colorschemes in this Ne
 
 ## 📁 Key Files & Directories
 
-- **Theme Plugin Specification:** [`lua/plugins/ui/themes.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/ui/themes.lua)
-- **Live Colorscheme Previewer:** [`lua/plugins/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/colorscheme_preview.lua)
+- **Nagatoro Theme System & Picker:** [`lua/plugins/krs/theme_picker.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/theme_picker.lua)
+- **Statusline Theme Picker:** [`lua/plugins/krs/statusline_picker.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/statusline_picker.lua)
+- **Colorify Engine (CMP Completion):** [`lua/krs/lsp/colorify.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/krs/lsp/colorify.lua)
+- **Theme Palette Files:** `colors/nagatoro-krs.lua`, `colors/nagatoro-light.lua`, `colors/onedark-krs.lua`, `colors/catppuccin-krs.lua`, `colors/nord-krs.lua`
+- **Customization Guide:** [`how-to-customize-editor.md`](how-to-customize-editor.md)
 
 ---
 
-## 🎨 Core Color Palette Architecture
+## 🎨 Nagatoro Theme System (`:KrsThemePicker`)
 
-The UI color scheme is driven by:
-1. **Installed Colorscheme Plugins**: Theme plugins (such as `doki-theme/doki-theme-vim`, `catppuccin/nvim`, `folke/tokyonight.nvim`).
-2. **Dynamic Background Inheritance**: Colorschemes naturally control their background palette, syntax highlighting, popups, and statusline styles without hardcoded background overrides.
+KrsVim ships with a set of complete, hand-crafted themes matching the `nagatoro-krs` palette schema. Press `<leader>th` or run `:KrsThemePicker` to open the interactive theme picker:
 
----
-
-## 📦 How to Add or Change Themes
-
-### 1. Adding a New Theme Plugin
-To add a new theme, add its specification to the returned table in [`lua/plugins/ui/themes.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/ui/themes.lua):
-
-```lua
-return {
-    {
-        "catppuccin/nvim",
-        name = "catppuccin",
-        lazy = false,
-        priority = 1000,
-        config = function()
-            vim.cmd.colorscheme("catppuccin-mocha")
-        end,
-    },
-    -- ... other plugins
-}
-```
-
-### 2. Statusline Integration (Lualine)
-Lualine is configured with `theme = "auto"`, meaning it dynamically adapts its palette to match whichever colorscheme is active.
+- **Available Themes:**
+  - `nagatoro-krs` (Hayase Nagatoro Dark — Default)
+  - `nagatoro-light` (Hayase Nagatoro Light)
+  - `onedark-krs` (NvChad OneDark in nagatoro format)
+  - `catppuccin-krs` (NvChad Catppuccin Mocha in nagatoro format)
+  - `nord-krs` (NvChad Nord in nagatoro format)
+- **Live Preview & Store Persistence:** Previews themes in real time while tabbed/selected. Cancelling (`<Esc>`) restores the previous theme; confirming (`<Enter>`) saves choice to `.krsnvim/theme.json` via [`krs.core.store`](architecture.md#layer-2--shared-libraries-luakrs).
 
 ---
 
-## 🦊 Live Colorscheme Previewer
+## 📊 NvChad Statusline & Statusline Theme Picker
 
-The configuration includes an active live colorscheme preview module [`lua/plugins/krs/colorscheme_preview.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/colorscheme_preview.lua).
+Run `:KrsStatuslineTheme` (or select from Command Palette `<C-Shift-P>`) to switch statusline layouts:
+- `nvchad_pills` (Rounded pill blocks with mode icons ` NORMAL`)
+- `nvchad_blocks` (Square block separators)
+- `nagatoro_classic` (Minimal classic layout)
+- `vscode` (Flat VSCode style)
+- `minimal` (Compact)
 
-### How it Works:
-1. Type `:colorscheme <theme>` in Command Mode and hit `<Tab>` to cycle through themes.
-2. Neovim previews the theme and its background in real time as you scroll options.
-3. If you press `<Esc>` (abort), it restores your previous colorscheme automatically without persisting changes.
-4. Pressing `<Enter>` confirms and applies the selected theme.
+---
+
+## 🎨 NvChad Completion Kind Icons & Colorify (`lua/krs/lsp/colorify.lua`)
+
+Completion items in `blink.cmp` use NvChad layout:
+- **Left**: Kind icon pill (` 󰊕 `, ` 󰩫 `, ` 󰀫 `, ` 󰌋 `, ` 󰌗 `) rendered with dedicated background and accent colors (`CmpKindBg_*`) from the active theme.
+- **Color Items**: CSS & Tailwind hex/RGB colors render a preview rectangle badge (` ██ `) using the exact hex color as background with luminance-aware contrast text.
+- **Right**: Kind label (`<Snippet>`, `<Function>`, `<Variable>`, etc.).
+
+---
+
+## 📦 How to Add a New Theme
+
+To add a custom theme, create a new file `colors/mytheme-krs.lua` adhering to the `nagatoro-krs.lua` palette format. See [`how-to-customize-editor.md#5-how-to-customize-statusline--themes`](how-to-customize-editor.md#5-how-to-customize-statusline--themes) for full step-by-step instructions and code examples.

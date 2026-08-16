@@ -269,5 +269,5 @@ _G.DevServer = M
 return setmetatable({
 	name = "krs_dev_server",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	lazy = true,
 }, { __index = M })

@@ -431,6 +431,42 @@ return {
 			appearance = { nerd_font_variant = "mono" },
 			completion = {
 				menu = {
+					border = "rounded",
+					draw = {
+						components = {
+							kind_icon = {
+								ellipsis = false,
+								text = function(ctx)
+									local colorify = require("krs.lsp.colorify")
+									local hex = colorify.extract_hex_color(ctx.label)
+										or colorify.extract_hex_color(ctx.label_description)
+									if hex then
+										return " ██ "
+									end
+									return colorify.get_kind_icon(ctx.kind)
+								end,
+								highlight = function(ctx)
+									local colorify = require("krs.lsp.colorify")
+									local hex = colorify.extract_hex_color(ctx.label)
+										or colorify.extract_hex_color(ctx.label_description)
+									if hex then
+										return colorify.get_or_create_color_hl(hex)
+									end
+									return colorify.get_kind_hl(ctx.kind)
+								end,
+							},
+							kind = {
+								text = function(ctx)
+									return require("krs.lsp.colorify").format_kind_label(ctx.kind)
+								end,
+							},
+						},
+						columns = {
+							{ "kind_icon" },
+							{ "label", "label_description", gap = 1 },
+							{ "kind" },
+						},
+					},
 					-- Don't auto-pop inside a freshly inserted empty pair ("{}" from autopairs).
 					-- Only auto-show is suppressed: <C-space> still opens the menu there,
 					-- which is what `import { | }` needs.

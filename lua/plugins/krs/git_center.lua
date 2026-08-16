@@ -2609,6 +2609,11 @@ end
 --- Registers the user commands and the global keymaps.
 --- Runs from the lazy spec's `config`, i.e. once neogit is loaded.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	pcall(vim.api.nvim_create_user_command, "GitCenter", function()
 		M.toggle_git_center()
 	end, { desc = "Toggle Git Control Center" })
@@ -2681,8 +2686,6 @@ function M.setup()
 	end
 end
 
-M.setup()
-
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.GitCenter = M
 
@@ -2694,7 +2697,7 @@ return setmetatable({
 	name = "krs_git_center",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "GitCenter", "GitCenterStage", "GitCenterCommit", "GitCenterPush", "GitCenterDiff" },
-	keys = { { "<C-S-g>", mode = { "n", "i" }, desc = "Open Git Control Center" } },
+	keys = { { "<C-S-g>", mode = { "n", "i", "v", "t" }, desc = "Open Git Control Center" } },
 	dependencies = {
 		"nvim-lua/plenary.nvim",
 		"sindrets/diffview.nvim",

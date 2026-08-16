@@ -273,6 +273,11 @@ end
 
 --- Registers `:NugetManager` and its keymap.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	if vim.fn.exists(":NugetManager") == 0 then
 		vim.api.nvim_create_user_command("NugetManager", function()
 			if not M.has_csharp_project() then
@@ -288,8 +293,6 @@ function M.setup()
 	end, { desc = "Nuget Package Manager" })
 end
 
-M.setup()
-
 -- Legacy global kept for user scripts and older keybinds that reference it.
 _G.NugetManager = M
 
@@ -301,6 +304,7 @@ return setmetatable({
 	name = "krs_nuget_manager",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "NugetManager",
+	ft = { "cs" },
 	keys = { { "<leader>ng", mode = "n", desc = "Nuget Package Manager" } },
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,

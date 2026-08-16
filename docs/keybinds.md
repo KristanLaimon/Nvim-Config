@@ -26,7 +26,9 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<C-0>` | n, i, v, t | Reset font size |
 | `<leader>i` | n | View image as pixel art (`chafa`) |
 | `<C-S-Enter>` | n | Open image/video with the OS default app |
+| `<C-S-d>` | n, i, v, t | Open Documentation Center & Wiki Modal ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
 | `<C-LeftMouse>` | all | Open the URL under the cursor in a browser |
+| `<S-LeftMouse>` | n, i, v | Shift + Click symbol: Move cursor and jump to definition |
 | `:q` / `:q!` / `<leader>q` | n, Cmd | Smart quit — split → tab → dashboard → quit |
 | `<leader>cd` | n | Open the default netrw directory browser |
 | `<leader>mp` | n | Markdown preview |
@@ -151,11 +153,17 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 
 ---
 
-## 🐙 Git
+## 🐙 Git & GitSigns
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
 | `<C-S-g>` | n, i, v, t | Toggle the [Git Control Center](git-center.md) |
+| `]c` / `[c` | n | Jump to next / previous Git change hunk ([`gitsigns`](plugins.md)) |
+| `<leader>hp` | n | Preview Git hunk diff at cursor |
+| `<leader>hs` | n | Stage Git hunk at cursor |
+| `<leader>hr` | n | Reset / discard Git hunk at cursor |
+| `<leader>hb` | n | Full inline Git blame line popup |
+| `<leader>hd` | n | Diff buffer against Git index |
 | `<A-h>` / `<A-l>` | Git Center | Switch previous / next submodule repository tab |
 | `s` / `S` | Git Center | Stage selected / stage all |
 | `u` / `U` | Git Center | Unstage selected / unstage all |
@@ -168,7 +176,18 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 
 ---
 
-## 📦 Language-specific
+## 🎨 Themes & UI Shortcuts
+
+| Shortcut / Command | Action |
+| :--- | :--- |
+| `<leader>th` / `:KrsThemePicker` | Nagatoro & NvChad Theme Picker with live preview ([`color-palette.md`](color-palette.md)) |
+| `:KrsStatuslineTheme` | Pick Statusline Theme (`nvchad_pills`, `nvchad_blocks`, `vscode`, `minimal`) |
+| `<leader>tr` / `:KrsToggleReferences` | Toggle LSP Reference Counts / CodeLens (Default: ON) ([`languages.md`](languages.md)) |
+| `<C-S-d>` / `:KrsWiki` | Open Documentation Center & Wiki Modal ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
+
+---
+
+## 📦 Language-specific & Tooling
 
 | Shortcut / Command | Action |
 | :--- | :--- |
@@ -180,4 +199,4 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `:KrsTypes` / `:TypeInjector` | [Type injector](type-injector.md) menu |
 | `:PHPCheckTools` | PHP / Composer / Intelephense / Pint / Xdebug diagnostic modal |
 | `:KrsBunDapInstall` | Build the Bun debug adapter |
-| `:NvimWiki` | Open this wiki |
+| `:NvimWiki` / `:KrsWiki` | Open Wiki Documentation Center modal |

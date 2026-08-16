@@ -22,42 +22,23 @@ return {
 		dependencies = {
 			"nvim-tree/nvim-web-devicons",
 		},
-		opts = {
-			options = {
-				theme = "auto",
-				globalstatus = true,
-			},
-			sections = {
-				lualine_a = {
-					{
-						"branch",
-						icon = "🌿",
-					},
-					"diff",
-					"diagnostics",
+		opts = function()
+			local has_picker, picker = pcall(require, "plugins.krs.statusline_picker")
+			if has_picker then
+				return picker.get_lualine_config()
+			end
+			return {
+				options = { theme = "auto", globalstatus = true },
+				sections = {
+					lualine_a = { "mode" },
+					lualine_b = { "branch", "diff", "diagnostics" },
+					lualine_c = { "filename" },
+					lualine_x = { "filetype" },
+					lualine_y = { "progress" },
+					lualine_z = { "location" },
 				},
-				lualine_b = {
-					{
-						"filename",
-						file_status = true,
-						path = 1,
-					},
-				},
-				lualine_c = {},
-				lualine_x = {
-					{
-						"mode",
-						fmt = function(str)
-							return "-- " .. str .. " --"
-						end,
-					},
-					"encoding",
-					"fileformat",
-					"filetype",
-				},
-				lualine_y = { "progress" },
-				lualine_z = { "location" },
-			},
-		},
+			}
+		end,
 	},
 }
+

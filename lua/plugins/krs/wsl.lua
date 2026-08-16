@@ -260,5 +260,5 @@ _G.Wsl = M
 return setmetatable({
 	name = "krs_wsl",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	lazy = true,
 }, { __index = M })

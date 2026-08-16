@@ -34,7 +34,8 @@ return {
 	{
 		name = "krs_php_tools",
 		dir = vim.fn.stdpath("config") .. "/lua/plugins/krs",
-		lazy = false,
+		ft = { "php", "blade" },
+		cmd = "PHPCheckTools",
 		config = function()
 			local modal = require("plugins.krs.php_tools_modal")
 

@@ -74,6 +74,7 @@ describe("plugins.krs.caps_lock state management and notification trigger", func
 	end)
 
 	it("registers user command CapsLockCheck", function()
+		caps_lock.setup()
 		expect(vim.fn.exists(":CapsLockCheck")).toBe(2)
 	end)
 

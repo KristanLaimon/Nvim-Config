@@ -192,6 +192,11 @@ end
 
 --- Setup autocmds for automatic pin restoration.
 function M.setup()
+	if M._did_setup then
+		return
+	end
+	M._did_setup = true
+
 	local group = vim.api.nvim_create_augroup("KRSPinnedTabsAuto", { clear = true })
 
 	vim.api.nvim_create_autocmd({ "VimEnter", "DirChanged", "BufReadPost" }, {
@@ -202,11 +207,9 @@ function M.setup()
 	})
 end
 
-M.setup()
-
 return setmetatable({
 	name = "krs_pinned_tabs",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	event = { "BufReadPost", "DirChanged" },
 	config = M.setup,
 }, { __index = M })
