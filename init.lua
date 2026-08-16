@@ -47,10 +47,17 @@ vim.api.nvim_create_user_command("KrsTest", function(command)
 	runner.run(root, command.args ~= "" and command.args or nil)
 end, { nargs = "?", desc = "Run the KRS unit test suite (optionally filtered by spec name)" })
 
--- If nvim is being run inside neovide wrapper
+-- If nvim is being run inside Neovide GUI
 if vim.g.neovide then
 	vim.g.neovide_window_blurred = true
-	vim.g.neovide_transparency = 0.48
-	vim.g.neovide_normal_opacity = 0.48
-	-- vim.g.neovide_show_border = true
+	vim.g.neovide_transparency = 0.80
+	vim.g.neovide_normal_opacity = 0.80
+
+	-- Cursor Motion & Trail Animation (Time in seconds)
+	-- Try setting to 0.25 for slow motion, 0.05 for super snappy, or 0.0 to disable.
+	vim.g.neovide_cursor_animation_length = 0.15
+	vim.g.neovide_cursor_trail_size = 0.8 -- Trail size length (0.0 to 1.0)
+	vim.g.neovide_cursor_animate_in_insert_mode = true
+	vim.g.neovide_cursor_animate_command_line = true
+	vim.g.neovide_cursor_unfocused_outline = true -- Draw outline cursor when window loses focus
 end

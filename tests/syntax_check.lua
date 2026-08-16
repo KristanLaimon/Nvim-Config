@@ -14,7 +14,7 @@
 local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
 
 --- Directories scanned, relative to the config root.
-local scan_dirs = { "lua", "tests", "colors" }
+local scan_dirs = { "lua", "tests", "colors", "schemas-langs" }
 
 local failures = 0
 local checked = 0

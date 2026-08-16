@@ -114,17 +114,22 @@ end
 --- @param filepath string
 --- @return string[] cmd
 local function system_open_command(filepath)
+	local abs_path = vim.fn.fnamemodify(filepath, ":p")
+	if #abs_path > 1 and not abs_path:match("^%a:[/\\]?$") then
+		abs_path = abs_path:gsub("[/\\]+$", "")
+	end
+
 	if vim.fn.has("win32") == 1 then
-		local win_path = filepath:gsub("/", "\\")
+		local win_path = abs_path:gsub("/", "\\")
 		return { "cmd.exe", "/c", "start", "", win_path }
 	end
 	if vim.fn.has("wsl") == 1 then
-		return { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
+		return { "explorer.exe", windows_path_for_wsl(abs_path) or abs_path }
 	end
 	if vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1 then
-		return { "open", filepath }
+		return { "open", abs_path }
 	end
-	return { "xdg-open", filepath }
+	return { "xdg-open", abs_path }
 end
 
 -- ============================================================================
@@ -138,33 +143,28 @@ function M.open_with_system_app(filepath)
 		if not filepath or filepath == "" then
 			filepath = vim.api.nvim_buf_get_name(0)
 		end
-		if not path_exists(filepath) then
+		if not filepath or filepath == "" or not path_exists(filepath) then
 			filepath = first_visible_file()
 		end
-		if not path_exists(filepath) then
+		if not filepath or filepath == "" or not path_exists(filepath) then
 			vim.notify("No valid file or folder found to open", vim.log.levels.WARN, {
 				title = M.settings.notify_title,
 			})
 			return
 		end
 
-		filepath = filepath:gsub("[/\\]+$", "")
-		local is_directory = path.is_dir(filepath)
-
-		if vim.ui and type(vim.ui.open) == "function" then
-			local win_path = filepath
-			if vim.fn.has("win32") == 1 then
-				win_path = filepath:gsub("/", "\\")
-			end
-			vim.ui.open(win_path)
-		else
-			local cmd = system_open_command(filepath)
-			vim.system(cmd, { detach = true, stdout = false, stderr = false })
+		local abs_path = vim.fn.fnamemodify(filepath, ":p")
+		if #abs_path > 1 and not abs_path:match("^%a:[/\\]?$") then
+			abs_path = abs_path:gsub("[/\\]+$", "")
 		end
 
-		local name = vim.fn.fnamemodify(filepath, ":t")
+		local is_directory = path.is_dir(abs_path)
+		local cmd = system_open_command(abs_path)
+		vim.system(cmd, { detach = true, stdout = false, stderr = false })
+
+		local name = vim.fn.fnamemodify(abs_path, ":t")
 		if name == "" then
-			name = filepath
+			name = abs_path
 		end
 		local msg = is_directory and ("📂 Opening folder in File Explorer: " .. name)
 			or ("🎬 Opening with OS default program: " .. name)

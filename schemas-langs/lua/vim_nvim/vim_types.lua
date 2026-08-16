@@ -16,72 +16,400 @@
 ---@class vim.g
 ---@field [string] any
 
+---@class vim.b
+---@field [string|integer] any
+
+---@class vim.w
+---@field [string|integer] any
+
+---@class vim.t
+---@field [string|integer] any
+
+---@class vim.v
+---@field count integer
+---@field count1 integer
+---@field register string
+---@field errmsg string
+---@field warningmsg string
+---@field statusmsg string
+---@field shell_error integer
+---@field argv string[]
+---@field cmdbang integer
+---@field cmdarg string
+---@field event table
+---@field version integer
+---@field [string] any
+
+---@class vim.env
+---@field [string] string
+
+---@class vim.o
+---@field [string] any
+
+---@class vim.opt
+---@field [string] any
+
+---@class vim.opt_local
+---@field [string] any
+
+---@class vim.bo
+---@field filetype string
+---@field buftype string
+---@field bufhidden string
+---@field buflisted boolean
+---@field modified boolean
+---@field modifiable boolean
+---@field readonly boolean
+---@field expandtab boolean
+---@field tabstop integer
+---@field shiftwidth integer
+---@field softtabstop integer
+---@field commentstring string
+---@field omnifunc string
+---@field formatexpr string
+---@field [string] any
+
+---@class vim.wo
+---@field number boolean
+---@field relativenumber boolean
+---@field wrap boolean
+---@field scrolloff integer
+---@field sidescrolloff integer
+---@field cursorline boolean
+---@field cursorcolumn boolean
+---@field colorcolumn string
+---@field foldenable boolean
+---@field foldmethod string
+---@field signcolumn string
+---@field winhighlight string
+---@field winblend integer
+---@field [string] any
+
+---@class vim.go
+---@field [string] any
+
+---@class vim.api
+---@field nvim_buf_get_lines fun(buf: integer, start: integer, end_idx: integer, strict_indexing: boolean): string[] Get lines from buffer
+---@field nvim_buf_set_lines fun(buf: integer, start: integer, end_idx: integer, strict_indexing: boolean, replacement: string[]): nil Set lines in buffer
+---@field nvim_buf_get_name fun(buf: integer): string Get buffer name
+---@field nvim_buf_set_name fun(buf: integer, name: string): nil Set buffer name
+---@field nvim_buf_is_valid fun(buf: integer): boolean Check buffer validity
+---@field nvim_buf_is_loaded fun(buf: integer): boolean Check buffer loaded state
+---@field nvim_buf_get_option fun(buf: integer, name: string): any Get buffer option (deprecated)
+---@field nvim_buf_set_option fun(buf: integer, name: string, value: any): nil Set buffer option (deprecated)
+---@field nvim_buf_get_var fun(buf: integer, name: string): any Get buffer variable
+---@field nvim_buf_set_var fun(buf: integer, name: string, value: any): nil Set buffer variable
+---@field nvim_buf_del_var fun(buf: integer, name: string): nil Delete buffer variable
+---@field nvim_buf_set_keymap fun(buf: integer, mode: string, lhs: string, rhs: string, opts: table): nil Buffer-local keymap
+---@field nvim_buf_del_keymap fun(buf: integer, mode: string, lhs: string): nil Delete buffer-local keymap
+---@field nvim_buf_create_user_command fun(buf: integer, name: string, command: string|fun(args: table), opts: table): nil Buffer user command
+---@field nvim_buf_del_user_command fun(buf: integer, name: string): nil Delete buffer user command
+---@field nvim_buf_add_highlight fun(buf: integer, ns_id: integer, hl_group: string, line: integer, col_start: integer, col_end: integer): integer Add highlight
+---@field nvim_buf_clear_namespace fun(buf: integer, ns_id: integer, line_start: integer, line_end: integer): nil Clear namespace highlights
+---@field nvim_win_get_buf fun(win: integer): integer Get buffer in window
+---@field nvim_win_set_buf fun(win: integer, buf: integer): nil Set buffer in window
+---@field nvim_win_get_cursor fun(win: integer): integer[] Get cursor position (1, 0)-indexed
+---@field nvim_win_set_cursor fun(win: integer, pos: integer[]): nil Set cursor position
+---@field nvim_win_get_height fun(win: integer): integer Get window height
+---@field nvim_win_set_height fun(win: integer, height: integer): nil Set window height
+---@field nvim_win_get_width fun(win: integer): integer Get window width
+---@field nvim_win_set_width fun(win: integer, width: integer): nil Set window width
+---@field nvim_win_get_config fun(win: integer): table Get floating window config
+---@field nvim_win_set_config fun(win: integer, config: table): nil Set floating window config
+---@field nvim_win_is_valid fun(win: integer): boolean Check window validity
+---@field nvim_win_close fun(win: integer, force: boolean): nil Close window
+---@field nvim_open_win fun(buf: integer, enter: boolean, config: table): integer Open floating window
+---@field nvim_create_buf fun(listed: boolean, scratch: boolean): integer Create buffer
+---@field nvim_get_current_buf fun(): integer Get current buffer handle
+---@field nvim_set_current_buf fun(buf: integer): nil Set active buffer
+---@field nvim_get_current_win fun(): integer Get current window handle
+---@field nvim_set_current_win fun(win: integer): nil Set active window
+---@field nvim_get_current_tabpage fun(): integer Get current tabpage handle
+---@field nvim_list_bufs fun(): integer[] List all buffers
+---@field nvim_list_wins fun(): integer[] List all windows
+---@field nvim_list_tabpages fun(): integer[] List all tabpages
+---@field nvim_create_autocmd fun(event: string|string[], opts: table): integer Create autocommand
+---@field nvim_del_autocmd fun(id: integer): nil Delete autocommand
+---@field nvim_clear_autocmds fun(opts: table): nil Clear autocommands
+---@field nvim_create_augroup fun(name: string, opts: table): integer Create autocommand group
+---@field nvim_del_augroup_by_id fun(id: integer): nil Delete augroup by ID
+---@field nvim_del_augroup_by_name fun(name: string): nil Delete augroup by name
+---@field nvim_create_namespace fun(name: string): integer Create highlight namespace
+---@field nvim_get_namespaces fun(): table<string, integer> Get all namespaces
+---@field nvim_set_hl fun(ns_id: integer, name: string, val: table): nil Set highlight group
+---@field nvim_get_hl_by_name fun(name: string, rgb: boolean): table Get highlight attributes
+---@field nvim_get_hl fun(ns_id: integer, opts: table): table Get highlight attributes
+---@field nvim_create_user_command fun(name: string, command: string|fun(args: table), opts: table): nil Create global user command
+---@field nvim_del_user_command fun(name: string): nil Delete user command
+---@field nvim_eval fun(expr: string): any Evaluate vimscript expression
+---@field nvim_exec2 fun(src: string, opts: table): table Execute vimscript code
+---@field nvim_command fun(cmd: string): nil Execute Ex command
+---@field nvim_out_write fun(str: string): nil Write to standard output
+---@field nvim_err_write fun(str: string): nil Write to error stream
+---@field nvim_err_writeln fun(str: string): nil Write error line
+---@field nvim_strwidth fun(text: string): integer Get screen display width of string
+---@field nvim_get_option_value fun(name: string, opts: table): any Get option value
+---@field nvim_set_option_value fun(name: string, val: any, opts: table): nil Set option value
+---@field nvim_get_mode fun(): table Get editor mode
+---@field nvim_feedkeys fun(keys: string, mode: string, escape_ks: boolean): nil Feed key sequence
+---@field nvim_replace_termcodes fun(str: string, from_part: boolean, do_lt: boolean, special: boolean): string Replace key codes
+---@field [string] fun(...: any): any Dynamic API function bridge
+
+---@class vim.fn
+---@field stdpath fun(what: string): string Get standard path directory
+---@field expand fun(expr: string, nosuf?: boolean, list?: boolean): any Expand wildcards and key words
+---@field glob fun(expr: string, nosuf?: boolean, list?: boolean): any Expand file wildcard matches
+---@field globpath fun(path: string, expr: string, nosuf?: boolean, list?: boolean): any Expand wildcard in paths
+---@field has fun(feature: string): integer Check feature support flag
+---@field executable fun(expr: string): integer Check if executable binary exists
+---@field filereadable fun(file: string): integer Check if file is readable
+---@field isdirectory fun(directory: string): integer Check if directory exists
+---@field mkdir fun(name: string, path?: string, prot?: integer): integer Create directory path
+---@field delete fun(file: string, flags?: string): integer Delete file or directory
+---@field rename fun(from: string, to: string): integer Rename file
+---@field getbufvar fun(buf: integer|string, varname: string, def?: any): any Get buffer variable
+---@field setbufvar fun(buf: integer|string, varname: string, val: any): nil Set buffer variable
+---@field getwinvar fun(winnr: integer, varname: string, def?: any): any Get window variable
+---@field setwinvar fun(winnr: integer, varname: string, val: any): nil Set window variable
+---@field line fun(expr: string, winid?: integer): integer Get line position
+---@field col fun(expr: string): integer Get column position
+---@field win_getid fun(win?: integer, tab?: integer): integer Get window ID
+---@field win_gotoid fun(expr: integer): integer Switch focus to window ID
+---@field mode fun(expr?: integer|boolean): string Get current mode code
+---@field fnamemodify fun(fname: string, mods: string): string Modify filename path
+---@field escape fun(string: string, chars: string): string Escape special characters
+---@field shellescape fun(string: string, special?: boolean): string Escape string for shell command execution
+---@field system fun(cmd: string|string[], input?: string): string Execute shell command
+---@field systemlist fun(cmd: string|string[], input?: string): string[] Execute shell command returning lines
+---@field getcwd fun(winnr?: integer, tabnr?: integer): string Get current working directory
+---@field setreg fun(regname: string, value: any, options?: string): integer Set register contents
+---@field getreg fun(regname?: string, 1?: integer, list?: boolean): any Get register contents
+---@field getchar fun(expr?: integer): integer|string Get user key press
+---@field getcurpos fun(winid?: integer): integer[] Get full cursor coordinates
+---@field strdisplaywidth fun(string: string, col?: integer): integer Get visual display width
+---@field [string] fun(...: any): any Dynamic Vimscript function bridge
+
+---@class vim.lsp.buf
+---@field format fun(opts?: table): nil Format current buffer
+---@field rename fun(new_name?: string, opts?: table): nil Rename symbol under cursor
+---@field code_action fun(opts?: table): nil Trigger code action menu
+---@field hover fun(opts?: table): nil Show hover documentation
+---@field definition fun(opts?: table): nil Jump to symbol definition
+---@field declaration fun(opts?: table): nil Jump to symbol declaration
+---@field type_definition fun(opts?: table): nil Jump to type definition
+---@field implementation fun(opts?: table): nil Jump to implementation
+---@field references fun(context?: table, opts?: table): nil List symbol references
+---@field document_symbol fun(opts?: table): nil List document symbols
+---@field workspace_symbol fun(query?: string, opts?: table): nil Search workspace symbols
+---@field signature_help fun(opts?: table): nil Show function signature help
+---@field outgoing_calls fun(opts?: table): nil Show outgoing call hierarchy
+---@field incoming_calls fun(opts?: table): nil Show incoming call hierarchy
+---@field document_highlight fun(): nil Highlight references in buffer
+---@field clear_references fun(): nil Clear document highlights
+---@field list_workspace_folders fun(): string[] List active workspace folders
+---@field add_workspace_folder fun(workspace_folder?: string): nil Add workspace folder
+---@field remove_workspace_folder fun(workspace_folder?: string): nil Remove workspace folder
+
+---@class vim.lsp
+---@field start fun(config: table, opts?: table): integer? Start LSP client session
+---@field stop_client fun(client_id: integer|table, force?: boolean): nil Stop LSP client session
+---@field get_active_clients fun(filter?: table): table[] List active LSP clients (deprecated alias)
+---@field get_clients fun(filter?: table): table[] List active LSP clients
+---@field get_client_by_id fun(client_id: integer): table? Get client by ID
+---@field buf_get_clients fun(bufnr?: integer): table[] Get clients attached to buffer
+---@field buf_is_attached fun(bufnr: integer, client_id: integer): boolean Check if client attached to buffer
+---@field buf_attach_client fun(bufnr: integer, client_id: integer): boolean Attach client to buffer
+---@field buf_detach_client fun(bufnr: integer, client_id: integer): nil Detach client from buffer
+---@field for_each_buffer fun(client_id: integer, fn: fun(bufnr: integer)): nil Iterate attached buffers
+---@field with fun(handler: fun(...: any): any, override_config: table): fun(...: any): any Configure LSP handler
+---@field handlers table<string, fun(...: any): any> Default LSP response handlers
+---@field buf vim.lsp.buf Buffer-scoped LSP commands
+---@field util table LSP utility functions
+---@field protocol table LSP specification protocol constants
+---@field log table LSP logger instance
+---@field rpc table Low-level RPC client protocol
+
+---@class vim.diagnostic.severity
+---@field ERROR integer 1 (Error level)
+---@field WARN integer 2 (Warning level)
+---@field INFO integer 3 (Info level)
+---@field HINT integer 4 (Hint level)
+
+---@class vim.diagnostic
+---@field config fun(opts?: table, namespace?: integer): table? Configure diagnostic display settings
+---@field set fun(namespace: integer, bufnr: integer, diagnostics: table[], opts?: table): nil Set diagnostics for buffer
+---@field get fun(bufnr?: integer, opts?: table): table[] Get diagnostics matching filter
+---@field get_next fun(opts?: table): table? Get next diagnostic
+---@field get_prev fun(opts?: table): table? Get previous diagnostic
+---@field goto_next fun(opts?: table): nil Jump to next diagnostic location
+---@field goto_prev fun(opts?: table): nil Jump to previous diagnostic location
+---@field open_float fun(opts?: table): nil Open diagnostic floating window
+---@field show fun(namespace?: integer, bufnr?: integer, diagnostics?: table[], opts?: table): nil Render diagnostics
+---@field hide fun(namespace?: integer, bufnr?: integer): nil Hide diagnostic highlights
+---@field reset fun(namespace?: integer, bufnr?: integer): nil Clear diagnostics in namespace
+---@field enable fun(enable?: boolean, filter?: table): nil Enable or disable diagnostics
+---@field is_enabled fun(opts?: table): boolean Check if diagnostics are enabled
+---@field count fun(bufnr?: integer, opts?: table): table<integer, integer> Count diagnostics by severity
+---@field severity vim.diagnostic.severity Diagnostic severity constants
+
+---@class vim.treesitter
+---@field start fun(bufnr?: integer, lang?: string): nil Start Treesitter highlighter for buffer
+---@field stop fun(bufnr?: integer): nil Stop Treesitter highlighter
+---@field get_parser fun(bufnr?: integer, lang?: string, opts?: table): table Get LanguageTree parser
+---@field get_node fun(opts?: table): table? Get syntax node under cursor
+---@field get_node_at_pos fun(bufnr: integer, row: integer, col: integer, opts?: table): table? Get syntax node at position
+---@field get_string_parser fun(str: string, lang: string, opts?: table): table Get parser for raw string
+---@field get_captures_at_pos fun(bufnr: integer, row: integer, col: integer): table[] Get capture groups at position
+---@field get_captures_at_cursor fun(winid?: integer): table[] Get capture groups under cursor
+---@field query table Treesitter query parser and manager
+---@field language table Treesitter parser registration and language mappings
+---@field highlighter table Treesitter syntax highlighter
+
+---@class vim.keymap
+---@field set fun(mode: string|string[], lhs: string, rhs: string|fun(), opts?: table): nil Set key mapping
+---@field del fun(mode: string|string[], lhs: string, opts?: table): nil Delete key mapping
+---@field get fun(mode: string, opts?: table): table[] Get registered key mappings
+
+---@class vim.fs
+---@field find fun(names: string|string[]|fun(name: string, path: string): boolean, opts?: table): string[] Find files in directory tree
+---@field dirname fun(path: string): string? Get directory portion of path
+---@field basename fun(path: string): string? Get trailing component of path
+---@field parents fun(path: string): fun(): string? Iterate parent directories
+---@field normalize fun(path: string, opts?: table): string Normalize path separators and references
+---@field joinpath fun(...: string): string Join path components
+---@field root fun(source: integer|string, marker: string|string[]|fun(...: any): boolean): string? Find root directory containing marker file
+
+---@class vim.uv
+---@field hrtime fun(): number Get high-resolution timestamp in nanoseconds
+---@field now fun(): number Get current timestamp
+---@field sleep fun(msec: integer): nil Block thread for duration
+---@field cwd fun(): string? Get current working directory
+---@field chdir fun(path: string): integer? Change working directory
+---@field exepath fun(): string? Get executable path of process
+---@field os_homedir fun(): string? Get user home directory path
+---@field os_tmpdir fun(): string? Get operating system temp directory path
+---@field os_uname fun(): table Get OS system architecture and version info
+---@field os_getenv fun(name: string): string? Read environment variable
+---@field os_setenv fun(name: string, value: string): integer? Write environment variable
+---@field fs_stat fun(path: string, callback?: fun(err: string?, stat: table?)): table? Stat file metadata
+---@field fs_lstat fun(path: string, callback?: fun(err: string?, stat: table?)): table? Stat symlink file metadata
+---@field fs_open fun(path: string, flags: string|integer, mode: integer, callback?: fun(err: string?, fd: integer?)): integer? Open file descriptor
+---@field fs_read fun(fd: integer, size: integer, offset: integer, callback?: fun(err: string?, data: string?)): string? Read bytes from file descriptor
+---@field fs_write fun(fd: integer, data: string, offset: integer, callback?: fun(err: string?, bytes: integer?)): integer? Write bytes to file descriptor
+---@field fs_close fun(fd: integer, callback?: fun(err: string?, success: boolean?)): boolean? Close file descriptor
+---@field fs_mkdir fun(path: string, mode: integer, callback?: fun(err: string?, success: boolean?)): boolean? Create directory
+---@field fs_unlink fun(path: string, callback?: fun(err: string?, success: boolean?)): boolean? Delete file
+---@field fs_rmdir fun(path: string, callback?: fun(err: string?, success: boolean?)): boolean? Remove directory
+---@field fs_scandir fun(path: string, callback?: fun(err: string?, req: any?)): any? Scan directory contents
+---@field new_timer fun(): table? Create libuv timer object
+---@field new_pipe fun(ipc?: boolean): table? Create libuv pipe handle
+---@field new_tcp fun(): table? Create libuv TCP socket handle
+---@field spawn fun(path: string, options: table, on_exit: fun(code: integer, signal: integer)): table?, integer? Spawn child process
+---@field [string] fun(...: any): any Dynamic libuv event loop binding
+
+---@class vim.json
+---@field encode fun(obj: any, opts?: table): string Encode table to JSON string
+---@field decode fun(str: string, opts?: table): any Decode JSON string to table
+
+---@class vim.log.levels
+---@field TRACE integer 0
+---@field DEBUG integer 1
+---@field INFO integer 2
+---@field WARN integer 3
+---@field ERROR integer 4
+---@field OFF integer 5
+
+---@class vim.log
+---@field levels vim.log.levels Log levels enum
+
+---@class vim.ui
+---@field input fun(opts: table, on_confirm: fun(input: string?)): nil Display single-line input prompt
+---@field select fun(items: any[], opts: table, on_choice: fun(item: any?, idx: integer?)): nil Display item picker modal
+---@field open fun(path: string): table? Open file or URI using default system handler
+
+---@class vim.uri
+---@field from_fname fun(fname: string): string Convert path to file URI
+---@field from_bufnr fun(bufnr: integer): string Convert buffer to file URI
+---@field to_fname fun(uri: string): string Convert file URI to path
+---@field to_bufnr fun(uri: string): integer Convert file URI to buffer handle
+
+---@class vim.health
+---@field start fun(name: string): nil Start health check report block
+---@field info fun(msg: string): nil Log health check info message
+---@field warn fun(msg: string, advice?: string|string[]): nil Log health check warning
+---@field error fun(msg: string, advice?: string|string[]): nil Log health check error
+---@field ok fun(msg: string): nil Log health check success message
+
+---@class vim.filetype
+---@field add fun(filetypes: table): nil Register filetype rules
+---@field match fun(opts: table): string? Match filetype for filename/content
+
 ---@class vim
----@field api table Neovim API functions (`nvim_*`).
----@field fn table Vimscript function bridge.
+---@field api vim.api Neovim API functions (`nvim_*`).
+---@field fn vim.fn Vimscript function bridge.
 ---@field cmd any Ex command runner: callable, and indexable as `vim.cmd.edit`.
----@field lsp table LSP client framework.
----@field diagnostic table Diagnostic framework.
----@field treesitter table Treesitter integration.
----@field keymap table Keymap helpers (`set`, `del`).
+---@field lsp vim.lsp LSP client framework.
+---@field diagnostic vim.diagnostic Diagnostic framework.
+---@field treesitter vim.treesitter Treesitter integration.
+---@field keymap vim.keymap Keymap helpers (`set`, `del`).
 ---@field g vim.g Global variables.
----@field b table Buffer-scoped variables.
----@field w table Window-scoped variables.
----@field t table Tabpage-scoped variables.
----@field v table Vim predefined variables (`v:count`, `v:argv`, ...).
----@field env table Environment variables.
----@field o table Global options.
----@field opt table Option objects with list/map helpers.
----@field opt_local table Window/buffer local option objects.
----@field bo table Buffer-local options.
----@field wo table Window-local options.
----@field go table Global-only options.
----@field fs table Filesystem path utilities.
----@field uv table libuv event loop bindings.
----@field loop table Deprecated alias of `vim.uv`.
----@field json table JSON encode/decode.
----@field log table Log levels (`vim.log.levels`).
----@field ui table UI hooks (`input`, `select`, `open`).
----@field uri table URI conversion helpers.
----@field uri_from_fname function Path -> file URI.
----@field uri_from_bufnr function Buffer -> file URI.
----@field uri_to_fname function File URI -> path.
----@field uri_to_bufnr function File URI -> buffer.
----@field health table Health-check reporting.
----@field filetype table Filetype detection.
----@field iter function Iterator constructor.
----@field notify function Emit a notification.
----@field notify_once function Emit a notification at most once.
----@field print function Print helper.
----@field inspect function Pretty-print any value.
----@field schedule function Run a callback on the main loop.
----@field schedule_wrap function Wrap a callback to run on the main loop.
----@field defer_fn function Run a callback after a delay.
----@field wait function Block until a condition holds.
----@field system function Run a process.
----@field trim function Trim surrounding whitespace.
----@field split function Split a string.
----@field gsplit function Split a string lazily.
----@field startswith function String prefix test.
----@field endswith function String suffix test.
----@field deepcopy function Recursive table copy.
----@field tbl_extend function Merge tables.
----@field tbl_deep_extend function Merge tables recursively.
----@field tbl_keys function Table keys as a list.
----@field tbl_values function Table values as a list.
----@field tbl_map function Map over a table.
----@field tbl_filter function Filter a table.
----@field tbl_contains function Membership test.
----@field tbl_count function Count entries.
----@field tbl_isempty function Emptiness test.
----@field tbl_get function Nested lookup.
----@field list_extend function Append a list to another.
----@field list_slice function Slice a list.
----@field list_contains function List membership test.
----@field validate function Argument validation.
----@field is_callable function Callable test.
----@field spairs function Sorted pairs iterator.
----@field regex function Compile a Vim regex.
----@field str_utfindex function UTF index conversion.
----@field str_byteindex function Byte index conversion.
+---@field b vim.b Buffer-scoped variables.
+---@field w vim.w Window-scoped variables.
+---@field t vim.t Tabpage-scoped variables.
+---@field v vim.v Vim predefined variables (`v:count`, `v:argv`, ...).
+---@field env vim.env Environment variables.
+---@field o vim.o Global options.
+---@field opt vim.opt Option objects with list/map helpers.
+---@field opt_local vim.opt_local Window/buffer local option objects.
+---@field bo vim.bo Buffer-local options.
+---@field wo vim.wo Window-local options.
+---@field go vim.go Global-only options.
+---@field fs vim.fs Filesystem path utilities.
+---@field uv vim.uv libuv event loop bindings.
+---@field loop vim.uv Deprecated alias of `vim.uv`.
+---@field json vim.json JSON encode/decode.
+---@field log vim.log Log levels (`vim.log.levels`).
+---@field ui vim.ui UI hooks (`input`, `select`, `open`).
+---@field uri vim.uri URI conversion helpers.
+---@field uri_from_fname fun(fname: string): string Path -> file URI.
+---@field uri_from_bufnr fun(bufnr: integer): string Buffer -> file URI.
+---@field uri_to_fname fun(uri: string): string File URI -> path.
+---@field uri_to_bufnr fun(uri: string): integer File URI -> buffer.
+---@field health vim.health Health-check reporting.
+---@field filetype vim.filetype Filetype detection.
+---@field iter fun(iter: table|fun(): any): table Iterator constructor.
+---@field notify fun(msg: string, level?: integer, opts?: table): nil Emit a notification.
+---@field notify_once fun(msg: string, level?: integer, opts?: table): nil Emit a notification at most once.
+---@field print fun(...: any): nil Print helper.
+---@field inspect fun(object: any, options?: table): string Pretty-print any value.
+---@field schedule fun(cb: fun()): nil Run a callback on the main loop.
+---@field schedule_wrap fun(cb: fun()): fun() Wrap a callback to run on the main loop.
+---@field defer_fn fun(cb: fun(), timeout: integer): table Run a callback after a delay.
+---@field wait fun(time: integer, callback?: fun(): boolean, interval?: integer, fast_only?: boolean): boolean, integer? Block until a condition holds.
+---@field system fun(cmd: string[], opts?: table, on_exit?: fun(obj: table)): table Run a process.
+---@field trim fun(str: string): string Trim surrounding whitespace.
+---@field split fun(s: string, sep: string, opts?: table): string[] Split a string.
+---@field gsplit fun(s: string, sep: string, opts?: table): fun(): string Split a string lazily.
+---@field startswith fun(s: string, prefix: string): boolean String prefix test.
+---@field endswith fun(s: string, suffix: string): boolean String suffix test.
+---@field deepcopy fun(orig: any, noref?: boolean): any Recursive table copy.
+---@field tbl_extend fun(behavior: 'error'|'keep'|'force', ...: table): table Merge tables.
+---@field tbl_deep_extend fun(behavior: 'error'|'keep'|'force', ...: table): table Merge tables recursively.
+---@field tbl_keys fun(t: table): table Table keys as a list.
+---@field tbl_values fun(t: table): table Table values as a list.
+---@field tbl_map fun(func: fun(val: any): any, t: table): table Map over a table.
+---@field tbl_filter fun(func: fun(val: any): boolean, t: table): table Filter a table.
+---@field tbl_contains fun(t: table, value: any): boolean Membership test.
+---@field tbl_count fun(t: table): integer Count entries.
+---@field tbl_isempty fun(t: table): boolean Emptiness test.
+---@field tbl_get fun(t: table, ...: string|integer): any Nested lookup.
+---@field list_extend fun(dst: table, src: table, start?: integer, finish?: integer): table Append a list to another.
+---@field list_slice fun(list: table, start?: integer, finish?: integer): table Slice a list.
+---@field list_contains fun(list: table, value: any): boolean List membership test.
+---@field validate fun(opt: table<string, table>): nil Argument validation.
+---@field is_callable fun(f: any): boolean Callable test.
+---@field spairs fun(t: table): fun(): any, any Sorted pairs iterator.
+---@field regex fun(re: string): table Compile a Vim regex.
+---@field str_utfindex fun(str: string, index?: integer): integer UTF index conversion.
+---@field str_byteindex fun(str: string, index?: integer, use_utf16?: boolean): integer Byte index conversion.
 vim = vim or {}
