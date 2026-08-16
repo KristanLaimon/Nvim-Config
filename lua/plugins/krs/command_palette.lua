@@ -63,13 +63,21 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	{ name = "🌳 Toggle File Explorer (Neo-tree)", cmd = "Neotree toggle", category = "Explorer" },
 	{ name = "🐙 Toggle Git Center (Ctrl+Shift+G)", cmd = "GitCenterToggle", category = "Git" },
-	{ name = "🎨 Toggle Git Center Colored Tab Indicators (Default: Plain Text)", cmd = "GitCenterToggleTabColors", category = "Git" },
+	{
+		name = "🎨 Toggle Git Center Colored Tab Indicators (Default: Plain Text)",
+		cmd = "GitCenterToggleTabColors",
+		category = "Git",
+	},
 	{ name = "🐙 Toggle Git Panel (Neogit)", cmd = "Neogit", category = "Git" },
 
 	-- --------------------------------------------------------------------------
 	-- 🧠 LSP, Diagnostics & Type Injection
 	-- --------------------------------------------------------------------------
-	{ name = "👁️ Toggle LSP Reference Counts / CodeLens (Default: ON)", cmd = "KrsToggleReferences", category = "LSP" },
+	{
+		name = "👁️ Toggle LSP Reference Counts / CodeLens (Default: ON)",
+		cmd = "KrsToggleReferences",
+		category = "LSP",
+	},
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
@@ -81,7 +89,11 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	{ name = "📚 Open Documentation Center & Wiki (Ctrl+Shift+D)", cmd = "KrsWiki", category = "UI" },
 	{ name = "🎨 Open Nagatoro & NvChad Theme Picker", cmd = "KrsThemePicker", category = "UI" },
-	{ name = "📊 Open Statusline Theme Picker (NvChad Pills, Blocks, etc.)", cmd = "KrsStatuslineTheme", category = "UI" },
+	{
+		name = "📊 Open Statusline Theme Picker (NvChad Pills, Blocks, etc.)",
+		cmd = "KrsStatuslineTheme",
+		category = "UI",
+	},
 	{ name = "🎨 Toggle UI Icons Mode (Nerd Font Symbols vs Emojis)", cmd = "ToggleIconsMode", category = "UI" },
 	{ name = "🔍 Increase Font Size", cmd = "FontSizeIncrease", category = "UI" },
 	{ name = "🔍 Decrease Font Size", cmd = "FontSizeDecrease", category = "UI" },
@@ -97,12 +109,16 @@ M.commands = {
 	{ name = "🎮 Discord: Reconnect", cmd = "Cord reconnect", category = "Discord" },
 	{ name = "🎮 Discord: Shutdown", cmd = "Cord shutdown", category = "Discord" },
 	{ name = "🎮 Discord: Status", cmd = "Cord status", category = "Discord" },
-	{ name = "🎮 Discord: Hot-reload Plugin", cmd = "CordReload", category = "Discord" },
+	{ name = "🎮 Discord: Restart Plugin", cmd = "CordReload", category = "Discord" },
 
 	-- --------------------------------------------------------------------------
 	-- 🎨 Tailwind Classes Organizer
 	-- --------------------------------------------------------------------------
-	{ name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)", cmd = "TailwindOrganizerToggle", category = "Tailwind" },
+	{
+		name = "🎨 Toggle Tailwind Organizer (Auto-Format on Save)",
+		cmd = "TailwindOrganizerToggle",
+		category = "Tailwind",
+	},
 	{ name = "✨ Organize Tailwind Classes (Current File)", cmd = "TailwindOrganize", category = "Tailwind" },
 	{ name = "ℹ️ Tailwind Organizer Status", cmd = "TailwindOrganizerStatus", category = "Tailwind" },
 
@@ -125,9 +141,17 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- 🦊 krsnvimtranspiler (Script Transpiler)
 	-- --------------------------------------------------------------------------
-	{ name = "🦊 Transpile Selected .krsnvim Script (Both .sh & .ps1)", cmd = "KrsTranspileBoth", category = "Transpiler" },
+	{
+		name = "🦊 Transpile Selected .krsnvim Script (Both .sh & .ps1)",
+		cmd = "KrsTranspileBoth",
+		category = "Transpiler",
+	},
 	{ name = "🐧 Transpile Selected .krsnvim Script to Bash (.sh)", cmd = "KrsTranspileSh", category = "Transpiler" },
-	{ name = "🪟 Transpile Selected .krsnvim Script to PowerShell (.ps1)", cmd = "KrsTranspilePs1", category = "Transpiler" },
+	{
+		name = "🪟 Transpile Selected .krsnvim Script to PowerShell (.ps1)",
+		cmd = "KrsTranspilePs1",
+		category = "Transpiler",
+	},
 	{ name = "🔄 Transpile Active / Neo-tree .krsnvim File", cmd = "KrsTranspile", category = "Transpiler" },
 	{ name = "🚀 Open Launch Profiles Manager (<C-S-q>)", cmd = "LaunchProfiles", category = "Transpiler" },
 }
@@ -261,11 +285,7 @@ local execute_item = M.execute_item
 --- Opens the palette picker.
 function M.open_palette()
 	if not pcall(require, "telescope") then
-		vim.notify(
-			"Telescope is not available for Command Palette",
-			vim.log.levels.ERROR,
-			{ title = "Command Palette" }
-		)
+		vim.notify("Telescope is not available for Command Palette", vim.log.levels.ERROR, { title = "Command Palette" })
 		return
 	end
 
@@ -360,4 +380,3 @@ return setmetatable({
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })
-

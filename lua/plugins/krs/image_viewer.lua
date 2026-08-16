@@ -116,11 +116,7 @@ end
 local function system_open_command(filepath)
 	if vim.fn.has("win32") == 1 then
 		local win_path = filepath:gsub("/", "\\")
-		if path.is_dir(filepath) then
-			return { "explorer.exe", win_path }
-		else
-			return { "cmd.exe", "/c", "start", "", win_path }
-		end
+		return { "cmd.exe", "/c", "start", "", win_path }
 	end
 	if vim.fn.has("wsl") == 1 then
 		return { "explorer.exe", windows_path_for_wsl(filepath) or filepath }
@@ -154,23 +150,17 @@ function M.open_with_system_app(filepath)
 
 		filepath = filepath:gsub("[/\\]+$", "")
 		local is_directory = path.is_dir(filepath)
-		local cmd = system_open_command(filepath)
 
-		vim.system(cmd, { detach = true, stdout = false, stderr = false }, function(result)
-			-- The Windows launchers return non-zero for reasons that are not
-			-- failures (start returns as soon as it hands off), so only report
-			-- errors from the POSIX openers.
-			if result and result.code and result.code ~= 0 and cmd[1] ~= "cmd.exe" and cmd[1] ~= "explorer.exe" then
-				vim.schedule(function()
-					vim.notify(
-						"Failed to open: "
-							.. (result.stderr and result.stderr ~= "" and result.stderr or cmd[1] .. " exited " .. result.code),
-						vim.log.levels.ERROR,
-						{ title = M.settings.notify_title }
-					)
-				end)
+		if vim.ui and type(vim.ui.open) == "function" then
+			local win_path = filepath
+			if vim.fn.has("win32") == 1 then
+				win_path = filepath:gsub("/", "\\")
 			end
-		end)
+			vim.ui.open(win_path)
+		else
+			local cmd = system_open_command(filepath)
+			vim.system(cmd, { detach = true, stdout = false, stderr = false })
+		end
 
 		local name = vim.fn.fnamemodify(filepath, ":t")
 		if name == "" then
