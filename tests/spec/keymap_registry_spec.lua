@@ -19,7 +19,7 @@ describe("keymap_registry", function()
 		end
 	end
 
-	it("toasts (permanently) on a real mode+lhs+scope collision", function()
+	it("toasts on a real mode+lhs+scope collision", function()
 		with_stub_notify(function(calls)
 			local registry = require("krs.core.keymap_registry")
 			registry.install()
@@ -28,7 +28,8 @@ describe("keymap_registry", function()
 			vim.keymap.set("n", "<F13>", function() end, { desc = "second" })
 
 			expect(#calls).toBe(1)
-			expect(calls[1].opts.timeout).toBe(false)
+			expect(calls[1].opts.title).toBe("Keymap collision")
+			expect(calls[1].opts.timeout).toBe(nil)
 			expect(calls[1].level).toBe(vim.log.levels.WARN)
 
 			vim.keymap.del("n", "<F13>")
@@ -56,15 +57,15 @@ describe("keymap_registry", function()
 		with_stub_notify(function(calls)
 			local registry = require("krs.core.keymap_registry")
 			registry.install()
-			local raw_pattern = registry.ALLOWLIST_SOURCE_PATTERN
-			registry.ALLOWLIST_SOURCE_PATTERN = "keymap_registry_spec%.lua"
+			local raw_patterns = registry.ALLOWLIST_SOURCE_PATTERNS
+			registry.ALLOWLIST_SOURCE_PATTERNS = { "keymap_registry_spec%.lua" }
 
 			vim.keymap.set("n", "<F15>", function() end, {})
 			vim.keymap.set("n", "<F15>", function() end, {})
 
 			expect(#calls).toBe(0)
 
-			registry.ALLOWLIST_SOURCE_PATTERN = raw_pattern
+			registry.ALLOWLIST_SOURCE_PATTERNS = raw_patterns
 			vim.keymap.del("n", "<F15>")
 		end)
 	end)

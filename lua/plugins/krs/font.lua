@@ -51,7 +51,7 @@ M.settings = {
 
 	keys = {
 		increase = { "<C-=>", "<C-+>", "<C-S-=>", "<C-S-+>", "<C-kPlus>", "<C-KPPlus>", "<C-ScrollWheelUp>" },
-		decrease = { "<C-->", "<C-_>", "<C-S-->", "<C-S-_>", "<C-kMinus>", "<C-KPMinus>", "<C-ScrollWheelDown>" },
+		decrease = { "<C-->", "<C-S-->", "<C-S-_>", "<C-kMinus>", "<C-KPMinus>", "<C-ScrollWheelDown>" },
 		reset = { "<C-0>", "<C-k0>", "<C-KP0>" },
 	},
 }

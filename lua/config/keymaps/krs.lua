@@ -3,7 +3,7 @@
 -- ============================================================================
 -- KEYS
 --   <C-S-t>       Task menu               <C-S-a>  Run default task
---   <C-1>..<C-4>  Toggle task output 1-4  <C-`>    Toggle last task output
+--   <C-1>..<C-4>  Toggle task output 1-4  <F7>     Toggle last task output
 --   <C-S-s>       Smart launch            <C-S-q>  Launch profiles manager
 --   <C-S-x>/<A-s> Stage everything (git)
 --   <C-S-f>       Floating desktop explorer    <leader>fw  WSL explorer
@@ -44,7 +44,7 @@ M.settings = {
 		run_default_task = { "<C-S-a>", "<C-S-A>" },
 		--- Toggle the most recent task output. `<C-i>` is omitted because it shares
 		--- the same keycode as <Tab>, which breaks code indentation in buffers.
-		toggle_last_output = { "<C-`>" },
+		toggle_last_output = { "<F7>" },
 		toggle_last_output_no_terminal = {},
 		--- Prefix for per-slot task output toggles; the slot number is appended.
 		task_slot_prefix = "<C-",
@@ -54,7 +54,7 @@ M.settings = {
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.
-		wiki = { "<C-S-,>", "<C-S-comma>", "<C-?>" },
+		wiki = { "<C-S-,>", "<C-S-comma>" },
 	},
 
 	--- How many task output slots have a direct toggle.
