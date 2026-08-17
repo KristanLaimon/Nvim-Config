@@ -51,7 +51,7 @@ M.settings = {
 		--- Open with the OS default application, from any mode.
 		open_external = { "<C-S-CR>", "<C-S-Enter>", "<C-S-Return>" },
 		--- Render the image inside the editor.
-		preview = "<leader>i",
+		preview = nil,
 		--- Dismiss the preview float.
 		close_preview = { "q", "<Esc>" },
 	},

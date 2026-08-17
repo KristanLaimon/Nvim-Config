@@ -34,7 +34,7 @@ M.settings = {
 
 	keys = {
 		--- Smart quit.
-		quit = { "<C-q>", "<leader>q" },
+		quit = { "<C-q>" },
 	},
 
 	--- Command-line abbreviations rerouted to smart quit. `force` picks the

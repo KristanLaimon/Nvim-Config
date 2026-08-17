@@ -15,7 +15,7 @@ local M = {}
 M.settings = {
 	store_file = vim.fn.stdpath("config") .. "/.krsnvim/theme.json",
 	default_theme = "nagatoro-krs",
-	keymap = "<leader>th",
+	keymap = nil,
 }
 
 --- Scans colors/ directory for available nagatoro-krs formatted themes.
@@ -160,7 +160,9 @@ function M.setup()
 		desc = "Open Nagatoro theme picker",
 	})
 
-	vim.keymap.set("n", M.settings.keymap, M.open_picker, { desc = "Theme Picker (Nagatoro Format)" })
+	if M.settings.keymap then
+		vim.keymap.set("n", M.settings.keymap, M.open_picker, { desc = "Theme Picker (Nagatoro Format)" })
+	end
 end
 
 -- LAZY.NVIM SPEC
@@ -168,7 +170,7 @@ local plugin_spec = {
 	name = "krs_theme_picker",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "KrsThemePicker",
-	keys = { { "<leader>th", mode = "n", desc = "Theme Picker" } },
+	keys = {},
 	config = M.setup,
 }
 

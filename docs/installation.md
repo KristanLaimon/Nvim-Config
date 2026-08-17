@@ -47,13 +47,13 @@ If you skip running `setup.ps1` or `setup.sh`, KrsVim handles missing external C
 | Missing CLI | Affected Feature | Graceful Fallback Behavior |
 | :--- | :--- | :--- |
 | **`ripgrep` (`rg`)** | Telescope Live Grep (`<C-f>`) | Live grep notifies that `rg` is missing. Standard buffer searches still work. |
-| **`fd` / `fdfind`** | Fast file finding (`<C-k>`) | Telescope falls back to native Neovim file scanner. |
+| **`fd` / `fdfind`** | Fast file finding (`<C-/>`) | Telescope falls back to native Neovim file scanner. |
 | **`gcc` / `MinGW`** | Treesitter C compilation | Pre-compiled parsers load normally. Custom parser compilation notifies if a compiler is missing. |
-| **`chafa`** | Image viewer popup (`<leader>i`) | Displays a fallback warning modal prompting you to install `chafa` or open via OS (`<C-S-Enter>`). |
+| **`chafa`** | Image viewer popup (`:ImageViewer`) | Displays a fallback warning modal prompting you to install `chafa` or open via OS (`<C-S-Enter>`). |
 | **`node` / `npm`** | JS/TS LSP, Prettier, HTML/CSS | Mason servers requiring Node.js wait until Node is installed on your `PATH`. |
 | **`bun`** | Bun debug adapter & profiles | Bun launch profiles notify if `bun` binary is not found. |
 | **`go`** | Go LSP (`gopls`) & Delve | Go features activate automatically once Go is present. |
-| **`dotnet`** | C# LSP & Nuget manager | Nuget manager (`<leader>ng`) notifies if `dotnet` CLI is missing. |
+| **`dotnet`** | C# LSP & Nuget manager | Nuget manager (`:NugetManager`) notifies if `dotnet` CLI is missing. |
 
 > 💡 **Tip:** You can run `setup.ps1` or `setup.sh` at any time after using Neovim to instantly fill in any missing dependencies!
 
@@ -80,14 +80,14 @@ For manual installation or custom package managers, here is the complete tool ch
 | **Neovim** (>= 0.10) | Core editor runtime | `scoop install neovim` | `neovim` |
 | **Git** | Mason, Neogit, Lazy.nvim, Git Control Center | `scoop install git` | `git` |
 | **ripgrep** (`rg`) | Telescope live grep (`<C-f>`) | `scoop install ripgrep` | `ripgrep` |
-| **fd** | Fast file finder (`<C-k>`) | `scoop install fd` | `fd-find` (or `fd`) |
-| **chafa** | Terminal pixel-art image previewer (`<leader>i`) | `scoop install chafa` | `chafa` |
+| **fd** | Fast file finder (`<C-/>`) | `scoop install fd` | `fd-find` (or `fd`) |
+| **chafa** | Terminal pixel-art image previewer (`:ImageViewer`) | `scoop install chafa` | `chafa` |
 | **GCC / MinGW** | Treesitter parser compilation | `scoop install gcc` | `gcc` / `build-essential` |
 | **Node.js & npm** | JS/TS LSP, Prettier, JSON/HTML LSPs | `scoop install nodejs-lts` | `nodejs npm` |
 | **Bun** *(optional)* | Bun launch profiles & fast JS runtime | `scoop install bun` | `curl -fsSL https://bun.sh/install \| bash` |
 | **Go** *(optional)* | Go LSP (`gopls`), `gofumpt`, Delve debugger | `scoop install go` | `golang` |
-| **.NET SDK** *(optional)*| C# LSP, Nuget manager (`<leader>ng`), `netcoredbg` | `scoop install dotnet-sdk` | `dotnet-sdk-8.0` |
-| **WSL** *(optional)* | WSL file explorer (`<leader>fw`), auto-WSL terminal | `wsl --install` | — |
+| **.NET SDK** *(optional)*| C# LSP, Nuget manager (`:NugetManager`), `netcoredbg` | `scoop install dotnet-sdk` | `dotnet-sdk-8.0` |
+| **WSL** *(optional)* | WSL file explorer (`:TelescopeFileBrowserWSL`), auto-WSL terminal | `wsl --install` | — |
 
 ---
 

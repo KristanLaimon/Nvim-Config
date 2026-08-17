@@ -156,9 +156,5 @@ return {
 		for _, key in ipairs(move_right_keys) do
 			pcall(vim.keymap.set, "n", key, "<Cmd>BufferLineMoveNext<CR>", { noremap = true, silent = true, desc = "Move buffer tab right" })
 		end
-
-		-- Leader shortcuts for moving buffer tabs
-		vim.keymap.set("n", "<leader>bh", "<Cmd>BufferLineMovePrev<CR>", { noremap = true, silent = true, desc = "Move buffer tab left" })
-		vim.keymap.set("n", "<leader>bl", "<Cmd>BufferLineMoveNext<CR>", { noremap = true, silent = true, desc = "Move buffer tab right" })
 	end,
 }

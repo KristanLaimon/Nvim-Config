@@ -51,8 +51,8 @@ M.settings = {
 	notify_title = "Tailwind Organizer",
 
 	keys = {
-		organize = "<leader>tw",
-		toggle = "<leader>tt",
+		organize = nil,
+		toggle = nil,
 	},
 
 	--- Responsive prefixes, in the order their rows are emitted.
@@ -507,9 +507,6 @@ return setmetatable({
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "TailwindOrganize", "TailwindOrganizerToggle", "TailwindOrganizerStatus", "TailwindOrganizerReload" },
 	event = { "BufReadPost", "BufNewFile" },
-	keys = {
-		{ "<leader>tw", mode = "n", desc = "Organize Tailwind Classes" },
-		{ "<leader>tt", mode = "n", desc = "Toggle Tailwind Auto-Organize" },
-	},
+	keys = {},
 	config = M.setup,
 }, { __index = M })

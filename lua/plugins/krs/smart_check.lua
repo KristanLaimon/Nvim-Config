@@ -247,6 +247,6 @@ return setmetatable({
 	name = "krs_smart_check",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "SmartCheck",
-	keys = { { "<leader>sc", mode = "n", desc = "Smart Check Project" } },
+	keys = {},
 	config = M.setup,
 }, { __index = M })

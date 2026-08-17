@@ -64,14 +64,6 @@ return {
 				return "<Ignore>"
 			end, { expr = true, desc = "Previous Git Hunk" })
 
-			-- Hunk Actions
-			map("n", "<leader>hs", gs.stage_hunk, { desc = "Stage Git Hunk" })
-			map("n", "<leader>hr", gs.reset_hunk, { desc = "Reset Git Hunk" })
-			map("n", "<leader>hp", gs.preview_hunk, { desc = "Preview Git Hunk" })
-			map("n", "<leader>hb", function()
-				gs.blame_line({ full = true })
-			end, { desc = "Git Blame Line" })
-			map("n", "<leader>hd", gs.diffthis, { desc = "Git Diff This" })
 		end,
 	},
 }

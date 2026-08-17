@@ -43,7 +43,7 @@ M.settings = {
 		--- Toggle the neo-tree sidebar.
 		explorer = "<C-S-Space>",
 		--- Netrw-style directory listing, kept as an escape hatch.
-		netrw = "<leader>cd",
+		netrw = nil,
 		--- Pin active code buffer tab.
 		pin_tab = "<C-p>",
 	},
@@ -97,7 +97,9 @@ end
 -- MAPPINGS
 -- ============================================================================
 
-vim.keymap.set("n", M.settings.keys.netrw, vim.cmd.Ex, opts("Open netrw directory listing"))
+if M.settings.keys.netrw then
+	vim.keymap.set("n", M.settings.keys.netrw, vim.cmd.Ex, opts("Open netrw directory listing"))
+end
 
 -- Comments: `gcc` for a line, `gc` for a selection, from any mode.
 for _, key in ipairs(M.settings.keys.comment) do

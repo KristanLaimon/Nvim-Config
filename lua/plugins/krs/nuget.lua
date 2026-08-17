@@ -35,7 +35,7 @@ M.settings = {
 
 	keys = {
 		--- Open the manager.
-		open = "<leader>ng",
+		open = nil,
 	},
 
 	--- Both attribute orders of a PackageReference. Each pattern captures two
@@ -306,7 +306,7 @@ return setmetatable({
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "NugetManager",
 	ft = { "cs" },
-	keys = { { "<leader>ng", mode = "n", desc = "Nuget Package Manager" } },
+	keys = {},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

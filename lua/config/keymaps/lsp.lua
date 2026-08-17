@@ -25,10 +25,10 @@ M.settings = {
 		code_action = "<C-.>",
 		goto_definition = { "<A-k>", "<M-k>", "<A-j>", "<M-j>" },
 		rename = "<F2>",
-		diagnostic_float = "<leader>k",
-		diagnostic_prev = "<leader>u",
-		diagnostic_next = "<leader>o",
-		format = "<leader>ff",
+		diagnostic_float = nil,
+		diagnostic_prev = nil,
+		diagnostic_next = nil,
+		format = nil,
 	},
 
 	--- Border used by every LSP popup.
@@ -67,16 +67,24 @@ vim.keymap.set({ "i", "v" }, M.settings.keys.signature_help, function()
 	pcall(vim.lsp.buf.hover, { border = M.settings.border })
 end, opts("Show parameter signature help"))
 
-vim.keymap.set("n", M.settings.keys.diagnostic_float, function()
-	vim.diagnostic.open_float({ border = M.settings.border, scope = "cursor", focusable = true })
-end, { desc = "Show diagnostic info" })
+if M.settings.keys.diagnostic_float then
+	vim.keymap.set("n", M.settings.keys.diagnostic_float, function()
+		vim.diagnostic.open_float({ border = M.settings.border, scope = "cursor", focusable = true })
+	end, { desc = "Show diagnostic info" })
+end
 
-vim.keymap.set("n", M.settings.keys.diagnostic_prev, vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
-vim.keymap.set("n", M.settings.keys.diagnostic_next, vim.diagnostic.goto_next, { desc = "Next diagnostic" })
+if M.settings.keys.diagnostic_prev then
+	vim.keymap.set("n", M.settings.keys.diagnostic_prev, vim.diagnostic.goto_prev, { desc = "Previous diagnostic" })
+end
+if M.settings.keys.diagnostic_next then
+	vim.keymap.set("n", M.settings.keys.diagnostic_next, vim.diagnostic.goto_next, { desc = "Next diagnostic" })
+end
 
-vim.keymap.set({ "n", "v" }, M.settings.keys.format, function()
-	require("conform").format({ async = true, lsp_fallback = true })
-end, { desc = "Format file or range" })
+if M.settings.keys.format then
+	vim.keymap.set({ "n", "v" }, M.settings.keys.format, function()
+		require("conform").format({ async = true, lsp_fallback = true })
+	end, { desc = "Format file or range" })
+end
 
 -- ============================================================================
 -- CODE ACTIONS

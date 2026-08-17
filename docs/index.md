@@ -13,7 +13,7 @@ Welcome to the **KrsVim** documentation! KrsVim is a fast, Windows-first, WSL-aw
 If you have just installed or launched KrsVim for the first time, follow these steps:
 
 1. **Start Neovim**: Run `nvim` in your terminal. On first startup, `lazy.nvim` automatically downloads and installs all editor plugins.
-2. **Open the Dashboard & Wiki**: If you land on the dashboard screen, press `w` to open this Wiki inside Neovim (or run `:KrsWiki` / `:NvimWiki` from anywhere, or `<C-S-d>` / `<leader>?`).
+2. **Open the Dashboard & Wiki**: If you land on the dashboard screen, press `w` to open this Wiki inside Neovim (or run `:KrsWiki` / `:NvimWiki` from anywhere, or `<C-S-d>`).
 3. **Sync External Dependencies**: KrsVim relies on a few external CLI utilities (like `ripgrep`, `fd`, `gcc`, `chafa`, `node`, `bun`, `go`, `dotnet`). Run the automated setup script for your platform:
    - **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
    - **Linux / WSL / Git Bash**: `./setup.sh`
@@ -28,7 +28,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 ### 🏁 Getting Started & Setup
 | Page | Contents |
 | :--- | :--- |
-| 🌱 [**Neovim Basics**](neovim-basics.md) | Modes, buffers/windows/tabs, the leader key — start here if you're new to Vim/Neovim itself |
+| 🌱 [**Neovim Basics**](neovim-basics.md) | Modes, buffers/windows/tabs, VSCode-style shortcuts — start here if you're new to Vim/Neovim itself |
 | ⚙️ [**Installation & Dependencies**](installation.md) | Setup scripts (`setup.ps1` / `setup.sh`), Scoop/APT commands, health checks & graceful fallbacks |
 | 🎓 [**How-To & Customization Guide**](how-to-customize-editor.md) | Step-by-step guide for adding plugins, local modules, new languages, themes, and terminals |
 | 🛠️ [**Languages, LSP & Formatting**](languages.md) | Mason servers, Conform formatters, Treesitter parsers & completion tuning |
@@ -44,8 +44,8 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | 🐙 [**Git Control Center**](git-center.md) | Interactive Git staging, restore, commit form & submodules (`<C-S-g>`) |
 | 📁 [**File Explorers**](file-explorer.md) | Desktop & WSL explorers (`<C-S-f>`), project pickers & Neo-tree integration |
 | 🖥️ [**Multi-Terminal Manager**](terminals.md) | 9 independent terminal buffers (`<A-1>`..`<A-9>`), height memory & auto-WSL |
-| 🎛️ [**Editor Quality of Life**](editor-qol.md) | Smart quit, context help (`?`/`<F1>`), colorscheme preview, image viewer (`<leader>i`), font sizing & PHP diagnostics |
-| 🎨 [**Color Palette & Themes**](color-palette.md) | HSL palette architecture and live theme swapping |
+| 🎛️ [**Editor Quality of Life**](editor-qol.md) | Smart quit, context help (`?`/`<F1>`), colorscheme preview, image viewer (`:ImageViewer`), font sizing & PHP diagnostics |
+| 🎨 [**Color Palette & Themes**](color-palette.md) | HSL palette architecture and live theme swapping (`:KrsThemePicker`) |
 
 ### 🚀 Building, Running & Debugging
 | Page | Contents |
@@ -58,7 +58,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 ### 🧬 Code Helpers & Tooling
 | Page | Contents |
 | :--- | :--- |
-| 🌬️ [**Tailwind Organizer**](tailwind-organizer.md) | Automatic multi-row class sorting on save (`<leader>tw`) |
+| 🌬️ [**Tailwind Organizer**](tailwind-organizer.md) | Automatic multi-row class sorting on save (`:TailwindOrganize`) |
 | 🧬 [**Type Injector**](type-injector.md) | Per-project Lua/TS type schemas and `@types` installer (`:TypeInjector`) |
 | 📝 [**Input Modal Component**](input-modal.md) | Unified rounded floating input dialog replacing standard `vim.ui.input` |
 | 📄 [**JSON Schemas**](schemas-json.md) / [**TOML Schemas**](schemas-toml.md) | Local schema catalogs, auto-completion & validation |
@@ -86,7 +86,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | `<C-S-t>` | Task Runner Menu |
 | `<C-S-s>` | Run Default Launch Profile / Stop Debug Session |
 | `<C-S-q>` | Launch Profile Manager |
-| `<C-S-d>` / `<leader>?` | This Wiki (Ctrl+Shift+D needs a Shift-aware terminal, see [Neovim Basics](neovim-basics.md)) |
+| `<C-S-d>` | This Wiki (`:KrsWiki`) |
 | `<C-b>` | Toggle Breakpoint |
 | `<C-;>` | Toggle Active Terminal |
 | `<A-1>`..`<A-9>` | Switch to Terminal Slot 1..9 |

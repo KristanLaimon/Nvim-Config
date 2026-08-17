@@ -758,7 +758,6 @@ return setmetatable({
 	cmd = { "TelescopeFileBrowserDesktop", "TelescopeFileBrowserWSL" },
 	keys = {
 		{ "<C-S-f>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
-		{ "<leader>fw", mode = "n", desc = "WSL File Explorer" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,

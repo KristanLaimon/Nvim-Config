@@ -52,6 +52,5 @@ describe("telescope plugin configuration", function()
 		for _, key in ipairs({ "<C-f>", "<C-S-o>", "<C-S-f>", "<C-/>" }) do
 			expect({ key, has_keymap(key, { "n", "i" }) }).toEqual({ key, true })
 		end
-		expect(has_keymap("<leader>fh", { "n" })).toBe(true)
 	end)
 end)

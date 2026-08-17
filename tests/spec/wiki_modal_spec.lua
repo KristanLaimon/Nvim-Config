@@ -45,16 +45,6 @@ describe("plugins.krs.wiki_modal", function()
 	-- "Ctrl is held", not Shift. Without a fallback that doesn't depend on
 	-- that distinction, the wiki becomes unreachable by keyboard in those
 	-- terminals no matter what <C-S-d> is bound to.
-	it("has a non-Ctrl+Shift fallback key that opens it everywhere", function()
-		local has_fallback = false
-		for _, key in ipairs(wiki_modal.settings.keys.open) do
-			if not key:match("^<C%-S%-") then
-				has_fallback = true
-			end
-		end
-		expect(has_fallback).toBe(true)
-	end)
-
 	it("resolves every open key to the wiki in normal mode", function()
 		wiki_modal.setup()
 		for _, key in ipairs(wiki_modal.settings.keys.open) do

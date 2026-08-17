@@ -30,7 +30,7 @@ M.settings = {
 		step_into = "<F11>",
 		step_out = "<F12>",
 		terminate = "<S-F5>",
-		toggle_ui = "<leader>du",
+		toggle_ui = nil,
 		--- Flip a breakpoint between enabled and disabled, keeping the line.
 		toggle_enabled = { "<A-h>", "<M-h>", "<C-S-h>", "<C-S-H>" },
 	},
@@ -153,12 +153,14 @@ for _, binding in ipairs(bindings) do
 	vim.keymap.set({ "n", "i", "v" }, binding.key, binding.fn, opts(binding.desc))
 end
 
-vim.keymap.set("n", M.settings.keys.toggle_ui, function()
-	local ok, dapui = pcall(require, "dapui")
-	if ok then
-		dapui.toggle()
-	end
-end, opts("Toggle Debugger UI"))
+if M.settings.keys.toggle_ui then
+	vim.keymap.set("n", M.settings.keys.toggle_ui, function()
+		local ok, dapui = pcall(require, "dapui")
+		if ok then
+			dapui.toggle()
+		end
+	end, opts("Toggle Debugger UI"))
+end
 
 -- See the header: bound late, and falls through to whatever was bound before.
 vim.api.nvim_create_autocmd("VimEnter", {

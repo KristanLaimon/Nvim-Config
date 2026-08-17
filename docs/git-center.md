@@ -18,7 +18,7 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 - **File & Section Restore**: Discard changes for single file (`r`) or entire section (`R`) with confirmation dialogs.
 - **Remote Push**: Execute `git push` (`P`) with automatic upstream tracking detection or interactive remote branch selection.
 - **Commit & Tag Box**: Multi-line commit title (`c`), description (`m`), and optional tag (`t`) via the `input_modal` component.
-- **In-Buffer GitSigns Integration (`gitsigns.nvim`)**: Real-time signcolumn diff indicators (`▎`, ``), hunk navigation (`]c`/`[c`), preview hunk (`<leader>hp`), stage (`<leader>hs`), reset (`<leader>hr`), and inline blame popup (`<leader>hb`). See [Keybinds](keybinds.md#git--gitsigns) for full list.
+- **In-Buffer GitSigns Integration (`gitsigns.nvim`)**: Real-time signcolumn diff indicators (`▎`, ``) and hunk navigation (`]c`/`[c`). See [Keybinds](keybinds.md#git--gitsigns) for full list.
 
 ---
 

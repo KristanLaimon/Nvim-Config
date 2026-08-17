@@ -40,7 +40,7 @@ M.settings = {
 		smart_launch = { "<C-S-s>", "<C-S-S>" },
 		launch_profiles = { "<C-S-q>", "<C-S-Q>" },
 		task_menu = { "<C-S-t>", "<C-S-T>" },
-		task_menu_leader = "<leader>ta",
+		task_menu_leader = nil,
 		run_default_task = { "<C-S-a>", "<C-S-A>" },
 		--- Toggle the most recent task output. `<C-i>` is omitted because it shares
 		--- the same keycode as <Tab>, which breaks code indentation in buffers.
@@ -49,7 +49,7 @@ M.settings = {
 		--- Prefix for per-slot task output toggles; the slot number is appended.
 		task_slot_prefix = "<C-",
 		explorer = "<C-S-f>",
-		wsl_explorer = "<leader>fw",
+		wsl_explorer = nil,
 		sneak_peek = { "<C-S-o>", "<C-S-O>" },
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
@@ -119,9 +119,11 @@ map_all_modes(M.settings.keys.run_default_task, function()
 	require("plugins.krs.tasks").run_default_or_menu()
 end, "Run default task or kill & rerun running task")
 
-vim.keymap.set("n", M.settings.keys.task_menu_leader, function()
-	require("plugins.krs.tasks").open_task_menu()
-end, opts("Open Project Task Menu"))
+if M.settings.keys.task_menu_leader then
+	vim.keymap.set("n", M.settings.keys.task_menu_leader, function()
+		require("plugins.krs.tasks").open_task_menu()
+	end, opts("Open Project Task Menu"))
+end
 
 -- Long-running task outputs (`bun run dev` and friends). A slot key does nothing
 -- when that slot is empty.
@@ -149,9 +151,11 @@ vim.keymap.set({ "n", "i", "v" }, M.settings.keys.explorer, function()
 	require("plugins.krs.file_explorer").open_desktop_explorer()
 end, opts("Open Floating Desktop File Explorer"))
 
-vim.keymap.set({ "n", "v" }, M.settings.keys.wsl_explorer, function()
-	require("plugins.krs.file_explorer").open_wsl_explorer()
-end, opts("Open Floating WSL File Explorer"))
+if M.settings.keys.wsl_explorer then
+	vim.keymap.set({ "n", "v" }, M.settings.keys.wsl_explorer, function()
+		require("plugins.krs.file_explorer").open_wsl_explorer()
+	end, opts("Open Floating WSL File Explorer"))
+end
 
 map_all_modes(M.settings.keys.sneak_peek, function()
 	require("plugins.krs.sneak_peek").toggle_or_pick()

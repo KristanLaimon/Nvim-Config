@@ -31,13 +31,13 @@ local settings = {
 	find_all_keys = {
 		"<C-A-k>", "<C-A-K>", "<C-M-k>", "<C-M-K>",
 		"<A-C-k>", "<A-C-K>", "<M-C-k>", "<M-C-K>",
-		"<C-S-/>", "<C-?>", "<leader>fa",
+		"<C-S-/>", "<C-?>",
 	},
 	live_grep_key = "<C-f>",
-	help_tags_key = "<leader>fh",
+	help_tags_key = nil,
 	open_folder_key = "<C-S-o>",
 	desktop_explorer_key = "<C-S-f>",
-	wsl_explorer_key = "<leader>fw",
+	wsl_explorer_key = nil,
 
 	--- Directory scan depth for the folder picker, and what it never descends into.
 	folder_scan_depth = 3,
@@ -80,9 +80,7 @@ return {
 		{ "<A-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<M-C-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<M-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
-		{ "<leader>fa", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "v" }, desc = "Find all files (no .gitignore)" },
 		{ "<C-f>", "<cmd>Telescope live_grep<CR>", mode = { "n", "i" }, desc = "Telescope live grep" },
-		{ "<leader>fh", "<cmd>Telescope help_tags<CR>", desc = "Telescope help tags" },
 		{ "<C-S-o>", "<cmd>TelescopeOpenFolder<CR>", mode = { "n", "i" }, desc = "Telescope open folder" },
 		{ "<C-S-f>", "<cmd>TelescopeFileBrowserDesktop<CR>", mode = { "n", "i", "v" }, desc = "Open Desktop File Explorer" },
 	},

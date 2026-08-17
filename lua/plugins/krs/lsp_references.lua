@@ -14,7 +14,7 @@ local M = {}
 M.settings = {
 	store_file = vim.fn.stdpath("config") .. "/.krsnvim/references.json",
 	default_enabled = true,
-	keymap = "<leader>tr",
+	keymap = nil,
 }
 
 --- Retrieves current toggle state from persistence store.
@@ -114,7 +114,9 @@ function M.setup()
 		M.run()
 	end, { desc = "Run LSP CodeLens / References under cursor" })
 
-	vim.keymap.set("n", M.settings.keymap, M.toggle, { desc = "Toggle LSP Reference Counts" })
+	if M.settings.keymap then
+		vim.keymap.set("n", M.settings.keymap, M.toggle, { desc = "Toggle LSP Reference Counts" })
+	end
 end
 
 -- LAZY.NVIM SPEC
@@ -123,7 +125,7 @@ local plugin_spec = {
 	dir = require("krs.core.lazyspec").for_module(),
 	event = { "LspAttach" },
 	cmd = { "KrsToggleReferences", "KrsRunCodeLens" },
-	keys = { { "<leader>tr", mode = "n", desc = "Toggle LSP Reference Counts" } },
+	keys = {},
 	config = M.setup,
 }
 

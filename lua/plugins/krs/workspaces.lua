@@ -76,11 +76,11 @@ M.settings = {
 		--- Close everything and return to the dashboard.
 		menu = { "<C-S-m>" },
 		--- Leader mappings: save, select, back to menu.
-		leader_save = "<leader>ws",
-		leader_select = "<leader>ww",
-		leader_menu = "<leader>wm",
+		leader_save = nil,
+		leader_select = nil,
+		leader_menu = nil,
 		--- Prefix for quick slots, the slot number is appended.
-		leader_slot_prefix = "<leader>w",
+		leader_slot_prefix = nil,
 	},
 }
 
@@ -870,16 +870,24 @@ function M.setup()
 		})
 	end
 
-	vim.keymap.set("n", M.settings.keys.leader_save, function()
-		M.save_workspace()
-	end, { desc = "Save Workspace" })
-	vim.keymap.set("n", M.settings.keys.leader_select, M.select_workspace, { desc = "Select Workspace" })
-	vim.keymap.set("n", M.settings.keys.leader_menu, M.close_to_menu, { desc = "Close and return to Menu" })
+	if M.settings.keys.leader_save then
+		vim.keymap.set("n", M.settings.keys.leader_save, function()
+			M.save_workspace()
+		end, { desc = "Save Workspace" })
+	end
+	if M.settings.keys.leader_select then
+		vim.keymap.set("n", M.settings.keys.leader_select, M.select_workspace, { desc = "Select Workspace" })
+	end
+	if M.settings.keys.leader_menu then
+		vim.keymap.set("n", M.settings.keys.leader_menu, M.close_to_menu, { desc = "Close and return to Menu" })
+	end
 
-	for slot = 1, M.settings.quick_slots do
-		vim.keymap.set("n", M.settings.keys.leader_slot_prefix .. slot, function()
-			M.load_workspace(slot)
-		end, { desc = "Load Workspace slot " .. slot })
+	if M.settings.keys.leader_slot_prefix then
+		for slot = 1, M.settings.quick_slots do
+			vim.keymap.set("n", M.settings.keys.leader_slot_prefix .. slot, function()
+				M.load_workspace(slot)
+			end, { desc = "Load Workspace slot " .. slot })
+		end
 	end
 end
 
@@ -896,9 +904,6 @@ return setmetatable({
 	cmd = { "WorkspaceSelect", "Workspaces", "WorkspaceSave", "WorkspaceManage", "WorkspaceClose", "WorkspaceMenu" },
 	keys = {
 		{ "<C-S-w>", mode = { "n", "i" }, desc = "Select Workspace" },
-		{ "<leader>ws", mode = "n", desc = "Select Workspace" },
-		{ "<leader>ww", mode = "n", desc = "Save Workspace" },
-		{ "<leader>wm", mode = "n", desc = "Manage Workspaces" },
 		{ "<C-S-m>", mode = { "n", "i" }, desc = "Close Workspace" },
 	},
 	dependencies = {

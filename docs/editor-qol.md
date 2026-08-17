@@ -17,7 +17,7 @@ last real file?                   → delete the buffer, land on the dashboard
 already on the dashboard?         → quit Neovim
 ```
 
-`<leader>q` does the same thing.
+`<C-q>` does the same thing.
 
 It also sweeps empty, unmodified `[No Name]` buffers as soon as a real file opens — the ones that pile up from `:e`, from opening a folder, or from a plugin that created a scratch buffer and forgot it.
 
@@ -52,21 +52,15 @@ See [Color Palette](color-palette.md) for the palette itself.
 
 ## 🖼️ Image Viewer (`image_viewer.lua`)
 
-`<leader>i` renders an image as terminal pixel art through `chafa`, in a floating window — enough to answer "is this the right asset?" without leaving the editor.
+`:ImageViewer` renders an image as terminal pixel art through `chafa`, in a floating window — enough to answer "is this the right asset?" without leaving the editor.
 
 `<C-S-Enter>` hands the file to the OS default application instead, which is what you want for anything `chafa` can't do (video, PSD, a real look at a photo). `:OpenRootInExplorer` opens the project root in the system file manager.
 
 ---
 
-## 🔠 Font Manager (`font.lua`)
+## 🔤 Font Sizing (`font_size.lua`)
 
-Live GUI font sizing, persisted to `font_config.json` in the config directory:
-
-| Shortcut | Command | Action |
-| :--- | :--- | :--- |
-| `<C-+>` / `<C-=>` | `:FontSizeIncrease` | +1pt |
-| `<C-->` | `:FontSizeDecrease` | −1pt |
-| `<C-0>` | `:FontSizeReset` | back to 14pt |
+`<C-+>` / `<C-=>` increases font size, `<C-->` decreases, `<C-0>` resets, and the chosen size is saved to `font_config.json` so it survives restarts.
 
 Defaults to JetBrainsMono Nerd Font at 14pt, clamped to 6–40. It sets `guifont` and, under Neovide, the scale factor — so it does nothing useful in a plain terminal, where font size belongs to the terminal emulator. `<C-MouseWheel>` also works.
 
@@ -74,7 +68,7 @@ Defaults to JetBrainsMono Nerd Font at 14pt, clamped to 6–40. It sets `guifont
 
 ## 📦 Nuget Manager (`nuget.lua`)
 
-`<leader>ng` / `:NugetManager` opens a Telescope picker over the `<PackageReference>` entries of the project's `.csproj`: `a` adds a package, `u` updates the selected one, `d` removes it.
+`:NugetManager` opens a Telescope picker over the `<PackageReference>` entries of the project's `.csproj`: `a` adds a package, `u` updates the selected one, `d` removes it.
 
 Every operation shells out to `dotnet add/remove package` rather than editing the XML, so the `.csproj` stays formatted the way the SDK wants it. If the project has no `.csproj`, it says so and does nothing.
 
@@ -92,6 +86,6 @@ The dual probe is the point: on Windows it's completely normal to have PHP in WS
 
 Distro detection and path translation, used by anything that needs to know whether a path lives inside `\\wsl.localhost\<Distro>\`:
 
-- the [WSL file explorer](file-explorer.md) (`<leader>fw`)
+- the [WSL file explorer](file-explorer.md) (`:TelescopeFileBrowserWSL`)
 - the [terminal manager](terminals.md), which launches `wsl.exe -d <Distro> --cd <path>` instead of the Windows shell when the `cwd` is inside a distro
 - the dashboard, which only shows the WSL button when `wsl.available()` is true

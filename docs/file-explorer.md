@@ -9,7 +9,7 @@ KRS Neovim includes native floating file explorers for Desktop, WSL, folder pick
 ## ⚡ Features
 
 1. **Desktop Explorer (`<C-S-f>`)**: Pure Lua floating file explorer starting at user Desktop or home directory.
-2. **WSL Explorer (`<leader>fw`)**: Native WSL distribution filesystem explorer.
+2. **WSL Explorer (`:TelescopeFileBrowserWSL`)**: Native WSL distribution filesystem explorer.
 3. **Sneak-Peek Project Modal (`<C-S-o>`)**: Open any folder in an on-top modal window (90% width x 90% height) with fresh LSP initialization and full process tree cleanup on close.
 4. **Neo-tree Move File Picker (`m`)**: Pressing `m` on a file in Neo-tree opens the floating file explorer starting at project root (`getcwd()`). Navigate to target folder and press `O` to move file without renaming.
 5. **Gitignore vs All Files Search in Neo-tree**:

@@ -18,7 +18,7 @@ This guide explains how to manage, customize, and extend colorschemes in this Ne
 
 ## 🎨 Nagatoro Theme System (`:KrsThemePicker`)
 
-KrsVim ships with a set of complete, hand-crafted themes matching the `nagatoro-krs` palette schema. Press `<leader>th` or run `:KrsThemePicker` to open the interactive theme picker:
+KrsVim ships with a set of complete, hand-crafted themes matching the `nagatoro-krs` palette schema. Run `:KrsThemePicker` to open the interactive theme picker:
 
 - **Available Themes:**
   - `nagatoro-krs` (Hayase Nagatoro Dark — Default)

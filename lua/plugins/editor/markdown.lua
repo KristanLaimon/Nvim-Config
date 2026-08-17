@@ -64,12 +64,6 @@ return {
 						silent = true,
 						desc = "Toggle Render Markdown (Buffer)",
 					})
-					vim.keymap.set("n", "<leader>mp", "<Cmd>MarkdownPreviewToggle<CR>", {
-						buffer = ev.buf,
-						noremap = true,
-						silent = true,
-						desc = "Toggle Markdown Browser Preview",
-					})
 				end,
 			})
 		end,

@@ -19,7 +19,7 @@ M.settings = {
 		-- (Neovide, or Windows Terminal 1.19+/kitty/wezterm/foot with the
 		-- Kitty keyboard protocol). Plain terminals send the same byte for
 		-- <C-d> and <C-S-d>, so <leader>? is kept as an always-works fallback.
-		open = { "<C-S-d>", "<leader>?" },
+		open = { "<C-S-d>" },
 	},
 	docs_dir = vim.fn.stdpath("config") .. "/docs",
 	left_width_ratio = 0.32,
