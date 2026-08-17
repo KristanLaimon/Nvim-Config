@@ -137,9 +137,21 @@ return {
 		event = { "BufReadPre", "BufNewFile" },
 		dependencies = { "williamboman/mason.nvim", "stevearc/conform.nvim" },
 		config = function()
+			local ok, installer = pcall(require, "krs.core.installer")
+			local ignore_list = ok and installer.mason_packages or {
+				"stylua",
+				"gofumpt",
+				"goimports",
+				"prettierd",
+				"prettier",
+				"blade-formatter",
+				"beautysh",
+				"protolint",
+				"biome",
+				"eslint",
+			}
 			require("mason-conform").setup({
-				ignore_install = {},
-				auto_install = false,
+				ignore_install = ignore_list,
 			})
 		end,
 	},

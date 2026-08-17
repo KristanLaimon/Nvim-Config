@@ -61,16 +61,7 @@ return {
 				mason_dap.setup({
 					-- These are nvim-dap adapter names, NOT mason package names.
 					-- (js -> js-debug-adapter, python -> debugpy, coreclr -> netcoredbg)
-					ensure_installed = {
-						"js",
-						-- Firefox has no js-debug equivalent, it needs its own adapter.
-						"firefox",
-						"delve",
-						"python",
-						"php",
-						"coreclr",
-						"bash",
-					},
+					ensure_installed = {},
 					automatic_installation = false,
 					handlers = {
 						function(config)
