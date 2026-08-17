@@ -98,10 +98,32 @@ local function opts(desc)
 	return { noremap = true, silent = true, desc = desc }
 end
 
+local function ensure_code_window()
+	local ok, dock = pcall(require, "krs.core.dock")
+	if not ok then
+		return
+	end
+	local cur_win = vim.api.nvim_get_current_win()
+	if not dock.is_code_win(cur_win) then
+		local target = dock.find_code_win()
+		if target and vim.api.nvim_win_is_valid(target) then
+			vim.api.nvim_set_current_win(target)
+		else
+			pcall(vim.cmd, "wincmd l")
+			local new_win = vim.api.nvim_get_current_win()
+			if not dock.is_code_win(new_win) then
+				pcall(vim.cmd, "vsplit")
+				pcall(vim.cmd, "enew")
+			end
+		end
+	end
+end
+
 -- The telescope plugin installs `_G.FindFiles*` with the project's own defaults;
 -- the fallbacks keep these keys working before it has loaded.
 for _, key in ipairs(M.settings.keys.find_files) do
 	vim.keymap.set({ "n", "i" }, key, function()
+		ensure_code_window()
 		if _G.FindFilesGitignore then
 			_G.FindFilesGitignore()
 		else
@@ -112,6 +134,7 @@ end
 
 for _, key in ipairs(M.settings.keys.find_all_files) do
 	vim.keymap.set({ "n", "i" }, key, function()
+		ensure_code_window()
 		if _G.FindFilesNoIgnore then
 			_G.FindFilesNoIgnore()
 		else

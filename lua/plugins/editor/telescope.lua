@@ -131,10 +131,34 @@ return {
 			return result and result.code == 0 and result.stdout ~= nil and result.stdout:match("true") ~= nil
 		end
 
+		--- Ensures focus is in a main code buffer window before launching a picker,
+		--- preventing files from accidentally opening inside Neo-tree or terminal splits.
+		local function ensure_code_window()
+			local ok, dock = pcall(require, "krs.core.dock")
+			if not ok then
+				return
+			end
+			local cur_win = vim.api.nvim_get_current_win()
+			if not dock.is_code_win(cur_win) then
+				local target = dock.find_code_win()
+				if target and vim.api.nvim_win_is_valid(target) then
+					vim.api.nvim_set_current_win(target)
+				else
+					pcall(vim.cmd, "wincmd l")
+					local new_win = vim.api.nvim_get_current_win()
+					if not dock.is_code_win(new_win) then
+						pcall(vim.cmd, "vsplit")
+						pcall(vim.cmd, "enew")
+					end
+				end
+			end
+		end
+
 		--- Finds files, respecting .gitignore.
 		--- Inside a repository `git files` is both the fastest and the most correct
 		--- source; outside one, rg/fd apply the ignore rules themselves.
 		local function find_files_gitignore()
+			ensure_code_window()
 			if in_git_repo() then
 				if not pcall(builtin.git_files, { recurse_submodules = true }) then
 					if not pcall(builtin.git_files, { show_untracked = true }) then
@@ -155,6 +179,7 @@ return {
 		--- Finds every file, ignore rules included -- for build output and vendored
 		--- code you deliberately want to open.
 		local function find_files_no_ignore()
+			ensure_code_window()
 			if vim.fn.executable("rg") == 1 then
 				builtin.find_files({
 					find_command = { "rg", "--files", "--color=never", "--no-ignore", "--hidden", "--glob", "!.git/*" },
@@ -358,6 +383,7 @@ return {
 		--- Finds a file and opens it in a split in `direction`.
 		--- @param direction "h"|"j"|"k"|"l"
 		local function open_find_files_split(direction)
+			ensure_code_window()
 			local split = settings.splits[direction]
 
 			builtin.find_files({

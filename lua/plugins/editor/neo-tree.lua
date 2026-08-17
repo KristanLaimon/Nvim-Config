@@ -159,10 +159,13 @@ vim.api.nvim_create_autocmd("VimEnter", {
 -- resize event does not always trigger it.
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
 	group = vim.api.nvim_create_augroup("NeoTreeEqualize", { clear = true }),
-	callback = function(args)
-		if vim.bo[args.buf].filetype == "neo-tree" then
-			vim.schedule(pin_width)
-		end
+	callback = function()
+		vim.schedule(function()
+			pin_width()
+			pcall(function()
+				require("krs.core.dock").enforce_neotree_layout()
+			end)
+		end)
 	end,
 })
 

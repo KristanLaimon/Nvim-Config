@@ -35,6 +35,8 @@ describe("keymap_registry", function()
 
 			expect(#calls).toBe(1)
 			expect(calls[1].opts.title).toBe("Keymap collision")
+			expect(calls[1].opts.max_width).toBe(120)
+			expect(type(calls[1].opts.on_open)).toBe("function")
 			expect(calls[1].opts.timeout).toBe(nil)
 			expect(calls[1].level).toBe(vim.log.levels.WARN)
 

@@ -205,7 +205,15 @@ function M.install()
 									record.second_desc or "(no desc)"
 								),
 								vim.log.levels.WARN,
-								{ title = "Keymap collision" }
+								{
+									title = "Keymap collision",
+									max_width = 120,
+									on_open = function(win)
+										if win and vim.api.nvim_win_is_valid(win) then
+											vim.wo[win].wrap = true
+										end
+									end,
+								}
 							)
 						end)
 					end
