@@ -687,6 +687,14 @@ function M.open_management_menu(root)
 				pcall(function()
 					vim.bo[self.state.bufnr].filetype = "markdown"
 				end)
+				if self.state.winid and vim.api.nvim_win_is_valid(self.state.winid) then
+					vim.wo[self.state.winid].conceallevel = 3
+					vim.wo[self.state.winid].concealcursor = "nvic"
+					local ok, rm_ui = pcall(require, "render-markdown.core.ui")
+					if ok and rm_ui and type(rm_ui.update) == "function" then
+						rm_ui.update(self.state.bufnr, self.state.winid, "UserCommand", true)
+					end
+				end
 			end,
 		}),
 		sorter = conf.generic_sorter({}),

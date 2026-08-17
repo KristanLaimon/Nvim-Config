@@ -78,6 +78,13 @@ function M.open(doc_file)
 		title_pos = "center",
 	})
 
+	vim.wo[win].conceallevel = 3
+	vim.wo[win].concealcursor = "nvic"
+	local ok, rm_ui = pcall(require, "render-markdown.core.ui")
+	if ok and rm_ui and type(rm_ui.update) == "function" then
+		rm_ui.update(buf, win, "UserCommand", true)
+	end
+
 	-- Keybindings inside wiki window
 	local opts = { noremap = true, silent = true, buffer = buf }
 	vim.keymap.set("n", "q", "<cmd>close<CR>", opts)

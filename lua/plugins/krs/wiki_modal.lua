@@ -145,6 +145,15 @@ local function load_document(filename)
 	end
 
 	state.active_doc_file = filename
+
+	if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
+		vim.wo[state.right_win].conceallevel = 3
+		vim.wo[state.right_win].concealcursor = "nvic"
+		local ok, rm_ui = pcall(require, "render-markdown.core.ui")
+		if ok and rm_ui and type(rm_ui.update) == "function" then
+			rm_ui.update(state.right_buf, state.right_win, "UserCommand", true)
+		end
+	end
 end
 
 --- Closes documentation modal cleanly.
@@ -245,6 +254,8 @@ function M.open()
 	vim.wo[state.left_win].cursorline = true
 	vim.wo[state.right_win].cursorline = false
 	vim.wo[state.right_win].wrap = true
+	vim.wo[state.right_win].conceallevel = 3
+	vim.wo[state.right_win].concealcursor = "nvic"
 
 	state.is_open = true
 

@@ -35,7 +35,7 @@ M.settings = {
 		--- Move focus between windows.
 		window_left = "<C-h>",
 		window_right = "<C-l>",
-		window_up = nil,
+		window_up = "<C-k>",
 		window_down = "<C-j>",
 		--- Cycle buffers.
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },

@@ -687,6 +687,14 @@ function M.select_workspace()
 						define_preview = function(self, entry)
 							vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, format_preview(entry.value))
 							vim.api.nvim_set_option_value("filetype", "markdown", { buf = self.state.bufnr })
+							if self.state.winid and vim.api.nvim_win_is_valid(self.state.winid) then
+								vim.wo[self.state.winid].conceallevel = 3
+								vim.wo[self.state.winid].concealcursor = "nvic"
+								local ok, rm_ui = pcall(require, "render-markdown.core.ui")
+								if ok and rm_ui and type(rm_ui.update) == "function" then
+									rm_ui.update(self.state.bufnr, self.state.winid, "UserCommand", true)
+								end
+							end
 						end,
 					}),
 					attach_mappings = function(prompt_bufnr, map)
