@@ -18,6 +18,15 @@ local M = {}
 -- CONFIGURATION
 -- ============================================================================
 
+local is_mobile_ed = false
+local env_ok_ed, env_mod_ed = pcall(require, "krs.core.environment")
+if env_ok_ed then
+	local env = env_mod_ed.detect()
+	is_mobile_ed = env.is_mobile or env.is_termux or env.is_proot
+else
+	is_mobile_ed = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+end
+
 M.settings = {
 	--- Space, as the prefix for every `<leader>` mapping.
 	leader = " ",
@@ -35,7 +44,7 @@ M.settings = {
 		--- Move focus between windows.
 		window_left = "<C-h>",
 		window_right = "<C-l>",
-		window_up = { "<C-k>", "<C-S-A-k>", "<C-A-S-k>", "<C-S-M-k>", "<C-M-S-k>", "<C-S-A-K>", "<C-A-S-K>", "<C-S-M-K>", "<C-M-S-K>" },
+		window_up = { "<C-S-A-k>", "<C-A-S-k>", "<C-S-M-k>", "<C-M-S-k>", "<C-S-A-K>", "<C-A-S-K>", "<C-S-M-K>", "<C-M-S-K>" },
 		window_down = "<C-j>",
 		--- Cycle buffers.
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
@@ -44,8 +53,10 @@ M.settings = {
 		explorer = { "<C-S-Space>", "<C-e>", "<C-E>", "<leader>e", "<leader>fe" },
 		--- Netrw-style directory listing, kept as an escape hatch.
 		netrw = nil,
-		--- Pin active code buffer tab.
-		pin_tab = { "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" },
+		--- Pin active code buffer tab (<C-p> on Desktop, <A-p> on Mobile).
+		pin_tab = is_mobile_ed
+			and { "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" }
+			or { "<C-p>", "<C-P>", "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" },
 	},
 
 	--- Window resize step, in cells.

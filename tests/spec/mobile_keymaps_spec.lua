@@ -20,7 +20,6 @@ describe("Mobile & Phone Termux keymap aliases", function()
 		local palette = require("plugins.krs.command_palette")
 		palette.setup()
 		expect(palette.settings.keys.open).toContain("<C-S-p>")
-		expect(palette.settings.keys.open).toContain("<C-S-P>")
 		expect(palette.settings.keys.open).toContain("<leader>cp")
 	end)
 

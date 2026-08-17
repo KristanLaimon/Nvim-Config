@@ -25,8 +25,16 @@ local M = {}
 -- CONFIGURATION
 -- ============================================================================
 
+local is_mobile_cp = false
+local env_ok_cp, env_mod_cp = pcall(require, "krs.core.environment")
+if env_ok_cp then
+	local env = env_mod_cp.detect()
+	is_mobile_cp = env.is_mobile or env.is_termux or env.is_proot
+else
+	is_mobile_cp = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+end
+
 M.settings = {
-	--- Picker geometry and titles.
 	picker_width = 0.75,
 	prompt_title = " 🚀🦊 Command Palette (Ctrl+Shift+P) ",
 	results_title = "Available Commands",
@@ -38,7 +46,9 @@ M.settings = {
 
 	keys = {
 		--- Open the palette. Bound in normal, insert, visual and terminal mode.
-		open = { "<C-S-p>", "<C-S-P>", "<leader>cp", "<leader>p" },
+		open = is_mobile_cp
+			and { "<C-p>", "<C-P>", "<C-S-p>", "<C-S-P>", "<leader>cp", "<leader>p" }
+			or { "<C-S-p>", "<C-S-P>", "<leader>cp", "<leader>p" },
 	},
 }
 
@@ -388,7 +398,12 @@ return setmetatable({
 	name = "krs_command_palette",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "CommandPalette",
-	keys = {
+	keys = is_mobile_cp and {
+		{ "<C-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette (Mobile)" },
+		{ "<C-P>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette (Mobile)" },
+		{ "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
+		{ "<leader>cp", mode = { "n", "v" }, desc = "Open Command Palette" },
+	} or {
 		{ "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
 		{ "<C-S-P>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
 		{ "<leader>cp", mode = { "n", "v" }, desc = "Open Command Palette" },

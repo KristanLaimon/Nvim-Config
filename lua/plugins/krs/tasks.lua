@@ -1044,10 +1044,12 @@ function M.open_task_menu()
 						vim.schedule(M.open_task_menu)
 					end
 
-					--- Binds a picker action in both insert and normal mode.
-					local function map_both(key, fn)
-						map("i", key, fn)
-						map("n", key, fn)
+					--- Binds single-letter shortcuts in normal mode only, and Ctrl-key mirrors in insert mode
+					local function map_action(norm_key, ctrl_key, fn)
+						map("n", norm_key, fn)
+						if ctrl_key then
+							map({ "n", "i" }, ctrl_key, fn)
+						end
 					end
 
 					actions.select_default:replace(function()
@@ -1058,16 +1060,16 @@ function M.open_task_menu()
 						end
 					end)
 
-					map_both("d", function()
+					local action_default = function()
 						local value = selected()
 						if value then
 							pdata.default_task = value.item
 							save_and_reopen()
 							notify("⭐ Default task saved")
 						end
-					end)
+					end
 
-					map_both("a", function()
+					local action_add = function()
 						actions.close(prompt_bufnr)
 						vim.schedule(function()
 							vim.ui.input({ prompt = "New Task Command: " }, function(cmd)
@@ -1079,9 +1081,9 @@ function M.open_task_menu()
 								end
 							end)
 						end)
-					end)
+					end
 
-					map_both("e", function()
+					local action_edit = function()
 						local value = selected()
 						if not value then
 							return
@@ -1161,9 +1163,9 @@ function M.open_task_menu()
 								end
 							end)
 						end)
-					end)
+					end
 
-					map_both("c", function()
+					local action_chain = function()
 						actions.close(prompt_bufnr)
 						vim.schedule(function()
 							vim.ui.input({ prompt = "Chain Name (e.g. Build & Test): " }, function(chain_name)
@@ -1193,9 +1195,9 @@ function M.open_task_menu()
 								end)
 							end)
 						end)
-					end)
+					end
 
-					map_both("x", function()
+					local action_delete = function()
 						local value = selected()
 						if not value then
 							return
@@ -1214,7 +1216,14 @@ function M.open_task_menu()
 							pdata.custom_tasks = kept
 						end
 						save_and_reopen()
-					end)
+					end
+
+					map_action("d", "<C-d>", action_default)
+					map_action("a", "<C-a>", action_add)
+					map_action("e", "<C-e>", action_edit)
+					map("n", "r", action_edit)
+					map_action("c", "<C-c>", action_chain)
+					map_action("x", "<C-x>", action_delete)
 
 					return true
 				end,
