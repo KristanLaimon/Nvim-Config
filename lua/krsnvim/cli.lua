@@ -402,7 +402,10 @@ function M.menu(title, options, callback)
 			for _, l in ipairs(ascii_lines) do
 				table.insert(content, l)
 			end
-			table.insert(content, "────────────────────────────────────────────────────────")
+			table.insert(
+				content,
+				"────────────────────────────────────────────────────────"
+			)
 			table.insert(content, " Choose an option:")
 
 			for i, item in ipairs(items) do
@@ -414,8 +417,14 @@ function M.menu(title, options, callback)
 				end
 			end
 
-			table.insert(content, "────────────────────────────────────────────────────────")
-			table.insert(content, " [j/k or ↑/↓]: Move  |  [Enter/Space]: Pick  |  [Mouse Click]: Pick  |  [q/Esc]: Cancel")
+			table.insert(
+				content,
+				"────────────────────────────────────────────────────────"
+			)
+			table.insert(
+				content,
+				" [j/k or ↑/↓]: Move  |  [Enter/Space]: Pick  |  [Mouse Click]: Pick  |  [q/Esc]: Cancel"
+			)
 
 			vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
 		end
@@ -472,14 +481,28 @@ function M.menu(title, options, callback)
 		local map_opts = { buffer = buf, noremap = true, silent = true }
 
 		-- Vim keybindings
-		vim.keymap.set("n", "j", function() move_cursor(1) end, map_opts)
-		vim.keymap.set("n", "k", function() move_cursor(-1) end, map_opts)
-		vim.keymap.set("n", "g", function() selected_idx = 1; render_menu() end, map_opts)
-		vim.keymap.set("n", "G", function() selected_idx = #items; render_menu() end, map_opts)
+		vim.keymap.set("n", "j", function()
+			move_cursor(1)
+		end, map_opts)
+		vim.keymap.set("n", "k", function()
+			move_cursor(-1)
+		end, map_opts)
+		vim.keymap.set("n", "g", function()
+			selected_idx = 1
+			render_menu()
+		end, map_opts)
+		vim.keymap.set("n", "G", function()
+			selected_idx = #items
+			render_menu()
+		end, map_opts)
 
 		-- Arrow keys
-		vim.keymap.set("n", "<Down>", function() move_cursor(1) end, map_opts)
-		vim.keymap.set("n", "<Up>", function() move_cursor(-1) end, map_opts)
+		vim.keymap.set("n", "<Down>", function()
+			move_cursor(1)
+		end, map_opts)
+		vim.keymap.set("n", "<Up>", function()
+			move_cursor(-1)
+		end, map_opts)
 
 		-- Selection
 		vim.keymap.set("n", "<CR>", confirm_choice, map_opts)
@@ -489,8 +512,12 @@ function M.menu(title, options, callback)
 		vim.keymap.set("n", "<LeftMouse>", mouse_click, map_opts)
 
 		-- Cancel
-		vim.keymap.set("n", "q", function() pcall(vim.api.nvim_win_close, win, true) end, map_opts)
-		vim.keymap.set("n", "<Esc>", function() pcall(vim.api.nvim_win_close, win, true) end, map_opts)
+		vim.keymap.set("n", "q", function()
+			pcall(vim.api.nvim_win_close, win, true)
+		end, map_opts)
+		vim.keymap.set("n", "<Esc>", function()
+			pcall(vim.api.nvim_win_close, win, true)
+		end, map_opts)
 
 		return
 	else
@@ -562,7 +589,10 @@ function M.multi_select(title, options, callback)
 			for _, l in ipairs(ascii_lines) do
 				table.insert(content, l)
 			end
-			table.insert(content, "────────────────────────────────────────────────────────")
+			table.insert(
+				content,
+				"────────────────────────────────────────────────────────"
+			)
 			table.insert(content, " Toggle items with Space, press Enter to submit:")
 
 			for i, item in ipairs(items) do
@@ -575,7 +605,10 @@ function M.multi_select(title, options, callback)
 				end
 			end
 
-			table.insert(content, "────────────────────────────────────────────────────────")
+			table.insert(
+				content,
+				"────────────────────────────────────────────────────────"
+			)
 			table.insert(content, " [j/k or ↑/↓]: Move  |  [Space]: Toggle  |  [a]: Select All  |  [Enter]: Submit")
 
 			vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
@@ -654,16 +687,28 @@ function M.multi_select(title, options, callback)
 
 		local map_opts = { buffer = buf, noremap = true, silent = true }
 
-		vim.keymap.set("n", "j", function() move_cursor(1) end, map_opts)
-		vim.keymap.set("n", "k", function() move_cursor(-1) end, map_opts)
-		vim.keymap.set("n", "<Down>", function() move_cursor(1) end, map_opts)
-		vim.keymap.set("n", "<Up>", function() move_cursor(-1) end, map_opts)
+		vim.keymap.set("n", "j", function()
+			move_cursor(1)
+		end, map_opts)
+		vim.keymap.set("n", "k", function()
+			move_cursor(-1)
+		end, map_opts)
+		vim.keymap.set("n", "<Down>", function()
+			move_cursor(1)
+		end, map_opts)
+		vim.keymap.set("n", "<Up>", function()
+			move_cursor(-1)
+		end, map_opts)
 		vim.keymap.set("n", "<Space>", toggle_current, map_opts)
 		vim.keymap.set("n", "a", toggle_all, map_opts)
 		vim.keymap.set("n", "<CR>", submit_selection, map_opts)
 		vim.keymap.set("n", "<LeftMouse>", mouse_click, map_opts)
-		vim.keymap.set("n", "q", function() pcall(vim.api.nvim_win_close, win, true) end, map_opts)
-		vim.keymap.set("n", "<Esc>", function() pcall(vim.api.nvim_win_close, win, true) end, map_opts)
+		vim.keymap.set("n", "q", function()
+			pcall(vim.api.nvim_win_close, win, true)
+		end, map_opts)
+		vim.keymap.set("n", "<Esc>", function()
+			pcall(vim.api.nvim_win_close, win, true)
+		end, map_opts)
 
 		return
 	end

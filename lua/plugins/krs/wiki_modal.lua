@@ -200,17 +200,13 @@ function M.open()
 
 	state.items = build_flat_items()
 
-	local editor_w = vim.o.columns
-	local editor_h = vim.o.lines - 2
-
-	local modal_w = math.floor(editor_w * 0.88)
-	local modal_h = math.floor(editor_h * 0.85)
-
-	local left_w = math.max(M.settings.min_left_width, math.floor(modal_w * M.settings.left_width_ratio))
-	local right_w = modal_w - left_w - 3
-
-	local top = math.floor((editor_h - modal_h) / 2)
-	local left = math.floor((editor_w - modal_w) / 2)
+	local geo = ui.compute_dual_panel({
+		left_ratio = M.settings.left_width_ratio or 0.35,
+		width_ratio = 0.88,
+		height_ratio = 0.85,
+		gap = 2,
+		min_left_width = M.settings.min_left_width,
+	})
 
 	local z_base = zindex.get_zindex("wiki_modal")
 
@@ -226,10 +222,10 @@ function M.open()
 
 	state.left_win = vim.api.nvim_open_win(state.left_buf, true, {
 		relative = "editor",
-		row = top,
-		col = left,
-		width = left_w,
-		height = modal_h,
+		row = geo.row,
+		col = geo.left_col,
+		width = geo.left_width,
+		height = geo.total_height,
 		style = "minimal",
 		border = "rounded",
 		title = " 📚 KrsVim Wiki Index (/ or Ctrl+F to search) ",
@@ -242,10 +238,10 @@ function M.open()
 	vim.b[state.right_buf].krs_wiki_modal = true
 	state.right_win = vim.api.nvim_open_win(state.right_buf, false, {
 		relative = "editor",
-		row = top,
-		col = left + left_w + 2,
-		width = right_w,
-		height = modal_h,
+		row = geo.row,
+		col = geo.right_col,
+		width = geo.right_width,
+		height = geo.total_height,
 		style = "minimal",
 		border = "rounded",
 		title = " 📖 Document Reader (/ or Ctrl+F to search) ",
@@ -380,39 +376,18 @@ function M.resize_split(delta)
 		return
 	end
 
-	local cur_ratio = M.settings.left_width_ratio or 0.35
-	local new_ratio = math.max(0.15, math.min(0.70, cur_ratio + delta))
-	M.settings.left_width_ratio = tonumber(string.format("%.3f", new_ratio))
-
-	local editor_w = vim.o.columns
-	local editor_h = vim.o.lines - 2
-
-	local modal_w = math.floor(editor_w * 0.88)
-	local modal_h = math.floor(editor_h * 0.85)
-
-	local left_w = math.max(M.settings.min_left_width, math.floor(modal_w * M.settings.left_width_ratio))
-	local right_w = modal_w - left_w - 3
-
-	local top = math.floor((editor_h - modal_h) / 2)
-	local left = math.floor((editor_w - modal_w) / 2)
-
-	pcall(vim.api.nvim_win_set_config, state.left_win, {
-		relative = "editor",
-		row = top,
-		col = left,
-		width = left_w,
-		height = modal_h,
+	M.settings.left_width_ratio = ui.resize_dual_panel({
+		left_win = state.left_win,
+		right_win = state.right_win,
+		delta = delta,
+		left_ratio = M.settings.left_width_ratio or 0.35,
+		width_ratio = 0.88,
+		height_ratio = 0.85,
+		gap = 2,
+		min_ratio = 0.15,
+		max_ratio = 0.70,
+		min_left_width = M.settings.min_left_width,
 	})
-
-	if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
-		pcall(vim.api.nvim_win_set_config, state.right_win, {
-			relative = "editor",
-			row = top,
-			col = left + left_w + 2,
-			width = right_w,
-			height = modal_h,
-		})
-	end
 end
 
 	local function map_keys(buf, win)

@@ -275,50 +275,26 @@ function M.resize_split(delta)
 	end
 
 	local cur_ratio = M.current_left_ratio or M.settings.left_ratio
-	local new_ratio = math.max(0.20, math.min(0.80, cur_ratio + delta))
-	M.current_left_ratio = tonumber(string.format("%.3f", new_ratio))
+	local new_ratio = ui.resize_dual_panel({
+		left_win = M.main_win,
+		right_win = M.preview_win,
+		tab_win = M.tab_win,
+		delta = delta,
+		left_ratio = cur_ratio,
+		width_ratio = M.settings.width_ratio,
+		height_ratio = M.settings.height_ratio,
+		gap = 2,
+		min_ratio = 0.20,
+		max_ratio = 0.80,
+	})
 
+	M.current_left_ratio = new_ratio
 	if M.root_dir then
 		save_left_ratio(M.root_dir, M.current_left_ratio)
 	end
 
-	local tot_width = math.floor(vim.o.columns * M.settings.width_ratio)
-	local tot_height = math.floor(vim.o.lines * M.settings.height_ratio)
-	local l_width = math.floor(tot_width * M.current_left_ratio)
-	local r_width = tot_width - l_width - 2
-	local s_row = math.max(2, math.floor((vim.o.lines - tot_height) / 2))
-	local s_col = math.floor((vim.o.columns - tot_width) / 2)
-
-	pcall(vim.api.nvim_win_set_config, M.main_win, {
-		relative = "editor",
-		width = l_width,
-		height = tot_height,
-		row = s_row,
-		col = s_col,
-	})
-
-	if M.tab_win and vim.api.nvim_win_is_valid(M.tab_win) then
-		pcall(vim.api.nvim_win_set_config, M.tab_win, {
-			relative = "editor",
-			width = l_width + 2,
-			height = 1,
-			row = s_row - 1,
-			col = s_col - 1,
-		})
-	end
-
-	if M.preview_win and vim.api.nvim_win_is_valid(M.preview_win) then
-		pcall(vim.api.nvim_win_set_config, M.preview_win, {
-			relative = "editor",
-			width = r_width,
-			height = tot_height,
-			row = s_row,
-			col = s_col + l_width + 2,
-		})
-	end
-
 	if M.refresh then
-		M.refresh()
+		pcall(M.refresh)
 	end
 end
 

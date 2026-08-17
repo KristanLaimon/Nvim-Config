@@ -163,4 +163,138 @@ function M.close(win)
 	end
 end
 
+-- ---------------------------------------------------------------------------
+-- Dual-Panel Side-by-Side Layout Geometry & Synchronous Split Resizing
+-- ---------------------------------------------------------------------------
+
+--- Computes centered geometry for a side-by-side dual panel UI.
+---
+--- @param opts table|nil Configuration:
+---   left_ratio?       number Current fraction of width for left panel (default 0.35).
+---   width_ratio?      number Fraction of editor width for total dual panel (default 0.88).
+---   height_ratio?     number Fraction of editor height for total dual panel (default 0.85).
+---   gap?              integer Gap cells between left and right windows (default 2).
+---   min_ratio?        number Min allowed left ratio (default 0.15).
+---   max_ratio?        number Max allowed left ratio (default 0.80).
+---   min_left_width?   integer Minimum left panel width (default 20).
+---   min_right_width?  integer Minimum right panel width (default 20).
+--- @return table Geometry details:
+---   left_ratio        number Cleaned and clamped left ratio.
+---   total_width       integer Total width across both panels and gap.
+---   total_height      integer Total height.
+---   row               integer Centered row position.
+---   left_col          integer Left panel col position.
+---   left_width        integer Left panel width.
+---   right_col         integer Right panel col position.
+---   right_width       integer Right panel width.
+function M.compute_dual_panel(opts)
+	opts = opts or {}
+	local editor_w = vim.o.columns or 80
+	local editor_h = (vim.o.lines or 24) - 2
+
+	local min_r = opts.min_ratio or 0.15
+	local max_r = opts.max_ratio or 0.80
+	local raw_ratio = opts.left_ratio or 0.35
+	local left_ratio = math.max(min_r, math.min(max_r, raw_ratio))
+	left_ratio = tonumber(string.format("%.3f", left_ratio)) or left_ratio
+
+	local tot_w = M.resolve_size(opts.width_ratio or 0.88, editor_w)
+	local tot_h = M.resolve_size(opts.height_ratio or 0.85, editor_h)
+	local gap = opts.gap or 2
+
+	local min_left = opts.min_left_width or 20
+	local min_right = opts.min_right_width or 20
+
+	local left_w = math.floor(tot_w * left_ratio)
+	left_w = math.max(min_left, math.min(tot_w - gap - min_right, left_w))
+	local right_w = tot_w - left_w - gap
+
+	local row = math.max(2, math.floor((editor_h - tot_h) / 2))
+	local start_col = math.floor((editor_w - tot_w) / 2)
+
+	return {
+		left_ratio = left_ratio,
+		total_width = tot_w,
+		total_height = tot_h,
+		row = row,
+		left_col = start_col,
+		left_width = left_w,
+		right_col = start_col + left_w + gap,
+		right_width = right_w,
+	}
+end
+
+--- Adjusts and re-applies layout geometry for side-by-side dual panel UI windows synchronously.
+---
+--- @param opts table Configuration:
+---   left_win          integer Handle to left window.
+---   right_win         integer Handle to right window.
+---   delta?            number Amount to adjust left_ratio (e.g. -0.03 or 0.03).
+---   left_ratio?       number Current left ratio.
+---   width_ratio?      number Combined width fraction.
+---   height_ratio?     number Combined height fraction.
+---   gap?              integer Cell gap between panels.
+---   min_ratio?        number Min allowed left ratio.
+---   max_ratio?        number Max allowed left ratio.
+---   min_left_width?   integer Minimum left panel width.
+---   min_right_width?  integer Minimum right panel width.
+---   tab_win?          integer Optional tab header window above left panel.
+--- @return number new_left_ratio
+function M.resize_dual_panel(opts)
+	opts = opts or {}
+	local left_win = opts.left_win
+	local right_win = opts.right_win
+	if not left_win or not vim.api.nvim_win_is_valid(left_win) then
+		return opts.left_ratio or 0.35
+	end
+
+	local cur_ratio = opts.left_ratio or 0.35
+	local delta = opts.delta or 0
+	local target_ratio = cur_ratio + delta
+
+	local geo = M.compute_dual_panel({
+		left_ratio = target_ratio,
+		width_ratio = opts.width_ratio,
+		height_ratio = opts.height_ratio,
+		gap = opts.gap,
+		min_ratio = opts.min_ratio,
+		max_ratio = opts.max_ratio,
+		min_left_width = opts.min_left_width,
+		min_right_width = opts.min_right_width,
+	})
+
+	-- Update Left Window
+	pcall(vim.api.nvim_win_set_config, left_win, {
+		relative = "editor",
+		row = geo.row,
+		col = geo.left_col,
+		width = geo.left_width,
+		height = geo.total_height,
+	})
+
+	-- Update Right Window
+	if right_win and vim.api.nvim_win_is_valid(right_win) then
+		pcall(vim.api.nvim_win_set_config, right_win, {
+			relative = "editor",
+			row = geo.row,
+			col = geo.right_col,
+			width = geo.right_width,
+			height = geo.total_height,
+		})
+	end
+
+	-- Update Tab Window (if present)
+	if opts.tab_win and vim.api.nvim_win_is_valid(opts.tab_win) then
+		pcall(vim.api.nvim_win_set_config, opts.tab_win, {
+			relative = "editor",
+			row = geo.row - 1,
+			col = geo.left_col,
+			width = geo.left_width + (opts.gap or 2),
+			height = 1,
+		})
+	end
+
+	return geo.left_ratio
+end
+
 return M

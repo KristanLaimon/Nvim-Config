@@ -125,3 +125,40 @@ describe("krs.core.ui.close_on_keys", function()
 		ui.close(win)
 	end)
 end)
+
+describe("krs.core.ui.compute_dual_panel & resize_dual_panel", function()
+	it("computes synchronous side-by-side panel geometry", function()
+		local geo = ui.compute_dual_panel({ left_ratio = 0.35, width_ratio = 0.80, height_ratio = 0.80, gap = 2 })
+
+		expect(geo.left_ratio).toBe(0.35)
+		expect(geo.left_width + geo.right_width + 2).toBe(geo.total_width)
+		expect(geo.right_col).toBe(geo.left_col + geo.left_width + 2)
+	end)
+
+	it("adjusts split ratio and resizes dual floating windows synchronously", function()
+		local b1 = ui.scratch_buffer({ lines = { "left" } })
+		local b2 = ui.scratch_buffer({ lines = { "right" } })
+		local w1 = vim.api.nvim_open_win(b1, false, { relative = "editor", row = 2, col = 2, width = 20, height = 10 })
+		local w2 = vim.api.nvim_open_win(b2, false, { relative = "editor", row = 2, col = 24, width = 40, height = 10 })
+
+		local new_ratio = ui.resize_dual_panel({
+			left_win = w1,
+			right_win = w2,
+			delta = 0.05,
+			left_ratio = 0.35,
+			width_ratio = 0.80,
+			height_ratio = 0.80,
+			gap = 2,
+		})
+
+		expect(new_ratio).toBe(0.40)
+
+		local cfg1 = vim.api.nvim_win_get_config(w1)
+		local cfg2 = vim.api.nvim_win_get_config(w2)
+
+		expect(cfg2.col).toBe(cfg1.col + cfg1.width + 2)
+
+		pcall(vim.api.nvim_win_close, w1, true)
+		pcall(vim.api.nvim_win_close, w2, true)
+	end)
+end)
