@@ -46,6 +46,16 @@ local settings = {
 		-- Encoding
 		encoding = "utf-8",
 
+		-- Folding: Treesitter folding for HTML tags, functions, and scope blocks with mouse click foldcolumn support.
+		foldmethod = "expr",
+		foldexpr = "v:lua.vim.treesitter.foldexpr()",
+		foldlevel = 99,
+		foldlevelstart = 99,
+		foldenable = true,
+		foldcolumn = "1",
+		fillchars = "eob: ,fold: ,foldopen:,foldclose:,foldsep: ",
+		viewoptions = "folds,cursor",
+
 		-- Behaviour and performance
 		mouse = "a",
 		autoread = true, -- Pick up files changed outside the editor.

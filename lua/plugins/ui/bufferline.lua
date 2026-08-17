@@ -56,6 +56,11 @@ return {
 				always_show_bufferline = true,
 				show_buffer_close_icons = true,
 				show_close_icon = false,
+				groups = {
+					items = {
+						require("bufferline.groups").builtin.pinned,
+					},
+				},
 				close_command = close_buffer,
 				right_mouse_command = close_buffer,
 				middle_mouse_command = close_buffer,

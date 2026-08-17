@@ -285,10 +285,10 @@ return setmetatable({
 	dir = require("krs.core.lazyspec").for_module(),
 	event = { "BufReadPost", "DirChanged" },
 	keys = {
-		{ "<C-p>", mode = { "n", "v" }, desc = "Toggle Pin Tab" },
-		{ "<C-P>", mode = { "n", "v" }, desc = "Toggle Pin Tab" },
-		{ "<A-p>", mode = { "n", "v" }, desc = "Toggle Pin Tab" },
-		{ "<M-p>", mode = { "n", "v" }, desc = "Toggle Pin Tab" },
+		{ "<C-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
+		{ "<C-P>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
+		{ "<A-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
+		{ "<M-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
 	},
 	config = M.setup,
 }, { __index = M })

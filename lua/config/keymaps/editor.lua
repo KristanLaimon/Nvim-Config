@@ -57,6 +57,8 @@ M.settings = {
 		pin_tab = is_mobile_ed
 			and { "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" }
 			or { "<C-p>", "<C-P>", "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" },
+		--- Toggle fold at cursor / selection (HTML tags, functions, scopes via Alt+Y).
+		fold_toggle = { "<A-y>", "<A-Y>", "<M-y>", "<M-Y>" },
 	},
 
 	--- Window resize step, in cells.
@@ -129,9 +131,18 @@ for _, key in ipairs(save_keys) do
 end
 
 for _, key in ipairs(M.settings.keys.pin_tab) do
-	vim.keymap.set("n", key, function()
+	vim.keymap.set({ "n", "v", "i" }, key, function()
+		if vim.fn.mode() == "i" then
+			pcall(vim.cmd, "stopinsert")
+		end
 		require("plugins.krs.pinned_tabs").toggle_pin()
 	end, opts("Toggle pin tab (code buffer only)"))
+end
+
+for _, key in ipairs(M.settings.keys.fold_toggle or {}) do
+	vim.keymap.set({ "n", "v", "i", "t" }, key, function()
+		require("plugins.krs.folding").toggle_fold()
+	end, opts("Toggle fold at cursor (HTML, functions, scopes)"))
 end
 
 
