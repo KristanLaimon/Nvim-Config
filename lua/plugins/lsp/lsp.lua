@@ -451,105 +451,123 @@ return {
 		event = { "BufReadPre", "BufNewFile", "InsertEnter" },
 		dependencies = { "rafamadriz/friendly-snippets" },
 		version = "*",
-		opts = {
-			enabled = function()
-				return vim.bo.filetype ~= "krsinputmodal" and vim.b.completion ~= false
-			end,
-			keymap = {
-				preset = "default",
-				["<CR>"] = { "accept", "fallback" },
-				["<C-space>"] = { "show", "show_documentation", "hide_documentation" },
-				["<C-@>"] = { "show", "show_documentation", "hide_documentation" },
-				["<Up>"] = { "select_prev", "fallback" },
-				["<Down>"] = { "select_next", "fallback" },
-			},
-			appearance = { nerd_font_variant = "mono" },
-			completion = {
-				menu = {
-					border = "rounded",
-					draw = {
-						components = {
-							kind_icon = {
-								ellipsis = false,
-								text = function(ctx)
-									local colorify = require("krs.lsp.colorify")
-									local hex = colorify.extract_hex_color(ctx.label)
-										or colorify.extract_hex_color(ctx.label_description)
-									if hex then
-										return " ██ "
-									end
-									return colorify.get_kind_icon(ctx.kind)
-								end,
-								highlight = function(ctx)
-									local colorify = require("krs.lsp.colorify")
-									local hex = colorify.extract_hex_color(ctx.label)
-										or colorify.extract_hex_color(ctx.label_description)
-									if hex then
-										return colorify.get_or_create_color_hl(hex)
-									end
-									return colorify.get_kind_hl(ctx.kind)
-								end,
-							},
-							kind = {
-								text = function(ctx)
-									return require("krs.lsp.colorify").format_kind_label(ctx.kind)
-								end,
-							},
-						},
-						columns = {
-							{ "kind_icon" },
-							{ "label", "label_description", gap = 1 },
-							{ "kind" },
+		opts = function()
+			local is_mobile = false
+			local env_ok, env_mod = pcall(require, "krs.core.environment")
+			if env_ok then
+				local env = env_mod.detect()
+				is_mobile = env.is_mobile or env.is_termux or env.is_proot
+			else
+				is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+			end
+
+			return {
+				enabled = function()
+					return vim.bo.filetype ~= "krsinputmodal" and vim.b.completion ~= false
+				end,
+				keymap = {
+					preset = "default",
+					["<CR>"] = { "accept_fallback", "fallback" },
+					["<C-space>"] = { "show", "show_documentation", "hide_documentation" },
+					["<C-@>"] = { "show", "show_documentation", "hide_documentation" },
+					["<Up>"] = { "select_prev", "fallback" },
+					["<Down>"] = { "select_next", "fallback" },
+				},
+				appearance = { nerd_font_variant = "mono" },
+				completion = {
+					list = {
+						selection = {
+							preselect = false,
+							auto_insert = false,
 						},
 					},
-					-- Don't auto-pop inside a freshly inserted empty pair ("{}" from autopairs).
-					-- Only auto-show is suppressed: <C-space> still opens the menu there,
-					-- which is what `import { | }` needs.
-					auto_show = function()
-						local line = vim.api.nvim_get_current_line()
-						local col = vim.api.nvim_win_get_cursor(0)[2]
-						local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
-						local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
-						return pairs_map[before] ~= after
-					end,
+					menu = {
+						border = "rounded",
+						max_height = is_mobile and 8 or 15,
+						draw = {
+							components = {
+								kind_icon = {
+									ellipsis = false,
+									text = function(ctx)
+										local colorify = require("krs.lsp.colorify")
+										local hex = colorify.extract_hex_color(ctx.label)
+											or colorify.extract_hex_color(ctx.label_description)
+										if hex then
+											return " ██ "
+										end
+										return colorify.get_kind_icon(ctx.kind)
+									end,
+									highlight = function(ctx)
+										local colorify = require("krs.lsp.colorify")
+										local hex = colorify.extract_hex_color(ctx.label)
+											or colorify.extract_hex_color(ctx.label_description)
+										if hex then
+											return colorify.get_or_create_color_hl(hex)
+										end
+										return colorify.get_kind_hl(ctx.kind)
+									end,
+								},
+								kind = {
+									text = function(ctx)
+										return require("krs.lsp.colorify").format_kind_label(ctx.kind)
+									end,
+								},
+							},
+							columns = {
+								{ "kind_icon" },
+								{ "label", "label_description", gap = 1 },
+								{ "kind" },
+							},
+						},
+						-- Don't auto-pop inside a freshly inserted empty pair ("{}" from autopairs).
+						-- Only auto-show is suppressed: <C-space> still opens the menu there,
+						-- which is what `import { | }` needs.
+						auto_show = function()
+							local line = vim.api.nvim_get_current_line()
+							local col = vim.api.nvim_win_get_cursor(0)[2]
+							local before, after = line:sub(col, col), line:sub(col + 1, col + 1)
+							local pairs_map = { ["{"] = "}", ["["] = "]", ["("] = ")" }
+							return pairs_map[before] ~= after
+						end,
+					},
+					documentation = { auto_show = false },
+					trigger = {
+						-- "{" and "[" open bracket-pair snippets on every keystroke otherwise
+						show_on_blocked_trigger_characters = { " ", "\n", "\t", "{", "[", "(" },
+					},
 				},
-				documentation = { auto_show = false },
-				trigger = {
-					-- "{" and "[" open bracket-pair snippets on every keystroke otherwise
-					show_on_blocked_trigger_characters = { " ", "\n", "\t", "{", "[", "(" },
+				signature = {
+					enabled = true,
+					window = { border = "rounded" },
 				},
-			},
-			signature = {
-				enabled = true,
-				window = { border = "rounded" },
-			},
-			sources = {
-				default = { "lsp", "path", "snippets", "buffer" },
-				-- Debug repl completes from the stopped frame only, never lsp/buffer words.
-				per_filetype = { ["dap-repl"] = { "dap" } },
-				providers = {
-					dap = { name = "DAP", module = "krs.lsp.dap_repl_source", async = true },
+				sources = {
+					default = { "lsp", "path", "snippets", "buffer" },
+					-- Debug repl completes from the stopped frame only, never lsp/buffer words.
+					per_filetype = { ["dap-repl"] = { "dap" } },
+					providers = {
+						dap = { name = "DAP", module = "krs.lsp.dap_repl_source", async = true },
+					},
 				},
-			},
-			fuzzy = {
-				implementation = "prefer_rust_with_warning",
-				prebuilt_binaries = {
-					download = true,
+				fuzzy = {
+					implementation = is_mobile and "lua" or "prefer_rust_with_warning",
+					prebuilt_binaries = {
+						download = not is_mobile,
+					},
+					sorts = {
+						-- always rank snippets (LSP kind 15) below real completions, regardless of fuzzy score
+						function(a, b)
+							local a_snip, b_snip = a.kind == 15, b.kind == 15
+							if a_snip == b_snip then
+								return nil
+							end
+							return b_snip
+						end,
+						"score",
+						"sort_text",
+					},
 				},
-				sorts = {
-					-- always rank snippets (LSP kind 15) below real completions, regardless of fuzzy score
-					function(a, b)
-						local a_snip, b_snip = a.kind == 15, b.kind == 15
-						if a_snip == b_snip then
-							return nil
-						end
-						return b_snip
-					end,
-					"score",
-					"sort_text",
-				},
-			},
-		},
+			}
+		end,
 		opts_extend = { "sources.default" },
 	},
 }

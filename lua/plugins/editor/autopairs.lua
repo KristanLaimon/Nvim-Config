@@ -13,8 +13,17 @@ return {
 	"windwp/nvim-autopairs",
 	event = "InsertEnter",
 	config = function()
+		local is_mobile = false
+		local env_ok, env_mod = pcall(require, "krs.core.environment")
+		if env_ok then
+			local env = env_mod.detect()
+			is_mobile = env.is_mobile or env.is_termux or env.is_proot
+		else
+			is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+		end
+
 		require("nvim-autopairs").setup({
-			check_ts = true,
+			check_ts = not is_mobile,
 			disable_filetype = { "TelescopePrompt", "vim" },
 		})
 	end,

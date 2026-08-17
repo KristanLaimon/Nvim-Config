@@ -51,11 +51,21 @@ return {
 	branch = "main",
 	build = ":TSUpdate",
 	event = { "BufReadPost", "BufNewFile" },
-	cmd = { "TSUpdate", "TSInstall" },
 	config = function()
+		local env_ok, env_mod = pcall(require, "krs.core.environment")
+		local is_mobile = false
+		if env_ok then
+			local env = env_mod.detect()
+			is_mobile = env.is_mobile or env.is_termux or env.is_proot
+		else
+			is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+		end
+
 		local ts = require("nvim-treesitter")
 		ts.setup({})
-		ts.install(parsers)
+		if not is_mobile then
+			pcall(ts.install, parsers)
+		end
 
 		-- main branch dropped the old highlight.enable config; highlighting
 		-- must be started manually per buffer. Parser names don't always
