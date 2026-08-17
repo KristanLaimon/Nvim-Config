@@ -130,4 +130,32 @@ describe("plugins.krs.pinned_tabs", function()
 		expect(#loaded).toBe(1)
 		expect(loaded[1]).toBe(file1)
 	end)
+
+	it("registers pinned buffers in bufferline.groups and focuses the first pinned tab on restore", function()
+		local file1 = path.join(root, "pinned_first.lua")
+		local file2 = path.join(root, "pinned_second.lua")
+		vim.fn.writefile({ "-- 1" }, file1)
+		vim.fn.writefile({ "-- 2" }, file2)
+
+		pinned_tabs.save_pins({ file1, file2 })
+		pinned_tabs.restore_pins({ focus = true })
+
+		-- 1. Check bufferline groups pin status (pin emoji icon state)
+		local ok_bg, groups = pcall(require, "bufferline.groups")
+		if ok_bg and groups and groups._is_pinned then
+			for _, b in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(b) then
+					local bname = path.normalize(vim.api.nvim_buf_get_name(b))
+					if bname == path.normalize(file1) or bname == path.normalize(file2) then
+						expect(groups._is_pinned({ id = b })).toBeTruthy()
+					end
+				end
+			end
+		end
+
+		-- 2. Check active window buffer is the first (leftmost) pinned tab
+		local cur_buf = vim.api.nvim_get_current_buf()
+		local cur_name = path.normalize(vim.api.nvim_buf_get_name(cur_buf))
+		expect(cur_name).toBe(path.normalize(file1))
+	end)
 end)

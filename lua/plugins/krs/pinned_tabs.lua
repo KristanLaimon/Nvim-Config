@@ -133,7 +133,17 @@ function M.toggle_pin()
 
 	-- Toggle in bufferline
 	pcall(function()
-		require("bufferline.groups").toggle_pin(bufnr)
+		local groups = require("bufferline.groups")
+		if groups then
+			if is_now_pinned then
+				groups.add_element("pinned", { id = bufnr })
+			else
+				groups.remove_element("pinned", { id = bufnr })
+			end
+			pcall(function()
+				require("bufferline.ui").refresh()
+			end)
+		end
 	end)
 
 	local fname = vim.fn.fnamemodify(abs_path, ":t")
@@ -144,8 +154,37 @@ function M.toggle_pin()
 	end
 end
 
+--- Switches focus to the given buffer in a non-sidebar code window.
+--- @param bufnr integer Buffer number to focus.
+function M.focus_buffer(bufnr)
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+	local target_win = nil
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_is_valid(win) then
+			local b = vim.api.nvim_win_get_buf(win)
+			local ft = vim.bo[b].filetype
+			local bt = vim.bo[b].buftype
+			if bt == "" and ft ~= "neo-tree" and ft ~= "qf" and ft ~= "toggleterm" and ft ~= "TaskRunner" and ft ~= "alpha" and ft ~= "dashboard" then
+				target_win = win
+				break
+			end
+		end
+	end
+	if not target_win then
+		target_win = vim.api.nvim_get_current_win()
+	end
+	pcall(function()
+		vim.api.nvim_set_current_win(target_win)
+		vim.api.nvim_win_set_buf(target_win, bufnr)
+	end)
+end
+
 --- Restores pinned tabs state into buffers and bufferline.
-function M.restore_pins()
+--- @param opts table|nil Options table, e.g. { focus = true }
+function M.restore_pins(opts)
+	opts = opts or {}
 	local pins = M.load_pins()
 	local root = project.root()
 
@@ -157,7 +196,7 @@ function M.restore_pins()
 		local is_abs = (path.is_absolute and path.is_absolute(p)) or (p:sub(1, 1) == "/" or p:match("^%a:") ~= nil)
 		local full = is_abs and path.normalize(p) or path.join(root, p)
 		if vim.fn.filereadable(full) == 1 then
-			table.insert(valid_pins, p)
+			table.insert(valid_pins, full)
 			pin_map[full] = true
 		else
 			cleaned_missing = true
@@ -166,27 +205,60 @@ function M.restore_pins()
 
 	-- Auto-prune pins file on disk if any pinned file was deleted while Neovim was closed
 	if cleaned_missing then
-		M.save_pins(valid_pins)
+		local new_pins_disk = {}
+		for _, p in ipairs(pins) do
+			local is_abs = (path.is_absolute and path.is_absolute(p)) or (p:sub(1, 1) == "/" or p:match("^%a:") ~= nil)
+			local full = is_abs and path.normalize(p) or path.join(root, p)
+			if vim.fn.filereadable(full) == 1 then
+				table.insert(new_pins_disk, p)
+			end
+		end
+		M.save_pins(new_pins_disk)
 	end
 
 	-- Ensure valid pinned files are open in listed buffers
-	for full_path, _ in pairs(pin_map) do
+	local first_pinned_buf = nil
+	for _, full_path in ipairs(valid_pins) do
 		local b = vim.fn.bufadd(full_path)
 		vim.fn.bufload(b)
 		vim.bo[b].buflisted = true
+		if not first_pinned_buf then
+			first_pinned_buf = b
+		end
 	end
 
 	-- Apply pin state in bufferline for open buffers
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(bufnr) and M.is_code_buffer(bufnr) then
-			local bpath = path.normalize(vim.api.nvim_buf_get_name(bufnr))
-			local should_be_pinned = pin_map[bpath] == true
-			pcall(function()
-				local groups = require("bufferline.groups")
-				if groups and groups.set_state then
-					groups.set_state(bufnr, "pinned", should_be_pinned)
+	pcall(function()
+		local groups = require("bufferline.groups")
+		if groups then
+			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(bufnr) and M.is_code_buffer(bufnr) then
+					local bpath = path.normalize(vim.api.nvim_buf_get_name(bufnr))
+					if pin_map[bpath] then
+						groups.add_element("pinned", { id = bufnr })
+					else
+						groups.remove_element("pinned", { id = bufnr })
+					end
 				end
+			end
+			pcall(function()
+				require("bufferline.ui").refresh()
 			end)
+		end
+	end)
+
+	-- Focus the first pinned tab (leftmost) if applicable
+	if first_pinned_buf and vim.api.nvim_buf_is_valid(first_pinned_buf) then
+		local cur_buf = vim.api.nvim_get_current_buf()
+		local cur_ft = vim.bo[cur_buf].filetype
+		local cur_name = vim.api.nvim_buf_get_name(cur_buf)
+		local no_cli_args = vim.fn.argc() == 0
+
+		local should_focus = opts.focus == true
+			or (no_cli_args and (cur_name == "" or cur_ft == "alpha" or cur_ft == "dashboard" or cur_ft == "neo-tree"))
+
+		if should_focus then
+			M.focus_buffer(first_pinned_buf)
 		end
 	end
 end
