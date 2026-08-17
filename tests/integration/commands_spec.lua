@@ -29,6 +29,13 @@ local function has_keymap(lhs, modes)
 	return false
 end
 
+pcall(function()
+	vim.api.nvim_exec_autocmds("VimEnter", { modeline = false })
+	require("plugins.krs.workspaces").setup()
+	require("plugins.krs.git_center").setup()
+	require("plugins.krs.tasks").setup()
+end)
+
 describe("user commands", function()
 	it("registers the task runner commands", function()
 		for _, name in ipairs({ "TaskRunner", "TaskMenu", "TaskRestart", "TaskKill", "TaskRunDefault" }) do

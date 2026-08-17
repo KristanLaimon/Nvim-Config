@@ -97,8 +97,8 @@ M.settings = {
 		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
 		tab_next = { "<A-l>", "<A-L>", "<M-l>", "<M-L>", "<A-Right>", "<M-Right>" },
 		--- Resize the split between left control panel and right preview pane.
-		resize_left = { "<", ",", "<M-,>", "<A-,>", "<C-w><", "<C-Left>" },
-		resize_right = { ">", ".", "<M-.>", "<A-.>", "<C-w>>", "<C-Right>" },
+		resize_left = { "<", ",", "<M-,>", "<A-,>", "<C-w><", "<C-Left>", "<C-S-Left>" },
+		resize_right = { ">", ".", "<M-.>", "<A-.>", "<C-w>>", "<C-Right>", "<C-S-Right>" },
 		--- Close the panel.
 		close = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>", "q", "<Esc>", "<esc>", "<ESC>", "<C-[>" },
 		--- Scroll the preview pane.

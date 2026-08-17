@@ -46,8 +46,10 @@ M.collisions = {}
 M.ALLOWLIST_SOURCE_PATTERNS = {
 	"lazy/core/handler/keys%.lua",
 	"config/keymaps/debug%.lua",
+	"config/keymaps/search%.lua",
 	"plugins/krs/terminal%.lua",
 	"plugins/krs/git_center%.lua",
+	"plugins/krs/tasks%.lua",
 	-- search.lua binds these before telescope loads (see telescope.lua:170-171);
 	-- telescope's own setup() rebinds the same keys to the same underlying
 	-- functions (_G.FindFilesGitignore / _G.FindFilesNoIgnore) once it's up.

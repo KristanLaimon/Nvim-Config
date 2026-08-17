@@ -226,17 +226,66 @@ end, { noremap = true, silent = true, nowait = true, desc = "Close Current Tab /
 
 local step = M.settings.resize_step
 local resize_modes = { "n", "i", "t" }
+
+--- Performs directional window resizing so Ctrl+Arrow moves the separator in the direction of the arrow.
+--- @param direction "left"|"right"|"up"|"down"
+local function resize_dir(direction)
+	return function()
+		local win = vim.api.nvim_get_current_win()
+		local is_float = vim.api.nvim_win_get_config(win).relative ~= ""
+		if is_float then
+			local cfg = vim.api.nvim_win_get_config(win)
+			if direction == "right" then
+				pcall(vim.api.nvim_win_set_width, win, cfg.width + step)
+			elseif direction == "left" then
+				pcall(vim.api.nvim_win_set_width, win, math.max(1, cfg.width - step))
+			elseif direction == "up" then
+				pcall(vim.api.nvim_win_set_height, win, math.max(1, cfg.height - step))
+			elseif direction == "down" then
+				pcall(vim.api.nvim_win_set_height, win, cfg.height + step)
+			end
+			return
+		end
+
+		if direction == "right" then
+			if vim.fn.winnr("l") ~= vim.fn.winnr() then
+				pcall(vim.cmd, "vertical resize +" .. step)
+			else
+				pcall(vim.cmd, "vertical resize -" .. step)
+			end
+		elseif direction == "left" then
+			if vim.fn.winnr("l") ~= vim.fn.winnr() then
+				pcall(vim.cmd, "vertical resize -" .. step)
+			else
+				pcall(vim.cmd, "vertical resize +" .. step)
+			end
+		elseif direction == "down" then
+			if vim.fn.winnr("j") ~= vim.fn.winnr() then
+				pcall(vim.cmd, "resize +" .. step)
+			else
+				pcall(vim.cmd, "resize -" .. step)
+			end
+		elseif direction == "up" then
+			if vim.fn.winnr("j") ~= vim.fn.winnr() then
+				pcall(vim.cmd, "resize -" .. step)
+			else
+				pcall(vim.cmd, "resize +" .. step)
+			end
+		end
+	end
+end
+
 for _, key in ipairs({ "<C-Right>", "<C-S-Right>" }) do
-	vim.keymap.set(resize_modes, key, "<Cmd>vertical resize -" .. step .. "<CR>", opts("Make window narrower"))
+	vim.keymap.set(resize_modes, key, resize_dir("right"), opts("Resize window right"))
 end
 for _, key in ipairs({ "<C-Left>", "<C-S-Left>" }) do
-	vim.keymap.set(resize_modes, key, "<Cmd>vertical resize +" .. step .. "<CR>", opts("Make window wider"))
+	vim.keymap.set(resize_modes, key, resize_dir("left"), opts("Resize window left"))
 end
 for _, key in ipairs({ "<C-Up>", "<C-S-Up>" }) do
-	vim.keymap.set(resize_modes, key, "<Cmd>resize +" .. step .. "<CR>", opts("Make window taller"))
+	vim.keymap.set(resize_modes, key, resize_dir("up"), opts("Resize window up"))
 end
 for _, key in ipairs({ "<C-Down>", "<C-S-Down>" }) do
-	vim.keymap.set(resize_modes, key, "<Cmd>resize -" .. step .. "<CR>", opts("Make window shorter"))
+	vim.keymap.set(resize_modes, key, resize_dir("down"), opts("Resize window down"))
 end
 
 --- Buffer cycling is disabled inside neo-tree, where those keys navigate the tree.

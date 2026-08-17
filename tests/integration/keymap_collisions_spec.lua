@@ -28,14 +28,27 @@ local t = require("krsnvim.test")
 local describe, it, expect = t.describe, t.it, t.expect
 
 describe("keymap collisions after a real startup", function()
-	it("has no un-allowlisted mode+lhs collisions once VimEnter has fired", function()
+	it("has no un-allowlisted mode+lhs collisions once VimEnter has fired and plugins open", function()
 		vim.api.nvim_exec_autocmds("VimEnter", { modeline = false })
 		require("plugins.krs.git_center").setup()
+		require("plugins.krs.hover_links").setup()
+
+		-- Create a markdown buffer and trigger FileType autocmd
+		local buf = vim.api.nvim_create_buf(true, false)
+		vim.api.nvim_buf_set_name(buf, "test_doc.md")
+		vim.bo[buf].filetype = "markdown"
+		vim.api.nvim_exec_autocmds("FileType", { buffer = buf, modeline = false })
+
+		-- Open and close krsvim wiki index modal
+		local wiki = require("plugins.krs.wiki_modal")
+		wiki.setup()
+		wiki.open()
+		wiki.close()
 
 		local registry = require("krs.core.keymap_registry")
 		local summary = {}
 		for _, c in ipairs(registry.collisions) do
-			table.insert(summary, string.format("%s (%s): %s <-> %s", c.lhs, c.mode, c.first_source, c.second_source))
+			table.insert(summary, string.format("%s (%s): %s (%s) <-> %s (%s)", c.lhs, c.mode, c.first_source, c.first_desc or "no desc", c.second_source, c.second_desc or "no desc"))
 		end
 
 		expect(summary).toEqual({})

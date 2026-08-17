@@ -216,6 +216,7 @@ function M.open()
 
 	-- Create Left Index Buffer & Win
 	state.left_buf = ui.scratch_buffer({ modifiable = true, filetype = "krsdocindex" })
+	vim.b[state.left_buf].krs_wiki_modal = true
 	local index_lines = {}
 	for _, item in ipairs(state.items) do
 		table.insert(index_lines, item.title)
@@ -238,6 +239,7 @@ function M.open()
 
 	-- Create Right Document Reader Buffer & Win
 	state.right_buf = ui.scratch_buffer({ modifiable = true, filetype = "markdown" })
+	vim.b[state.right_buf].krs_wiki_modal = true
 	state.right_win = vim.api.nvim_open_win(state.right_buf, false, {
 		relative = "editor",
 		row = top,
@@ -371,8 +373,52 @@ function M.open()
 		follow_link_in_reader()
 	end
 
+--- Resizes the split ratio between left index pane and right reader pane.
+--- @param delta number Fraction to adjust left ratio (e.g. -0.03 or 0.03).
+function M.resize_split(delta)
+	if not state.is_open or not state.left_win or not vim.api.nvim_win_is_valid(state.left_win) then
+		return
+	end
+
+	local cur_ratio = M.settings.left_width_ratio or 0.35
+	local new_ratio = math.max(0.15, math.min(0.70, cur_ratio + delta))
+	M.settings.left_width_ratio = tonumber(string.format("%.3f", new_ratio))
+
+	local editor_w = vim.o.columns
+	local editor_h = vim.o.lines - 2
+
+	local modal_w = math.floor(editor_w * 0.88)
+	local modal_h = math.floor(editor_h * 0.85)
+
+	local left_w = math.max(M.settings.min_left_width, math.floor(modal_w * M.settings.left_width_ratio))
+	local right_w = modal_w - left_w - 3
+
+	local top = math.floor((editor_h - modal_h) / 2)
+	local left = math.floor((editor_w - modal_w) / 2)
+
+	pcall(vim.api.nvim_win_set_config, state.left_win, {
+		relative = "editor",
+		row = top,
+		col = left,
+		width = left_w,
+		height = modal_h,
+	})
+
+	if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
+		pcall(vim.api.nvim_win_set_config, state.right_win, {
+			relative = "editor",
+			row = top,
+			col = left + left_w + 2,
+			width = right_w,
+			height = modal_h,
+		})
+	end
+end
+
 	local function map_keys(buf, win)
-		local opts = { noremap = true, silent = true, buffer = buf, nowait = true }
+		local function make_opts(desc)
+			return { noremap = true, silent = true, buffer = buf, nowait = true, desc = desc }
+		end
 
 		-- Close keys (Esc/q plus whatever opens the modal, so it toggles shut too)
 		local close_keys = { "q", "<Esc>" }
@@ -380,7 +426,7 @@ function M.open()
 			table.insert(close_keys, k)
 		end
 		for _, k in ipairs(close_keys) do
-			vim.keymap.set({ "n", "v", "i", "t" }, k, M.close, opts)
+			vim.keymap.set({ "n", "v", "i", "t" }, k, M.close, make_opts("Close wiki modal"))
 		end
 
 		-- Panel Switch
@@ -394,39 +440,62 @@ function M.open()
 					vim.api.nvim_set_current_win(state.left_win)
 				end
 			end
-		end, opts)
+		end, make_opts("Switch wiki modal panel"))
 
 		vim.keymap.set("n", "<C-h>", function()
 			if state.left_win and vim.api.nvim_win_is_valid(state.left_win) then
 				vim.api.nvim_set_current_win(state.left_win)
 			end
-		end, opts)
+		end, make_opts("Focus left wiki index panel"))
 
 		vim.keymap.set("n", "<C-l>", function()
 			if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
 				vim.api.nvim_set_current_win(state.right_win)
 			end
-		end, opts)
+		end, make_opts("Focus right document reader panel"))
+
+		-- Split Resizing (<C-Left> / <C-Right>, <C-S-Left> / <C-S-Right>, < / >)
+		for _, k in ipairs({ "<C-Left>", "<C-S-Left>" }) do
+			vim.keymap.set({ "n", "v", "i", "t" }, k, function()
+				M.resize_split(-0.03)
+			end, make_opts("Resize wiki split left"))
+		end
+		vim.keymap.set("n", "<", function()
+			M.resize_split(-0.03)
+		end, make_opts("Resize wiki split left"))
+
+		for _, k in ipairs({ "<C-Right>", "<C-S-Right>" }) do
+			vim.keymap.set({ "n", "v", "i", "t" }, k, function()
+				M.resize_split(0.03)
+			end, make_opts("Resize wiki split right"))
+		end
+		vim.keymap.set("n", ">", function()
+			M.resize_split(0.03)
+		end, make_opts("Resize wiki split right"))
 
 		-- <C-f> mirrors "/": both start native Neovim search in this pane
 		-- (repeat matches with n/N). Vim's own <C-f> page-scroll isn't
 		-- useful in these small panes, so it's free to reuse.
-		vim.keymap.set("n", "<C-f>", "/", opts)
+		vim.keymap.set("n", "<C-f>", "/", make_opts("Search within wiki panel"))
 	end
 
 	map_keys(state.left_buf, state.left_win)
 	map_keys(state.right_buf, state.right_win)
 
 	-- Link follow keymaps inside right reader buffer
-	local reader_opts = { noremap = true, silent = true, buffer = state.right_buf, nowait = true }
-	vim.keymap.set("n", "<CR>", follow_link_in_reader, reader_opts)
-	vim.keymap.set("n", "<C-k>", follow_link_in_reader, reader_opts)
-	vim.keymap.set("n", "gx", follow_link_in_reader, reader_opts)
-	vim.keymap.set("n", "K", follow_link_in_reader, reader_opts)
-	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, reader_opts)
+	local function reader_opts(desc)
+		return { noremap = true, silent = true, buffer = state.right_buf, nowait = true, desc = desc }
+	end
+	vim.keymap.set("n", "<CR>", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
+	vim.keymap.set("n", "<C-k>", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
+	vim.keymap.set("n", "gx", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
+	vim.keymap.set("n", "K", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
+	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, reader_opts("Follow wiki link at mouse click"))
 
 	-- Index click selection keymap in left buffer
-	local left_opts = { noremap = true, silent = true, buffer = state.left_buf, nowait = true }
+	local function left_opts(desc)
+		return { noremap = true, silent = true, buffer = state.left_buf, nowait = true, desc = desc }
+	end
 	local function select_index_at_mouse()
 		local mouse_pos = vim.fn.getmousepos()
 		if mouse_pos and mouse_pos.winid == state.left_win and vim.api.nvim_win_is_valid(mouse_pos.winid) then
@@ -438,7 +507,7 @@ function M.open()
 			end
 		end
 	end
-	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", select_index_at_mouse, left_opts)
+	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", select_index_at_mouse, left_opts("Select wiki index item at mouse click"))
 end
 
 function M.setup()

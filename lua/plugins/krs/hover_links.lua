@@ -309,15 +309,17 @@ function M.attach_hover_keymaps(bufnr, winid)
 		return
 	end
 
-	local opts = { buffer = bufnr, noremap = true, silent = true, nowait = true }
+	local function make_opts(desc)
+		return { buffer = bufnr, noremap = true, silent = true, nowait = true, desc = desc }
+	end
 
-	vim.keymap.set("n", "<CR>", M.follow_link_at_cursor, opts)
-	vim.keymap.set("n", "<C-k>", M.follow_link_at_cursor, opts)
-	vim.keymap.set("n", "gx", M.follow_link_at_cursor, opts)
-	vim.keymap.set("n", "K", M.follow_link_at_cursor, opts)
-	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, opts)
-	vim.keymap.set("n", "q", M.close_hover, opts)
-	vim.keymap.set("n", "<Esc>", M.close_hover, opts)
+	vim.keymap.set("n", "<CR>", M.follow_link_at_cursor, make_opts("Follow hover link"))
+	vim.keymap.set("n", "<C-k>", M.follow_link_at_cursor, make_opts("Follow hover link"))
+	vim.keymap.set("n", "gx", M.follow_link_at_cursor, make_opts("Follow hover link"))
+	vim.keymap.set("n", "K", M.follow_link_at_cursor, make_opts("Follow hover link"))
+	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, make_opts("Follow hover link at mouse click"))
+	vim.keymap.set("n", "q", M.close_hover, make_opts("Close hover float"))
+	vim.keymap.set("n", "<Esc>", M.close_hover, make_opts("Close hover float"))
 end
 
 --- Shows hover or focuses floating window if already open.
@@ -352,19 +354,24 @@ function M.setup()
 
 	local augroup = vim.api.nvim_create_augroup("KrsHoverLinks", { clear = true })
 
-	-- Attach keymaps for markdown and text files
+	-- Attach keymaps for markdown and text files (skip scratch/nofile/modal buffers)
 	vim.api.nvim_create_autocmd("FileType", {
 		group = augroup,
 		pattern = { "markdown", "text", "gitcommit" },
 		callback = function(ev)
-			local opts = { buffer = ev.buf, noremap = true, silent = true }
+			if vim.bo[ev.buf].buftype ~= "" or vim.b[ev.buf].krs_wiki_modal then
+				return
+			end
+			local function make_opts(desc)
+				return { buffer = ev.buf, noremap = true, silent = true, desc = desc }
+			end
 			vim.keymap.set("n", "<CR>", function()
 				if not M.follow_link_at_cursor() then
 					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
 				end
-			end, opts)
-			vim.keymap.set("n", "gx", M.follow_link_at_cursor, opts)
-			vim.keymap.set("n", "<C-k>", M.follow_link_at_cursor, opts)
+			end, make_opts("Follow link under cursor"))
+			vim.keymap.set("n", "gx", M.follow_link_at_cursor, make_opts("Follow link under cursor"))
+			vim.keymap.set("n", "<C-k>", M.follow_link_at_cursor, make_opts("Follow link under cursor"))
 		end,
 	})
 
