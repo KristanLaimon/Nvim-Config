@@ -269,26 +269,7 @@ return {
 			require("mason").setup()
 			require("mason-lspconfig").setup({
 				automatic_installation = false,
-				ensure_installed = {
-					"intelephense",
-					"lua_ls",
-					"jsonls",
-					"taplo",
-					"yamlls",
-					"biome",
-					"eslint",
-					"svelte",
-					"astro",
-					"html",
-					"cssls",
-					"tailwindcss",
-					"emmet_ls",
-					"omnisharp",
-					"lemminx",
-					"dockerls",
-					"gopls",
-					"bashls",
-				},
+				ensure_installed = {},
 				handlers = {
 					function(server_name)
 						if server_name == "vtsls" or server_name == "ts_ls" or server_name == "tsserver" then
@@ -303,6 +284,20 @@ return {
 					end,
 				},
 			})
+
+			-- 2. Setup configured servers in opts.servers
+			for server_name, config in pairs(opts.servers) do
+				if not (server_name == "vtsls" or server_name == "ts_ls" or server_name == "tsserver") then
+					if config.enabled ~= false then
+						local cfg = vim.deepcopy(config)
+						if has_blink then
+							cfg.capabilities = blink.get_lsp_capabilities(cfg.capabilities)
+						end
+						vim.lsp.config(server_name, cfg)
+						vim.lsp.enable(server_name)
+					end
+				end
+			end
 
 			vim.diagnostic.config({
 				virtual_text = {

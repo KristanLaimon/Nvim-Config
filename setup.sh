@@ -1,98 +1,308 @@
 #!/usr/bin/env bash
-# setup.sh - Automated dependency installer for krsnvim (Linux / WSL / Git Bash)
-# Idempotent: Safe to run multiple times, only installs missing packages.
+# ==============================================================================
+# setup.sh - System Dependency & Toolchain Installer for KRS Neovim
+# Supports: Termux (Android), Debian/Ubuntu/WSL, Fedora, Arch, macOS, Alpine
+# ==============================================================================
 
 set -e
 
-echo -e "\033[1;36m🦊 Checking dependencies for krsnvim...\033[0m"
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[1;36m'
+NC='\033[0m' # No Color
 
-# Required CLI tools for krsnvim (excluding Mason / internal Neovim plugins)
-# Format: "command:package_name:alternative_command"
-COMMANDS=(
-  "nvim:neovim"
-  "git:git"
-  "rg:ripgrep"
-  "fd:fd-find:fdfind"
-  "chafa:chafa"
-  "gcc:gcc"
-  "node:nodejs-lts:nodejs"
-  "bun:bun"
-  "go:golang:go"
-  "dotnet:dotnet-sdk:dotnet"
-)
+echo -e "${CYAN}============================================================${NC}"
+echo -e "${CYAN} 🦊 KRS Neovim System Dependency & Toolchain Installer ${NC}"
+echo -e "${CYAN}============================================================${NC}"
 
-MISSING_CMDS=()
-MISSING_PKGS=()
+# Detect OS & Package Manager
+PKG_MANAGER=""
+IS_TERMUX=false
+NEED_SUDO=true
+
+if [ "$EUID" -eq 0 ]; then
+  NEED_SUDO=false
+fi
+
+if [ -n "$TERMUX_VERSION" ] || [ -d "/data/data/com.termux" ] || [[ "$PREFIX" == *"com.termux"* ]]; then
+  IS_TERMUX=true
+  if command -v pkg >/dev/null 2>&1; then
+    PKG_MANAGER="pkg"
+    NEED_SUDO=false
+    echo -e "${GREEN}[+] Environment detected: Termux Native (Android)${NC}"
+  elif command -v apt-get >/dev/null 2>&1; then
+    PKG_MANAGER="apt"
+    echo -e "${GREEN}[+] Environment detected: Ubuntu PRoot/Chroot on Android Termux (apt)${NC}"
+  fi
+elif command -v apt-get >/dev/null 2>&1; then
+  PKG_MANAGER="apt"
+  echo -e "${GREEN}[+] Environment detected: Debian / Ubuntu / PRoot / WSL (apt)${NC}"
+elif command -v dnf >/dev/null 2>&1; then
+  PKG_MANAGER="dnf"
+  echo -e "${GREEN}[+] Environment detected: Fedora / RHEL (dnf)${NC}"
+elif command -v pacman >/dev/null 2>&1; then
+  PKG_MANAGER="pacman"
+  echo -e "${GREEN}[+] Environment detected: Arch Linux (pacman)${NC}"
+elif command -v brew >/dev/null 2>&1; then
+  PKG_MANAGER="brew"
+  NEED_SUDO=false
+  echo -e "${GREEN}[+] Environment detected: macOS (brew)${NC}"
+elif command -v apk >/dev/null 2>&1; then
+  PKG_MANAGER="apk"
+  echo -e "${GREEN}[+] Environment detected: Alpine Linux (apk)${NC}"
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "mingw"* ]]; then
+  echo -e "${YELLOW}[*] Windows environment detected. Delegating to setup.ps1...${NC}"
+  if command -v powershell.exe >/dev/null 2>&1; then
+    exec powershell.exe -ExecutionPolicy Bypass -File "./setup.ps1"
+  else
+    echo -e "${RED}[!] powershell.exe not found.${NC}"
+    exit 1
+  fi
+else
+  echo -e "${RED}[!] Unable to detect supported package manager.${NC}"
+  exit 1
+fi
+
+run_cmd() {
+  if [ "$NEED_SUDO" = true ] && [ "$EUID" -ne 0 ]; then
+    if [ -n "$SUDO_PASS" ]; then
+      echo "$SUDO_PASS" | sudo -S "$@"
+    else
+      sudo "$@"
+    fi
+  else
+    "$@"
+  fi
+}
 
 check_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
-# 1. Check existing installations
-for entry in "${COMMANDS[@]}"; do
-  IFS=":" read -r cmd pkg alt_cmd <<< "$entry"
-  if check_cmd "$cmd" || ([ -n "$alt_cmd" ] && check_cmd "$alt_cmd"); then
-    echo -e "  - \033[0;90m$pkg ($cmd): Already installed\033[0m"
-  else
-    echo -e "  - \033[1;33m$pkg ($cmd): Missing\033[0m"
-    MISSING_CMDS+=("$cmd")
-    MISSING_PKGS+=("$pkg")
+# Component installer functions
+install_core() {
+  echo -e "\n${BLUE}[*] Installing Core Utilities (neovim, git, ripgrep, fd, compiler, chafa)...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y neovim git ripgrep fd clang chafa
+      ;;
+    apt)
+      run_cmd apt-get update
+      run_cmd apt-get install -y neovim git ripgrep fd-find build-essential chafa
+      ;;
+    dnf)
+      run_cmd dnf install -y neovim git ripgrep fd-find gcc gcc-c++ chafa
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed neovim git ripgrep fd gcc chafa
+      ;;
+    brew)
+      run_cmd brew install neovim git ripgrep fd gcc chafa
+      ;;
+    apk)
+      run_cmd apk add neovim git ripgrep fd build-base chafa
+      ;;
+  esac
+}
+
+install_node() {
+  echo -e "\n${BLUE}[*] Installing Node.js & Web Toolchain (node, npm, prettier)...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y nodejs-lts
+      ;;
+    apt)
+      run_cmd apt-get update
+      run_cmd apt-get install -y nodejs npm
+      ;;
+    dnf)
+      run_cmd dnf install -y nodejs npm
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed nodejs npm
+      ;;
+    brew)
+      run_cmd brew install node
+      ;;
+    apk)
+      run_cmd apk add nodejs npm
+      ;;
+  esac
+
+  if check_cmd npm; then
+    echo -e "${BLUE}[*] Installing global npm formatters (prettier, prettierd)...${NC}"
+    run_cmd npm install -g prettier prettierd 2>/dev/null || true
   fi
+}
+
+install_go() {
+  echo -e "\n${BLUE}[*] Installing Go Toolchain...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y golang
+      ;;
+    apt)
+      run_cmd apt-get update
+      run_cmd apt-get install -y golang-go
+      ;;
+    dnf)
+      run_cmd dnf install -y golang
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed go
+      ;;
+    brew)
+      run_cmd brew install go
+      ;;
+    apk)
+      run_cmd apk add go
+      ;;
+  esac
+}
+
+install_python() {
+  echo -e "\n${BLUE}[*] Installing Python Toolchain...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y python
+      ;;
+    apt)
+      run_cmd apt-get update
+      run_cmd apt-get install -y python3 python3-pip
+      ;;
+    dnf)
+      run_cmd dnf install -y python3 python3-pip
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed python python-pip
+      ;;
+    brew)
+      run_cmd brew install python3
+      ;;
+    apk)
+      run_cmd apk add python3 py3-pip
+      ;;
+  esac
+}
+
+install_lua_tools() {
+  echo -e "\n${BLUE}[*] Installing Lua tools (stylua)...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y stylua 2>/dev/null || true
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed stylua 2>/dev/null || true
+      ;;
+    brew)
+      run_cmd brew install stylua 2>/dev/null || true
+      ;;
+    *)
+      if check_cmd cargo; then
+        cargo install stylua 2>/dev/null || true
+      fi
+      ;;
+  esac
+}
+
+install_all() {
+  install_core
+  install_node
+  install_go
+  install_python
+  install_lua_tools
+}
+
+# Menu / CLI flags parsing
+AUTO_ALL=false
+SUDO_PASS="${SUDO_PASS:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --sudo-pass)
+      SUDO_PASS="$2"
+      shift 2
+      ;;
+    --all|-y|--yes)
+      AUTO_ALL=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
 done
 
-# 2. If nothing missing, report synced and exit
-if [ ${#MISSING_CMDS[@]} -eq 0 ]; then
-  echo -e "\n\033[1;32m[+] Nothing to install: all dependencies are synced!\033[0m"
-  exit 0
+if [ ! -t 0 ]; then
+  AUTO_ALL=true
 fi
 
-echo -e "\n\033[1;33m[*] Missing dependencies detected: ${MISSING_CMDS[*]}\033[0m"
-
-# 3. Handle Windows Git Bash / MSYS environment
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "mingw"* ]]; then
-  echo "[*] Windows environment detected. Delegating to PowerShell setup..."
-  if command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -ExecutionPolicy Bypass -File "./setup.ps1"
-  elif command -v scoop >/dev/null 2>&1; then
-    scoop bucket add main 2>/dev/null || true
-    scoop bucket add extras 2>/dev/null || true
-    for pkg in "${MISSING_PKGS[@]}"; do
-      case "$pkg" in
-        fd-find) pkg="fd" ;;
-        golang) pkg="go" ;;
-      esac
-      scoop install "$pkg" || true
-    done
-  else
-    echo "[!] PowerShell or Scoop not found in PATH."
-    exit 1
-  fi
-  exit 0
-fi
-
-# 4. Install Bun via official script if missing on Linux/macOS
-if ! check_cmd bun; then
-  echo "[*] Installing Bun runtime..."
-  curl -fsSL https://bun.sh/install | bash || true
-fi
-
-# 5. Linux / WSL package managers
-if command -v apt-get >/dev/null 2>&1; then
-  echo "[*] Debian/Ubuntu/WSL detected. Running apt install..."
-  sudo apt-get update
-  sudo apt-get install -y neovim git ripgrep fd-find chafa build-essential nodejs golang-go dotnet-sdk-8.0 || true
-elif command -v dnf >/dev/null 2>&1; then
-  echo "[*] Fedora detected. Running dnf install..."
-  sudo dnf install -y neovim git ripgrep fd-find chafa gcc nodejs golang dotnet-sdk-8.0 || true
-elif command -v pacman >/dev/null 2>&1; then
-  echo "[*] Arch Linux detected. Running pacman install..."
-  sudo pacman -Sy --needed neovim git ripgrep fd chafa gcc nodejs go dotnet-sdk || true
-elif command -v brew >/dev/null 2>&1; then
-  echo "[*] macOS detected. Running brew install..."
-  brew install neovim git ripgrep fd chafa gcc node bun go dotnet || true
+if [ "$AUTO_ALL" = true ]; then
+  echo -e "${YELLOW}[*] Non-interactive / --all mode selected. Installing all dependencies...${NC}"
+  install_all
 else
-  echo -e "\033[1;31m[!] Package manager not detected. Please install missing tools manually: ${MISSING_CMDS[*]}\033[0m"
-  exit 1
+  echo -e "\n${YELLOW}Select component toolchains to install from official package manager sources:${NC}\n"
+  echo "  1) ALL Recommended Dependencies (Core, Node/npm, Go, Python, Lua tools) [Default]"
+  echo "  2) Core Utilities only (neovim, git, ripgrep, fd, compiler, chafa)"
+  echo "  3) Node.js & Web Toolchain (node, npm, prettier)"
+  echo "  4) Go Toolchain (go)"
+  echo "  5) Python Toolchain (python3, pip)"
+  echo "  6) Custom Selection (choose step-by-step)"
+  echo "  Q) Quit"
+  echo ""
+  read -p "Enter choice [1-6, Q] (Default: 1): " CHOICE
+  CHOICE="${CHOICE:-1}"
+
+  case "$CHOICE" in
+    1|[aA][lL][lL])
+      install_all
+      ;;
+    2)
+      install_core
+      ;;
+    3)
+      install_node
+      ;;
+    4)
+      install_go
+      ;;
+    5)
+      install_python
+      ;;
+    6)
+      read -p "Install Core Utilities (neovim, git, ripgrep, fd, compiler)? [Y/n]: " C_CORE
+      [[ "${C_CORE:-y}" =~ ^[Yy] ]] && install_core
+
+      read -p "Install Node.js & npm (for JS/TS/HTML/CSS LSPs & Prettier)? [Y/n]: " C_NODE
+      [[ "${C_NODE:-y}" =~ ^[Yy] ]] && install_node
+
+      read -p "Install Go (for Go LSP & tools)? [Y/n]: " C_GO
+      [[ "${C_GO:-y}" =~ ^[Yy] ]] && install_go
+
+      read -p "Install Python (for Python LSPs & tools)? [Y/n]: " C_PY
+      [[ "${C_PY:-y}" =~ ^[Yy] ]] && install_python
+
+      read -p "Install Stylua / Lua tools? [Y/n]: " C_LUA
+      [[ "${C_LUA:-y}" =~ ^[Yy] ]] && install_lua_tools
+      ;;
+    [qQ]*)
+      echo "Exiting setup."
+      exit 0
+      ;;
+    *)
+      echo "Invalid selection. Running default full installation..."
+      install_all
+      ;;
+  esac
 fi
 
-echo -e "\n\033[1;32m[+] Setup complete! All dependencies are synced.\033[0m"
+echo -e "\n${GREEN}============================================================${NC}"
+echo -e "${GREEN} ✅ System Dependency Setup Complete! ${NC}"
+echo -e "${GREEN}============================================================${NC}"
+echo -e "You can now launch Neovim."
+echo -e "Inside Neovim, if you wish to install additional LSPs or formatters, run:"
+echo -e "  ${CYAN}:KrsInstallAll${NC}"
+echo ""

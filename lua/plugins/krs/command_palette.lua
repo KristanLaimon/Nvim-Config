@@ -86,9 +86,11 @@ M.commands = {
 	},
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
-	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },
-	{ name = "📦 Server & Package Manager (Mason)", cmd = "Mason", category = "LSP" },
-	{ name = "📦 Nuget Package Manager (C#)", cmd = "NugetManager", category = "LSP" },
+	{ name = "📦 Install Dependencies & Toolchains (Interactive Toggle UI)", cmd = "KrsInstallDependencies", category = "Setup" },
+	{ name = "🔑 Run System Setup (Sudo/Root UI Password Prompt)", cmd = "KrsSystemSetup", category = "Setup" },
+	{ name = "⚡ Fast Automated Batch Installer", cmd = "KrsInstallAll", category = "Setup" },
+	{ name = "⚙️ Check System & LSP Installation Health", cmd = "KrsSetupStatus", category = "Setup" },
+	{ name = "🔄 Reset System Setup Completion State", cmd = "KrsSetupReset", category = "Setup" },
 
 	-- --------------------------------------------------------------------------
 	-- 🎨 UI & Configuration

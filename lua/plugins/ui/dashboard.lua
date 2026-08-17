@@ -1,6 +1,8 @@
 -- ============================================================================
--- CONFIGURATION
+-- PLUGINS: Starter Dashboard (alpha-nvim) with Environment Detection & Responsive Banners
 -- ============================================================================
+
+local env_lib = require("krs.core.environment")
 
 local settings = {
 	--- Colour of the ASCII banner. Re-applied on every colorscheme change.
@@ -8,16 +10,17 @@ local settings = {
 
 	--- Menu entries, in order: { key, icon, label, command }.
 	buttons = {
-		{ "f", "", "File Explorer (Desktop)", ":TelescopeFileBrowserDesktop<CR>" },
-		{ "p", "", "Recent projects", ":Telescope projects<CR>" },
-		{ "w", "", "Wiki (Documentation)", ":KrsWiki<CR>" },
-		{ "e", "", "Plugins/Extensions", ":Lazy<CR>" },
-		{ "m", "", "Lsps/Languages", ":Mason<CR>" },
-		{ "q", "", "Quit", ":qa<CR>" },
+		{ "f", "📁", "File Explorer", ":TelescopeFileBrowserDesktop<CR>" },
+		{ "p", "💼", "Recent projects", ":Telescope projects<CR>" },
+		{ "s", "📦", "Dependencies & Toolchains", ":KrsInstallDependencies<CR>" },
+		{ "w", "📚", "Wiki & Docs (Ctrl+Shift+D)", ":KrsWiki<CR>" },
+		{ "e", "🧩", "Plugins & Extensions", ":Lazy<CR>" },
+		{ "m", "⚙️", "Server Manager (Mason)", ":Mason<CR>" },
+		{ "q", "🚪", "Quit", ":qa<CR>" },
 	},
 
 	--- WSL entry, inserted at this position when WSL is available.
-	wsl_button = { "l", "", "File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>" },
+	wsl_button = { "l", "🐧", "File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>" },
 	wsl_button_position = 4,
 
 	--- Filetypes that must never be replaced by the dashboard.
@@ -30,25 +33,53 @@ return {
 	config = function()
 		local alpha = require("alpha")
 		local dashboard = require("alpha.themes.dashboard")
+		local env = env_lib.detect()
 
-		dashboard.section.header.val = {
-			[[             /\     /\                                                     /\  /\								   ]],
-			[[            ( ..   .. )                                                   ( .. ..)							  ]],
-			[[             \ Y  /                                                        \ Y  /								  ]],
-			[[          /\_/\   /\_/\    _  __ ____  ____   _   _ _   _ ___ __  __     /\_/\/\_/\					      ]],
-			[[         (   o o     o o  | |/ /|  _ \/ ___| | \ | | | | |_ _|  \/  |   (o o   o o)								]],
-			[[          \   ~   ~   /   | ' / | |_) \___ \ |  \| | | | || || |\/| |    \   ~  ~ /								]],
-			[[           \___^___/      | . \ |  _ < ___) || |\  | |_| || || |  | |     \___^__/							  ]],
-			[[                          |_|\_\|_| \_\____/ |_| \_|\___/|___|_|  |_|                             ]],
-			[[           /\_/\                                                              /\_/\               ]],
-			[[          ( -.- )~                                                           ~( -.- )             ]],
-			[[          (____)__)                                                          (____)__)            ]],
-			[[           |  | |           "Foxes can be coders too!" - Random fox             |  | |            ]],
-			[[           |  | |                                                             |  | |              ]],
-			[[           /\_/\                                                              /\_/\               ]],
-			[[          ( >.< )                        (>.<)                               ( >.< )              ]],
-			[[           ^---^                                                              ^---^               ]],
-		}
+		--- Returns an ASCII banner adapted to the current terminal width & environment.
+		local function get_responsive_header()
+			local cols = vim.o.columns or 80
+			if cols < 68 or env.is_mobile then
+				return {
+					[[       /\_/\    K R S   N E O V I M      ]],
+					[[      ( o.o )   "Foxes can be coders too!"]],
+					[[       > ^ <                               ]],
+					"      [ " .. env.label .. " ]",
+				}
+			elseif cols < 98 then
+				return {
+					[[   /\_/\   _  __ ____  ____  _   _ _   _ ___ __  __   /\_/\   ]],
+					[[  ( o o ) | |/ /|  _ \/ ___|| \ | | | | |_ _|  \/  | ( o o )  ]],
+					[[   \ ~ /  | ' / | |_) \___ \|  \| | | | || || |\/| |  \ ~ /   ]],
+					[[    ^--^  |_|\_\|_| \_\____/|_|\_|\___/|___|_|  |_|   ^--^    ]],
+					[[               "Foxes can be coders too!"                     ]],
+					"             📱 Environment: " .. env.label,
+				}
+			else
+				return {
+					[[             /\     /\                                                     /\  /\             ]],
+					[[            ( ..   .. )                                                   ( .. ..)            ]],
+					[[             \ Y  /                                                        \ Y  /             ]],
+					[[          /\_/\   /\_/\    _  __ ____  ____   _   _ _   _ ___ __  __     /\_/\/\_/\           ]],
+					[[         (   o o     o o  | |/ /|  _ \/ ___| | \ | | | | |_ _|  \/  |   (o o   o o)           ]],
+					[[          \   ~   ~   /   | ' / | |_) \___ \ |  \| | | | || || |\/| |    \   ~  ~ /           ]],
+					[[           \___^___/      | . \ |  _ < ___) || |\  | |_| || || |  | |     \___^__/            ]],
+					[[                          |_|\_\|_| \_\____/ |_| \_|\___/|___|_|  |_|                         ]],
+					[[           /\_/\                                                              /\_/\           ]],
+					[[          ( -.- )~                "Foxes can be coders too!"                 ~( -.- )         ]],
+					"          (____)__)              💻 Environment: " .. env.label .. "          (____)__)",
+				}
+			end
+		end
+
+		dashboard.section.header.val = get_responsive_header()
+
+		-- Dynamic header update on window resize (e.g. rotating phone screen or resizing split)
+		vim.api.nvim_create_autocmd("VimResized", {
+			callback = function()
+				dashboard.section.header.val = get_responsive_header()
+				pcall(alpha.redraw)
+			end,
+		})
 
 		-- `:colorscheme` clears user-defined groups, so the banner colour is
 		-- re-applied whenever the theme changes.
@@ -62,7 +93,8 @@ return {
 		--- Turns a settings entry into an alpha button.
 		--- @param entry table `{ key, icon, label, command }`
 		local function make_button(entry)
-			return dashboard.button(entry[1], entry[2] .. "  " .. entry[3], entry[4])
+			local icon = entry[2] ~= "" and (entry[2] .. "  ") or ""
+			return dashboard.button(entry[1], icon .. entry[3], entry[4])
 		end
 
 		dashboard.section.buttons.val = vim.tbl_map(make_button, settings.buttons)
@@ -73,7 +105,7 @@ return {
 			table.insert(dashboard.section.buttons.val, settings.wsl_button_position, make_button(settings.wsl_button))
 		end
 
-		dashboard.section.footer.val = ""
+		dashboard.section.footer.val = "⚡ KRS Neovim (" .. env.label .. ")"
 
 		-- alpha redraws on WinResized, which fires while a window is already gone
 		-- (closing a split or the explorer) and then throws "invalid window id".

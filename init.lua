@@ -54,8 +54,8 @@ end, { nargs = "?", desc = "Run the KRS unit test suite (optionally filtered by 
 -- If nvim is being run inside Neovide GUI
 if vim.g.neovide then
 	vim.g.neovide_window_blurred = true
-	vim.g.neovide_opacity = 0.80
-	vim.g.neovide_normal_opacity = 0.80
+	vim.g.neovide_opacity = 0.70
+	vim.g.neovide_normal_opacity = 0.70
 
 	-- Cursor Motion & Trail Animation (Time in seconds)
 	-- Try setting to 0.25 for slow motion, 0.05 for super snappy, or 0.0 to disable.

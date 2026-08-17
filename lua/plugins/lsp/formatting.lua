@@ -139,6 +139,7 @@ return {
 		config = function()
 			require("mason-conform").setup({
 				ignore_install = {},
+				auto_install = false,
 			})
 		end,
 	},
