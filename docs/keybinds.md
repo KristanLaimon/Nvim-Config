@@ -26,7 +26,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<C-0>` | n, i, v, t | Reset font size |
 | `<leader>i` | n | View image as pixel art (`chafa`) |
 | `<C-S-Enter>` | n | Open image/video with the OS default app |
-| `<C-S-d>` | n, i, v, t | Open Documentation Center & Wiki Modal ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
+| `<C-S-d>` / `<leader>?` | n, i, v, t | Open Documentation Center & Wiki Modal — `<leader>?` always works, `<C-S-d>` needs a terminal that reports Shift on Ctrl combos (see note below) |
 | `<C-LeftMouse>` | all | Open the URL under the cursor in a browser |
 | `<S-LeftMouse>` | n, i, v | Shift + Click symbol: Move cursor and jump to definition |
 | `:q` / `:q!` / `<leader>q` | n, Cmd | Smart quit — split → tab → dashboard → quit |
@@ -35,6 +35,8 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `:ReloadConfig` | Cmd | Reload the Neovim configuration |
 
 > Commenting is mapped across a whole family of keys because `'` is a dead key on US-International, ES and Latam layouts — one of them will reach Neovim whatever your layout does. From terminal mode it leaves insert, hops to the previous window, and comments there.
+>
+> **Why `<leader>?` exists next to `<C-S-d>`:** plain terminals (classic PowerShell/`conhost`, older Windows Terminal) can't tell `Ctrl+D` and `Ctrl+Shift+D` apart — both send the same byte, so the terminal never even tells Neovim Shift was held. Neovide and modern terminals (Windows Terminal 1.19+, kitty, wezterm) *do* report it, so `<C-S-d>` works there. If `<C-S-d>` ever does nothing, `<leader>?` (`Space` then `?`) opens the wiki regardless of terminal — that's why every panel here documented as `<C-S-x>` also has a `:KrsXxx` command as backup.
 
 ---
 
@@ -61,7 +63,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
 | `K` | n | Hover documentation |
-| `<A-k>` / `<M-k>` / `<A-j>` / `<M-j>` / `<C-S-d>` | n, i, v | Go to definition (Telescope fallback) |
+| `<A-k>` / `<M-k>` / `<A-j>` / `<M-j>` | n, i, v | Go to definition (Telescope fallback) |
 | `<C-j>` | n, i, v | Signature / parameter help |
 | `<C-.>` | n, i, v | Code actions / quick fix at the caret |
 | `<leader>k` | n | Diagnostic float under the cursor |
@@ -183,7 +185,7 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 | `<leader>th` / `:KrsThemePicker` | Nagatoro & NvChad Theme Picker with live preview ([`color-palette.md`](color-palette.md)) |
 | `:KrsStatuslineTheme` | Pick Statusline Theme (`nvchad_pills`, `nvchad_blocks`, `nvchad_round`, `vscode`, `minimal`) |
 | `<leader>tr` / `:KrsToggleReferences` | Toggle LSP Reference Counts / CodeLens (Default: ON) ([`languages.md`](languages.md)) |
-| `<C-S-d>` / `:KrsWiki` | Open Documentation Center & Wiki Modal ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
+| `<C-S-d>` / `<leader>?` / `:KrsWiki` | Open Documentation Center & Wiki Modal. Inside it, `/` or `<C-f>` searches the pane you're in ([`how-to-customize-editor.md`](how-to-customize-editor.md)) |
 
 ---
 

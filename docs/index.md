@@ -2,6 +2,10 @@
 
 Welcome to the **KrsVim** documentation! KrsVim is a fast, Windows-first, WSL-aware Neovim distribution built around a modular architecture and rounded floating UI modules (`lua/plugins/krs/`).
 
+> 🌱 **Never used Vim or Neovim before?** This wiki assumes you know what "buffer", "leader key", and "Normal mode" mean. If you don't, read **[Neovim Basics](neovim-basics.md)** first — 5 minutes, then everything below will make sense.
+
+> 🔎 **Searching this wiki:** inside this modal, press `/` or `Ctrl+F` in either pane to search it (native Neovim search — `n`/`N` repeats). Left pane searches page titles, right pane searches the open page's text.
+
 ---
 
 ## 🏁 New User Quick Start (First 5 Minutes)
@@ -9,12 +13,13 @@ Welcome to the **KrsVim** documentation! KrsVim is a fast, Windows-first, WSL-aw
 If you have just installed or launched KrsVim for the first time, follow these steps:
 
 1. **Start Neovim**: Run `nvim` in your terminal. On first startup, `lazy.nvim` automatically downloads and installs all editor plugins.
-2. **Open the Dashboard & Wiki**: If you land on the dashboard screen, press `w` to open this Wiki inside Neovim (or run `:NvimWiki` from anywhere).
+2. **Open the Dashboard & Wiki**: If you land on the dashboard screen, press `w` to open this Wiki inside Neovim (or run `:KrsWiki` / `:NvimWiki` from anywhere, or `<C-S-d>` / `<leader>?`).
 3. **Sync External Dependencies**: KrsVim relies on a few external CLI utilities (like `ripgrep`, `fd`, `gcc`, `chafa`, `node`, `bun`, `go`, `dotnet`). Run the automated setup script for your platform:
    - **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
    - **Linux / WSL / Git Bash**: `./setup.sh`
    *(These scripts are idempotent—safe to run at any time! If you haven't run them yet, KrsVim will still run with [graceful fallbacks](installation.md#⚡-what-if-you-havent-run-setupps1-or-setupsh).)*
 4. **Discover Shortcuts**: Press `<C-S-p>` to launch the **Command Palette**, or press `?` / `<F1>` in any window to get instant, context-aware keyboard help.
+5. **Want to change something?** Every feature here is meant to be edited by you, not just read about — [How-To & Customization Guide § Quick Answer](how-to-customize-editor.md#⚡-quick-answer-how-do-i-change-x) is the fastest path from "I don't like this" to "fixed it myself."
 
 ---
 
@@ -23,6 +28,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 ### 🏁 Getting Started & Setup
 | Page | Contents |
 | :--- | :--- |
+| 🌱 [**Neovim Basics**](neovim-basics.md) | Modes, buffers/windows/tabs, the leader key — start here if you're new to Vim/Neovim itself |
 | ⚙️ [**Installation & Dependencies**](installation.md) | Setup scripts (`setup.ps1` / `setup.sh`), Scoop/APT commands, health checks & graceful fallbacks |
 | 🎓 [**How-To & Customization Guide**](how-to-customize-editor.md) | Step-by-step guide for adding plugins, local modules, new languages, themes, and terminals |
 | 🛠️ [**Languages, LSP & Formatting**](languages.md) | Mason servers, Conform formatters, Treesitter parsers & completion tuning |
@@ -80,6 +86,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | `<C-S-t>` | Task Runner Menu |
 | `<C-S-s>` | Run Default Launch Profile / Stop Debug Session |
 | `<C-S-q>` | Launch Profile Manager |
+| `<C-S-d>` / `<leader>?` | This Wiki (Ctrl+Shift+D needs a Shift-aware terminal, see [Neovim Basics](neovim-basics.md)) |
 | `<C-b>` | Toggle Breakpoint |
 | `<C-;>` | Toggle Active Terminal |
 | `<A-1>`..`<A-9>` | Switch to Terminal Slot 1..9 |

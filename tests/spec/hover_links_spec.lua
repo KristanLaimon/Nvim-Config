@@ -100,10 +100,33 @@ describe("plugins.krs.hover_links link navigation and parsing", function()
 			col = 5,
 		})
 
-		hover_links.follow_link_at_cursor()
+		local handled = hover_links.follow_link_at_cursor()
 
-		-- Window remains open since no link matched
+		expect(handled).toBe(false)
 		expect(vim.api.nvim_win_is_valid(win)).toBeTruthy()
 		vim.api.nvim_win_close(win, true)
+	end)
+
+	it("jumps to file links referenced inside code comments", function()
+		local target_file = path.join(temp_dir, "helper.lua")
+		vim.fn.writefile({ "local M = {}", "function M.init() end", "return M" }, target_file)
+
+		local comment_line = string.format("-- @see %s:2:1", target_file:gsub("\\", "/"))
+
+		local buf = vim.api.nvim_create_buf(true, false)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "local x = 10", comment_line })
+		vim.api.nvim_set_current_buf(buf)
+		vim.api.nvim_win_set_cursor(0, { 2, 5 })
+
+		local handled = hover_links.follow_link_at_cursor()
+
+		expect(handled).toBe(true)
+
+		local active_buf = vim.api.nvim_get_current_buf()
+		local active_name = path.normalize(vim.api.nvim_buf_get_name(active_buf))
+		local cursor = vim.api.nvim_win_get_cursor(0)
+
+		expect(active_name).toBe(path.normalize(target_file))
+		expect(cursor[1]).toBe(2)
 	end)
 end)

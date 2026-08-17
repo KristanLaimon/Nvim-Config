@@ -442,6 +442,56 @@ function M.setup()
 			desc = "Copy selection to OS Clipboard",
 		})
 	end
+
+	-- Auto-enter terminal mode on buffer focus and mouse click.
+	-- Ensures clicking inside a terminal window or returning to it (e.g. toggling Neo-tree off)
+	-- automatically puts Neovim into terminal (insert) mode (`startinsert`).
+	local auto_insert_group = vim.api.nvim_create_augroup("KrsTerminalAutoInsert", { clear = true })
+
+	local function is_term_buf(bufnr)
+		return is_valid_buf(bufnr) and (vim.bo[bufnr].buftype == "terminal" or vim.b[bufnr].krs_is_multi_term)
+	end
+
+	local function setup_term_buffer(bufnr)
+		if is_term_buf(bufnr) then
+			pcall(vim.keymap.set, "n", "<LeftMouse>", "<cmd>startinsert<CR>", {
+				buffer = bufnr,
+				noremap = true,
+				silent = true,
+				desc = "Enter Terminal Mode on Click",
+			})
+		end
+	end
+
+	local function enter_terminal_mode(bufnr)
+		if not is_term_buf(bufnr) then
+			return
+		end
+		if vim.api.nvim_get_mode().mode ~= "t" then
+			pcall(vim.cmd, "startinsert")
+		end
+	end
+
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if is_term_buf(bufnr) then
+			setup_term_buffer(bufnr)
+		end
+	end
+
+	vim.api.nvim_create_autocmd({ "TermOpen", "BufEnter", "WinEnter", "BufWinEnter" }, {
+		group = auto_insert_group,
+		callback = function(args)
+			if is_term_buf(args.buf) then
+				setup_term_buffer(args.buf)
+				enter_terminal_mode(args.buf)
+				vim.schedule(function()
+					if vim.api.nvim_get_current_buf() == args.buf then
+						enter_terminal_mode(args.buf)
+					end
+				end)
+			end
+		end,
+	})
 end
 
 -- Legacy global kept for user scripts and older keybinds that reference it.
@@ -454,6 +504,7 @@ _G.TerminalManager = M
 return setmetatable({
 	name = "krs_terminal",
 	dir = require("krs.core.lazyspec").for_module(),
+	event = { "TermOpen", "BufEnter" },
 	cmd = { "TerminalToggle", "TerminalSelect" },
 	keys = {
 		{ "<C-;>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal" },

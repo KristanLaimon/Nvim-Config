@@ -15,7 +15,11 @@ local M = {}
 
 M.settings = {
 	keys = {
-		open = { "<C-S-d>", "<C-S-D>" },
+		-- <C-S-d> needs a terminal that reports Shift on Ctrl+letter combos
+		-- (Neovide, or Windows Terminal 1.19+/kitty/wezterm/foot with the
+		-- Kitty keyboard protocol). Plain terminals send the same byte for
+		-- <C-d> and <C-S-d>, so <leader>? is kept as an always-works fallback.
+		open = { "<C-S-d>", "<leader>?" },
 	},
 	docs_dir = vim.fn.stdpath("config") .. "/docs",
 	left_width_ratio = 0.32,
@@ -28,6 +32,7 @@ M.categories = {
 		title = "🏁 Getting Started",
 		docs = {
 			{ name = "Wiki Home & Overview", file = "index.md" },
+			{ name = "Neovim Basics (start here if new)", file = "neovim-basics.md" },
 			{ name = "Installation & Setup", file = "installation.md" },
 			{ name = "Keybinds Reference", file = "keybinds.md" },
 			{ name = "Plugin Inventory", file = "plugins.md" },
@@ -92,6 +97,7 @@ local state = {
 	right_win = nil,
 	active_doc_file = nil,
 	items = {}, -- Flat list of { type = "header"|"doc", title = ..., file = ... }
+	augroup = nil,
 }
 
 --- Flatten categories into list items for navigation index.
@@ -113,6 +119,10 @@ local function load_document(filename)
 		return
 	end
 
+	if state.active_doc_file == filename then
+		return
+	end
+
 	local filepath = path_util.join(M.settings.docs_dir, filename)
 	local lines = {}
 	local f = io.open(filepath, "r")
@@ -130,7 +140,9 @@ local function load_document(filename)
 	vim.bo[state.right_buf].modifiable = true
 	vim.api.nvim_buf_set_lines(state.right_buf, 0, -1, false, lines)
 	vim.bo[state.right_buf].modifiable = false
-	vim.bo[state.right_buf].filetype = "markdown"
+	if vim.bo[state.right_buf].filetype ~= "markdown" then
+		vim.bo[state.right_buf].filetype = "markdown"
+	end
 
 	state.active_doc_file = filename
 end
@@ -141,11 +153,23 @@ function M.close()
 		return
 	end
 
+	if state.augroup then
+		pcall(vim.api.nvim_del_augroup_by_id, state.augroup)
+		state.augroup = nil
+	end
+
 	if state.left_win and vim.api.nvim_win_is_valid(state.left_win) then
 		pcall(vim.api.nvim_win_close, state.left_win, true)
 	end
 	if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
 		pcall(vim.api.nvim_win_close, state.right_win, true)
+	end
+
+	if state.left_buf and vim.api.nvim_buf_is_valid(state.left_buf) then
+		pcall(vim.api.nvim_buf_delete, state.left_buf, { force = true })
+	end
+	if state.right_buf and vim.api.nvim_buf_is_valid(state.right_buf) then
+		pcall(vim.api.nvim_buf_delete, state.right_buf, { force = true })
 	end
 
 	zindex.unregister("wiki_modal")
@@ -155,6 +179,7 @@ function M.close()
 	state.right_win = nil
 	state.left_buf = nil
 	state.right_buf = nil
+	state.active_doc_file = nil
 end
 
 --- Opens Documentation Center modal.
@@ -197,7 +222,7 @@ function M.open()
 		height = modal_h,
 		style = "minimal",
 		border = "rounded",
-		title = " 📚 KrsVim Wiki Index ",
+		title = " 📚 KrsVim Wiki Index (/ or Ctrl+F to search) ",
 		title_pos = "center",
 		zindex = z_base,
 	})
@@ -212,7 +237,7 @@ function M.open()
 		height = modal_h,
 		style = "minimal",
 		border = "rounded",
-		title = " 📖 Document Reader ",
+		title = " 📖 Document Reader (/ or Ctrl+F to search) ",
 		title_pos = "center",
 		zindex = z_base,
 	})
@@ -226,14 +251,18 @@ function M.open()
 	-- Load initial document (index.md)
 	load_document("index.md")
 
+	state.augroup = vim.api.nvim_create_augroup("KrsWikiModal", { clear = true })
+
 	-- Set up cursor movement listener on index list for live document preview
 	vim.api.nvim_create_autocmd("CursorMoved", {
+		group = state.augroup,
 		buffer = state.left_buf,
 		callback = function()
-			if not state.is_open then
+			if not state.is_open or not state.left_win or not vim.api.nvim_win_is_valid(state.left_win) then
 				return
 			end
-			local line = vim.api.nvim_win_get_cursor(state.left_win)[1]
+			local cursor = vim.api.nvim_win_get_cursor(state.left_win)
+			local line = cursor[1]
 			local item = state.items[line]
 			if item and item.type == "doc" and item.file then
 				load_document(item.file)
@@ -249,27 +278,67 @@ function M.open()
 		end
 
 		local cursor = vim.api.nvim_win_get_cursor(state.right_win)
-		local row = cursor[1]
+		local row, col = cursor[1], cursor[2] + 1
 		local lines = vim.api.nvim_buf_get_lines(state.right_buf, row - 1, row, false)
 		local line = lines[1] or ""
 
-		local target = line:match("%[[^%]]+%]%(([^%)]+)%)")
-		if not target then
-			target = line:match("(https?://%S+)")
+		local links = {}
+		local s_pos = 1
+		while true do
+			local m_start, m_end, label, target = line:find("(%[[^%]]+%]%(([^%)]+)%))", s_pos)
+			if not m_start then
+				break
+			end
+			table.insert(links, { start_col = m_start, end_col = m_end, target = target })
+			s_pos = m_end + 1
 		end
 
-		if not target then
+		local url_patterns = { "https?://%S+", "file://%S+" }
+		for _, pat in ipairs(url_patterns) do
+			s_pos = 1
+			while true do
+				local u_start, u_end, target = line:find("(" .. pat .. ")", s_pos)
+				if not u_start then
+					break
+				end
+				target = target:gsub("[%),.]+$", "")
+				local inside = false
+				for _, l in ipairs(links) do
+					if u_start >= l.start_col and u_end <= l.end_col then
+						inside = true
+						break
+					end
+				end
+				if not inside then
+					table.insert(links, { start_col = u_start, end_col = u_end, target = target })
+				end
+				s_pos = u_end + 1
+			end
+		end
+
+		local chosen_target = nil
+		for _, l in ipairs(links) do
+			if col >= l.start_col and col <= l.end_col then
+				chosen_target = l.target
+				break
+			end
+		end
+		if not chosen_target and #links > 0 then
+			chosen_target = links[1].target
+		end
+
+		if not chosen_target then
 			vim.notify("No markdown link found on this line", vim.log.levels.WARN, { title = "Wiki Reader" })
 			return
 		end
 
-		if target:match("^https?://") then
-			pcall(vim.ui.open, target)
-			vim.notify("🌐 Opening web link: " .. target, vim.log.levels.INFO)
+		if chosen_target:match("^https?://") then
+			pcall(vim.ui.open, chosen_target)
+			vim.notify("🌐 Opening web link: " .. chosen_target, vim.log.levels.INFO)
 			return
 		end
 
-		local clean_file = target:gsub("^file:///", ""):gsub("#.*$", ""):gsub("^.*/", "")
+		local clean_file = chosen_target:gsub("^file:///", ""):gsub("#.*$", ""):gsub("^.*/", "")
 		if clean_file:match("%.md$") then
 			load_document(clean_file)
 			-- Sync left index selection if match found
@@ -282,41 +351,83 @@ function M.open()
 		end
 	end
 
-	local function map_keys(buf, win)
-		local opts = { noremap = true, silent = true, buffer = buf }
+	local function follow_link_at_mouse()
+		local mouse_pos = vim.fn.getmousepos()
+		if mouse_pos and mouse_pos.winid == state.right_win and vim.api.nvim_win_is_valid(mouse_pos.winid) then
+			vim.api.nvim_set_current_win(mouse_pos.winid)
+			pcall(vim.api.nvim_win_set_cursor, mouse_pos.winid, { mouse_pos.line, math.max(0, mouse_pos.column - 1) })
+		end
+		follow_link_in_reader()
+	end
 
-		-- Close keys
-		for _, k in ipairs({ "q", "<Esc>", "<C-S-d>", "<C-S-D>" }) do
+	local function map_keys(buf, win)
+		local opts = { noremap = true, silent = true, buffer = buf, nowait = true }
+
+		-- Close keys (Esc/q plus whatever opens the modal, so it toggles shut too)
+		local close_keys = { "q", "<Esc>" }
+		for _, k in ipairs(M.settings.keys.open) do
+			table.insert(close_keys, k)
+		end
+		for _, k in ipairs(close_keys) do
 			vim.keymap.set({ "n", "v", "i", "t" }, k, M.close, opts)
 		end
 
 		-- Panel Switch
 		vim.keymap.set("n", "<Tab>", function()
 			if vim.api.nvim_get_current_win() == state.left_win then
-				vim.api.nvim_set_current_win(state.right_win)
+				if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
+					vim.api.nvim_set_current_win(state.right_win)
+				end
 			else
-				vim.api.nvim_set_current_win(state.left_win)
+				if state.left_win and vim.api.nvim_win_is_valid(state.left_win) then
+					vim.api.nvim_set_current_win(state.left_win)
+				end
 			end
 		end, opts)
 
 		vim.keymap.set("n", "<C-h>", function()
-			vim.api.nvim_set_current_win(state.left_win)
+			if state.left_win and vim.api.nvim_win_is_valid(state.left_win) then
+				vim.api.nvim_set_current_win(state.left_win)
+			end
 		end, opts)
 
 		vim.keymap.set("n", "<C-l>", function()
-			vim.api.nvim_set_current_win(state.right_win)
+			if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
+				vim.api.nvim_set_current_win(state.right_win)
+			end
 		end, opts)
+
+		-- <C-f> mirrors "/": both start native Neovim search in this pane
+		-- (repeat matches with n/N). Vim's own <C-f> page-scroll isn't
+		-- useful in these small panes, so it's free to reuse.
+		vim.keymap.set("n", "<C-f>", "/", opts)
 	end
 
 	map_keys(state.left_buf, state.left_win)
 	map_keys(state.right_buf, state.right_win)
 
 	-- Link follow keymaps inside right reader buffer
-	local reader_opts = { noremap = true, silent = true, buffer = state.right_buf }
+	local reader_opts = { noremap = true, silent = true, buffer = state.right_buf, nowait = true }
 	vim.keymap.set("n", "<CR>", follow_link_in_reader, reader_opts)
 	vim.keymap.set("n", "<C-k>", follow_link_in_reader, reader_opts)
 	vim.keymap.set("n", "gx", follow_link_in_reader, reader_opts)
 	vim.keymap.set("n", "K", follow_link_in_reader, reader_opts)
+	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, reader_opts)
+
+	-- Index click selection keymap in left buffer
+	local left_opts = { noremap = true, silent = true, buffer = state.left_buf, nowait = true }
+	local function select_index_at_mouse()
+		local mouse_pos = vim.fn.getmousepos()
+		if mouse_pos and mouse_pos.winid == state.left_win and vim.api.nvim_win_is_valid(mouse_pos.winid) then
+			vim.api.nvim_set_current_win(mouse_pos.winid)
+			pcall(vim.api.nvim_win_set_cursor, mouse_pos.winid, { mouse_pos.line, math.max(0, mouse_pos.column - 1) })
+			local item = state.items[mouse_pos.line]
+			if item and item.type == "doc" and item.file then
+				load_document(item.file)
+			end
+		end
+	end
+	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", select_index_at_mouse, left_opts)
 end
 
 function M.setup()
@@ -334,11 +445,16 @@ function M.setup()
 end
 
 -- LAZY.NVIM SPEC
+local lazy_keys = {}
+for _, k in ipairs(M.settings.keys.open) do
+	table.insert(lazy_keys, { k, mode = { "n", "v", "i", "t" }, desc = "Open Documentation Center Wiki" })
+end
+
 local plugin_spec = {
 	name = "krs_wiki_modal",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "KrsWiki", "NvimWiki" },
-	keys = { { "<C-S-d>", mode = { "n", "v", "i", "t" }, desc = "Open Documentation Center Wiki" } },
+	keys = lazy_keys,
 	config = M.setup,
 }
 

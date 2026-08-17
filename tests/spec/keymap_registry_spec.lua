@@ -1,0 +1,92 @@
+-- ============================================================================
+-- tests/spec/keymap_registry_spec.lua -- Keymap collision toast test.
+-- ============================================================================
+
+local t = require("krsnvim.test")
+local describe, it, expect = t.describe, t.it, t.expect
+
+describe("keymap_registry", function()
+	local function with_stub_notify(fn)
+		local calls = {}
+		local raw_notify = vim.notify
+		vim.notify = function(msg, level, opts)
+			table.insert(calls, { msg = msg, level = level, opts = opts })
+		end
+		local ok, err = pcall(fn, calls)
+		vim.notify = raw_notify
+		if not ok then
+			error(err, 0)
+		end
+	end
+
+	it("toasts (permanently) on a real mode+lhs+scope collision", function()
+		with_stub_notify(function(calls)
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+
+			vim.keymap.set("n", "<F13>", function() end, { desc = "first" })
+			vim.keymap.set("n", "<F13>", function() end, { desc = "second" })
+
+			expect(#calls).toBe(1)
+			expect(calls[1].opts.timeout).toBe(false)
+			expect(calls[1].level).toBe(vim.log.levels.WARN)
+
+			vim.keymap.del("n", "<F13>")
+		end)
+	end)
+
+	it("does not toast for different modes or different buffers", function()
+		with_stub_notify(function(calls)
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+
+			vim.keymap.set("n", "<F14>", function() end, {})
+			vim.keymap.set("i", "<F14>", function() end, {})
+			vim.keymap.set("n", "<F14>", function() end, { buffer = 0 })
+
+			expect(#calls).toBe(0)
+
+			vim.keymap.del("n", "<F14>", { buffer = 0 })
+			vim.keymap.del("n", "<F14>")
+			vim.keymap.del("i", "<F14>")
+		end)
+	end)
+
+	it("silences a collision whose source matches the lazy stub handler pattern", function()
+		with_stub_notify(function(calls)
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+			local raw_pattern = registry.ALLOWLIST_SOURCE_PATTERN
+			registry.ALLOWLIST_SOURCE_PATTERN = "keymap_registry_spec%.lua"
+
+			vim.keymap.set("n", "<F15>", function() end, {})
+			vim.keymap.set("n", "<F15>", function() end, {})
+
+			expect(#calls).toBe(0)
+
+			registry.ALLOWLIST_SOURCE_PATTERN = raw_pattern
+			vim.keymap.del("n", "<F15>")
+		end)
+	end)
+
+	it("still binds the key even when a collision is detected", function()
+		with_stub_notify(function()
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+
+			vim.keymap.set("n", "<F16>", "<Nop>", {})
+			vim.keymap.set("n", "<F16>", "<Nop>", { desc = "override" })
+
+			local maps = vim.api.nvim_get_keymap("n")
+			local found = false
+			for _, m in ipairs(maps) do
+				if m.lhs == "<F16>" then
+					found = true
+				end
+			end
+			expect(found).toBe(true)
+
+			vim.keymap.del("n", "<F16>")
+		end)
+	end)
+end)

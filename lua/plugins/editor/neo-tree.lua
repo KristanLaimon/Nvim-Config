@@ -97,12 +97,35 @@ local function pin_width()
 	end
 end
 
+--- Toggles Neo-tree from any mode (including Terminal mode), ensuring
+--- Neo-tree remains full-height on the left of dock/terminal windows.
+local function toggle_neotree()
+	if vim.api.nvim_get_mode().mode == "t" then
+		pcall(vim.cmd, "stopinsert")
+	end
+	vim.cmd("Neotree toggle")
+	vim.schedule(function()
+		pcall(function()
+			require("krs.core.dock").enforce_neotree_layout()
+		end)
+	end)
+end
+
+_G.Neotree_Toggle = toggle_neotree
+
 local fix_group = vim.api.nvim_create_augroup("NeoTreeFixWidth", { clear = true })
 
 vim.api.nvim_create_autocmd("FileType", {
 	pattern = "neo-tree",
 	group = fix_group,
-	callback = pin_width,
+	callback = function()
+		pin_width()
+		vim.schedule(function()
+			pcall(function()
+				require("krs.core.dock").enforce_neotree_layout()
+			end)
+		end)
+	end,
 })
 
 vim.api.nvim_create_autocmd("WinClosed", {
@@ -118,9 +141,7 @@ vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
 	group = vim.api.nvim_create_augroup("NeoTreeEqualize", { clear = true }),
 	callback = function(args)
 		if vim.bo[args.buf].filetype == "neo-tree" then
-			vim.schedule(function()
-				pcall(vim.cmd, "wincmd =")
-			end)
+			vim.schedule(pin_width)
 		end
 	end,
 })
@@ -289,8 +310,8 @@ return {
 		branch = "v3.x",
 		cmd = "Neotree",
 		keys = {
-			{ settings.toggle_keys[1], ":Neotree toggle<CR>", desc = "Toggle Explorer" },
-			{ settings.toggle_keys[2], ":Neotree toggle<CR>", desc = "Toggle Explorer" },
+			{ settings.toggle_keys[1], toggle_neotree, mode = { "n", "i", "t" }, desc = "Toggle Explorer" },
+			{ settings.toggle_keys[2], toggle_neotree, mode = { "n", "i", "t" }, desc = "Toggle Explorer" },
 		},
 		dependencies = {
 			"nvim-lua/plenary.nvim",
@@ -300,11 +321,13 @@ return {
 			"folke/snacks.nvim",
 		},
 		config = function()
-			vim.keymap.set("n", settings.toggle_keys[2], ":Neotree toggle<CR>", {
-				noremap = true,
-				silent = true,
-				desc = "Toggle Explorer",
-			})
+			for _, key in ipairs(settings.toggle_keys) do
+				vim.keymap.set({ "n", "i", "t" }, key, toggle_neotree, {
+					noremap = true,
+					silent = true,
+					desc = "Toggle Explorer",
+				})
+			end
 
 			require("neo-tree").setup({
 				-- Was true: while dap-ui tears its panels down, neo-tree can briefly

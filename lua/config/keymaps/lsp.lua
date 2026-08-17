@@ -5,7 +5,7 @@
 --   K                Hover documentation
 --   <C-j>            Signature / parameter help
 --   <C-.>            Code actions, in a dropdown at the caret
---   <A-j> / <A-k> / <C-S-d>  Go to definition (jump back with <C-o>)
+--   <A-j> / <A-k>    Go to definition (jump back with <C-o>)
 --   <F2>             Rename: LSP symbol, neo-tree entry, or the file on disk
 --   <leader>k        Diagnostic under the cursor
 --   <leader>u / <leader>o  Previous / next diagnostic
@@ -23,7 +23,7 @@ M.settings = {
 		hover = "K",
 		signature_help = "<C-j>",
 		code_action = "<C-.>",
-		goto_definition = { "<A-k>", "<M-k>", "<A-j>", "<M-j>", "<C-S-d>" },
+		goto_definition = { "<A-k>", "<M-k>", "<A-j>", "<M-j>" },
 		rename = "<F2>",
 		diagnostic_float = "<leader>k",
 		diagnostic_prev = "<leader>u",
@@ -144,13 +144,22 @@ end
 
 M.goto_definition = goto_definition
 
---- Handles Shift + Left Click: moves cursor to mouse position and jumps to definition.
+--- Handles Shift + Left Click: moves cursor to mouse position and follows link (if on a link) or jumps to definition.
 local function goto_definition_at_mouse()
 	local mouse_pos = vim.fn.getmousepos()
 	if mouse_pos and mouse_pos.winid > 0 and vim.api.nvim_win_is_valid(mouse_pos.winid) then
 		vim.api.nvim_set_current_win(mouse_pos.winid)
 		pcall(vim.api.nvim_win_set_cursor, mouse_pos.winid, { mouse_pos.line, math.max(0, mouse_pos.column - 1) })
 	end
+
+	local ok, hover_links = pcall(require, "plugins.krs.hover_links")
+	if ok and hover_links.follow_link_at_cursor then
+		local handled = hover_links.follow_link_at_cursor()
+		if handled then
+			return
+		end
+	end
+
 	goto_definition()
 end
 

@@ -27,29 +27,18 @@ All of them exit non-zero on failure, so they work unchanged in CI or a git hook
 
 ```
 tests/
-├── run.lua              Unit runner: loads tests/spec/*_spec.lua, prints one summary
+├── run.lua              Unit runner: loads every tests/spec/*_spec.lua, prints one summary
 ├── syntax_check.lua     Compiles (never runs) every Lua file in the repository
-├── spec/                Unit specs -- pure logic, no plugins
-│   ├── core_path_spec.lua
-│   ├── core_store_spec.lua
-│   ├── core_project_spec.lua
-│   ├── core_ui_spec.lua
-│   ├── core_dock_spec.lua
-│   ├── tasks_spec.lua
-│   ├── launch_runtimes_spec.lua
-│   ├── tailwind_organizer_spec.lua
-│   ├── git_status_spec.lua
-│   ├── git_diff_spec.lua
-│   ├── favorites_spec.lua
-│   ├── code_action_menu_spec.lua
-│   ├── context_help_spec.lua
-│   └── wsl_spec.lua
-└── integration/         Specs that need plugins and a real UI
-    ├── run.lua
-    ├── commands_spec.lua
-    ├── dap_breakpoints_spec.lua
-    └── dap_adapters_spec.lua
+├── spec/                Unit specs -- pure logic, no plugins loaded (one file per feature)
+├── integration/         Specs that need plugins and a real UI (run.lua + a handful of *_spec.lua)
+└── krsnvimscript/       .krsnvim example scripts used as fixtures for lua/krsnvim/tests
 ```
+
+`tests/spec/` has one `*_spec.lua` per feature (`tasks_spec.lua`, `git_status_spec.lua`,
+`wiki_modal_spec.lua`, and so on) — the filename always matches the module it pins down, so
+if you're editing `lua/plugins/krs/tasks.lua`, its test is `tests/spec/tasks_spec.lua`. This
+list grows constantly, so don't trust a snapshot of it here — `nvim -l tests/run.lua` prints
+every spec currently in the suite, and `ls tests/spec/` shows the files directly.
 
 The `krsnvimscript` library keeps its own suite in `lua/krsnvim/tests/`, run with
 `require("krsnvim.tests").run_all()`.
@@ -103,25 +92,44 @@ Lifecycle hooks: `beforeEach`, `afterEach`, `beforeAll`, `afterAll`.
 
 ## 🎯 What is covered
 
+A sample of what's pinned down, to show the *kind* of thing a spec checks (see
+[Layout](#🗂️-layout) above for how to find the full, current list):
+
 | Area | Spec | What it pins |
 | :--- | :--- | :--- |
 | Paths | `core_path_spec` | Drive letters, trailing slashes, case rules, relative paths |
-| Persistence | `core_store_spec` | Corrupt and missing files degrade instead of throwing |
 | Project config | `core_project_spec` | `.krsnvim` → `.krslocal` → `.nvimkrs` lookup ORDER |
-| Floats | `core_ui_spec` | Fractional sizes, centering, clamping, dismiss keys |
-| Bottom dock | `core_dock_spec` | Task output vs terminal classification, pane lookup |
 | Task runner | `tasks_spec` | Chain resolution, `depends_on`, discovery, legacy files |
-| Languages | `launch_runtimes_spec` | Command line and DAP config per runtime |
-| Tailwind | `tailwind_organizer_spec` | Row assignment, sort order, attribute rewriting |
 | Git | `git_status_spec`, `git_diff_spec` | Porcelain parsing, diff formatting and highlight tags |
 | WSL | `wsl_spec` | UNC path parsing and the `wsl.exe --cd` command |
-| Favorites | `favorites_spec` | Storage key format, toggle, rename, removal |
-| Code actions | `code_action_menu_spec` | Ranking of quickfix / refactor / source actions |
-| Context help | `context_help_spec` | Which surface `?` documents, and the editor fallback |
+| Wiki keymaps | `wiki_modal_spec` | The open key doesn't collide with another feature's key, and always has a non-Ctrl+Shift fallback |
 | Public surface | `commands_spec` (integration) | Every user command and keymap still registers |
-| Breakpoints | `dap_breakpoints_spec` (integration) | Disable/enable/persist/restore round trip |
 | Debug adapters | `dap_adapters_spec` (integration) | Every language still registers its configurations |
 
 UI-heavy flows (pickers, modals in use, terminal execution) are deliberately not
 covered: they need a driven UI, and the checks would be brittle. The logic behind
 them is factored out into `lua/krs/`, which IS covered.
+
+---
+
+## 🔧 "I edited a plugin file — do I need a test?"
+
+Short version: if the change is logic (parsing, ordering, a conditional, a keymap
+that must not collide with another one), yes — a few lines in the matching spec
+pays for itself the first time a later edit breaks it silently. If it's pure UI
+layout (window size, border color, title text), skip it; see the note above.
+
+1. **Find its spec.** Filename mirrors the module: editing
+   `lua/plugins/krs/tasks.lua` → open `tests/spec/tasks_spec.lua`. Nothing there
+   yet? Copy the shape from [Writing a spec](#✍️-writing-a-spec) above and create
+   `tests/spec/<module>_spec.lua` — `tests/run.lua` picks up every file in that
+   folder automatically, no registration step.
+2. **Write the case in plain language first**, then the assertion:
+   `it("does not share its open key with LSP go-to-definition", ...)` reads as a
+   sentence on its own, before you ever look at the `expect(...)` line.
+3. **Run just that spec while you iterate**: `nvim -l tests/run.lua tasks` (or
+   `:KrsTest tasks` inside the editor) filters by filename substring, so you're
+   not waiting on the whole suite every save.
+4. **Run everything once before you're done**: `nvim -l tests/run.lua` — a change
+   in a shared module (`lua/krs/core/*.lua`) can break a spec for a completely
+   different feature that happens to depend on it.

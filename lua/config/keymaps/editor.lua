@@ -180,6 +180,20 @@ for _, key in ipairs(M.settings.keys.buffer_next) do
 	vim.keymap.set("n", key, safe_buf_navigate("BufferLineCycleNext"), opts("Next buffer"))
 end
 
-vim.keymap.set("n", M.settings.keys.explorer, ":Neotree toggle<CR>", opts("Toggle Explorer"))
+local function toggle_neotree()
+	if _G.Neotree_Toggle then
+		_G.Neotree_Toggle()
+	else
+		if vim.api.nvim_get_mode().mode == "t" then
+			pcall(vim.cmd, "stopinsert")
+		end
+		vim.cmd("Neotree toggle")
+		pcall(function()
+			require("krs.core.dock").enforce_neotree_layout()
+		end)
+	end
+end
+
+vim.keymap.set({ "n", "i", "t" }, M.settings.keys.explorer, toggle_neotree, opts("Toggle Explorer"))
 
 return M

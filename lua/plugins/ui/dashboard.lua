@@ -10,7 +10,7 @@ local settings = {
 	buttons = {
 		{ "f", "", "File Explorer (Desktop)", ":TelescopeFileBrowserDesktop<CR>" },
 		{ "p", "", "Recent projects", ":Telescope projects<CR>" },
-		{ "w", "", "Wiki (Documentation)", ":NvimWiki<CR>" },
+		{ "w", "", "Wiki (Documentation)", ":KrsWiki<CR>" },
 		{ "e", "", "Plugins/Extensions", ":Lazy<CR>" },
 		{ "m", "", "Lsps/Languages", ":Mason<CR>" },
 		{ "q", "", "Quit", ":qa<CR>" },
@@ -19,9 +19,6 @@ local settings = {
 	--- WSL entry, inserted at this position when WSL is available.
 	wsl_button = { "l", "", "File Explorer (WSL)", ":TelescopeFileBrowserWSL<CR>" },
 	wsl_button_position = 4,
-
-	--- Documentation entry point opened by `w` / `:NvimWiki`.
-	wiki_index = "/docs/index.md",
 
 	--- Filetypes that must never be replaced by the dashboard.
 	protected_filetypes = { "alpha", "neo-tree" },
@@ -61,20 +58,6 @@ return {
 		set_header_highlight()
 		vim.api.nvim_create_autocmd("ColorScheme", { callback = set_header_highlight })
 		dashboard.section.header.opts.hl = settings.header_highlight.name
-
-		--- Opens the documentation index in a normal buffer.
-		local function open_wiki()
-			local index_file = vim.fn.stdpath("config") .. settings.wiki_index
-			if vim.fn.filereadable(index_file) == 0 then
-				vim.notify("Wiki index file not found: " .. index_file, vim.log.levels.ERROR)
-				return
-			end
-
-			pcall(vim.cmd, "Neotree close")
-			vim.cmd("edit " .. vim.fn.fnameescape(index_file))
-		end
-
-		vim.api.nvim_create_user_command("NvimWiki", open_wiki, { desc = "Open Neovim Configuration Wiki" })
 
 		--- Turns a settings entry into an alpha button.
 		--- @param entry table `{ key, icon, label, command }`

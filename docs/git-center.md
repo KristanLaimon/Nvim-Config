@@ -50,3 +50,34 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 | `d` | Normal | Open selected file in Side-by-Side Diff Modal UI |
 | `<F5>` / `<C-r>` | Normal | Refresh Git status |
 
+---
+
+## 🔧 Customizing
+
+Everything tunable lives in `M.settings` at the top of
+[`lua/plugins/krs/git_center.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/git_center.lua)
+— sizes, filenames, delays. To make the panel take up (almost) the whole
+screen instead of the default 92%×85%:
+
+```lua
+-- lua/plugins/krs/git_center.lua
+M.settings = {
+    width_ratio = 0.98,   -- was 0.92
+    height_ratio = 0.95,  -- was 0.85
+    left_ratio = 0.30,    -- unchanged: file list stays 30% of that width
+    -- ...
+}
+```
+
+Save, restart (or `:Lazy reload krs_git_center`), reopen with `<C-S-g>`. Same
+pattern for `modal_width_ratio`/`modal_height_ratio` (the full-screen diff
+modal opened with `d`) or `editor_width_ratio`/`editor_height` (the commit
+message box opened with `c`/`m`/`t`).
+
+To change a keybind (e.g. `P` for push feels wrong), search this same file for
+the key's *current* mapping — Git Center's keys are wired inside its own
+buffer-local `map_keys` function rather than a flat `M.settings.keys` table
+(too many context-dependent bindings for that to stay simple), so `grep -n
+'"P"' lua/plugins/krs/git_center.lua` finds the exact `vim.keymap.set` call to
+edit directly.
+

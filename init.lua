@@ -23,6 +23,7 @@ if vim.loader then
 end
 
 require("config.options")
+require("krs.core.keymap_registry").install()
 require("config.keymaps")
 require("config.lazy")
 

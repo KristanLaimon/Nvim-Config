@@ -28,6 +28,7 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **Nuget Package Manager** | `nuget.lua` | CRUD for `<PackageReference>` in a `.csproj` via `dotnet add/remove package`, in a Telescope picker. | `<leader>ng`, `:NugetManager` |
 | **Buffer Cleaner & Smart Quit** | `buffer_cleaner.lua` | Makes `:q` context-aware (close split → close tab → back to dashboard → quit) and sweeps empty `[No Name]` buffers. | `:q`, `:q!` |
 | **Context Help** | `context_help.lua` | Context-aware cheatsheet — different content in Neo-tree, Git, Telescope, editor. | `?`, `<F1>` |
+| **Documentation Wiki** | `wiki_modal.lua` | This dual-pane wiki modal — categorized index on the left, live markdown preview with link-following on the right, native `/`/`<C-f>` search in either pane. | `<C-S-d>`, `<leader>?`, `:KrsWiki` |
 | **Live Colorscheme Preview** | `colorscheme_preview.lua` | Previews themes live while tabbing through `:colorscheme`, reverts on cancel. | `:colorscheme <Tab>` |
 | **Pixel-Art Image Viewer** | `image_viewer.lua` | Renders images as terminal pixel art via `chafa`, or hands off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
 | **Input Modal** | `input_modal.lua` | The shared floating input dialog; overrides `vim.ui.input` globally. | used everywhere |

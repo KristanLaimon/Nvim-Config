@@ -4,6 +4,36 @@
 
 This comprehensive guide teaches you how to extend, customize, and maintain your **KrsVim** Neovim setup. It is written with easy-to-follow examples for every part of the configuration so you can add new plugins, languages, themes, terminals, or custom modules with complete confidence.
 
+New to Vim/Neovim itself (modes, buffers, the leader key)? Read
+[Neovim Basics](neovim-basics.md) first — this page assumes you already know what
+those words mean.
+
+---
+
+## ⚡ Quick Answer: "How do I change X?"
+
+Every feature in this config follows the same shape, so the same three steps
+find and change almost anything without needing to ask for help:
+
+1. **Find the file.** Every KRS feature lives in one file named after what it
+   does: `lua/plugins/krs/<feature>.lua` (e.g. `git_center.lua`, `tasks.lua`,
+   `wiki_modal.lua`). Not sure of the name? Search for text you see on screen —
+   e.g. if a notification says "Saved as favorite", `grep -rn "Saved as
+   favorite" lua/` finds the exact file and line.
+2. **Look at the top of that file for `M.settings`.** Keybinds, titles, colors,
+   and other tunables are pulled out into this table on purpose — you almost
+   never need to touch the logic below it. See `M.settings.keys.open` in
+   `lua/plugins/krs/wiki_modal.lua` for an example: change the value, save, and
+   the next `:e` or restart picks it up.
+3. **Save and reload.** `:source $MYVIMRC` re-runs `init.lua` for options/keymap
+   changes; a changed plugin `config` function needs `:Lazy reload <name>` or a
+   full restart to re-run. When in doubt, restart — it's fast.
+
+If the change touches logic (not just a setting value), skim
+[Testing](testing.md#🔧-i-edited-a-plugin-file--do-i-need-a-test) — most
+features have a matching `tests/spec/<feature>_spec.lua` you can run in under a
+second while you iterate.
+
 ---
 
 ## 📂 File Structure & Directory Layout Explanation
@@ -33,6 +63,47 @@ c:\Users\Kristan\AppData\Local\nvim\
 ├── tests/                     -- Unit & integration test suite (`tests/run.lua`)
 └── .krsnvim/                  -- Per-project persistent state (tasks.json, launch.json, breakpoints.json)
 ```
+
+---
+
+## 🎹 0. How to Change Any Keybinding
+
+Two kinds of keybind live in this config, and the fix is different for each —
+[keybinds.md](keybinds.md) explains which is which up top:
+
+**Global keybind** (editing, windows, LSP, debugging — anything in
+`lua/config/keymaps/*.lua`): open the matching file, find the key in its
+`M.settings.keys` table, change the string, save, `:source $MYVIMRC`.
+
+```lua
+-- lua/config/keymaps/lsp.lua
+M.settings = {
+    keys = {
+        hover = "K",              -- change this to e.g. "<leader>k" if K feels wrong
+        rename = "<F2>",
+    },
+}
+```
+
+**Feature keybind** (a KRS panel like Git Center, Wiki, Tasks): same idea, but
+inside that feature's own file under `lua/plugins/krs/`, because the key needs
+to stay next to the `lazy.nvim` spec that registers it as a lazy-load trigger.
+
+```lua
+-- lua/plugins/krs/wiki_modal.lua
+M.settings = {
+    keys = {
+        open = { "<C-S-d>", "<leader>?" }, -- add/remove keys here
+    },
+}
+-- ...further down, the SAME list feeds the lazy.nvim `keys = {...}` spec,
+-- so a key added here is automatically also a lazy-load trigger.
+```
+
+Picking a key that's already used elsewhere silently breaks one of the two
+features — whichever sets the mapping last wins, with no error. Before binding
+something new, check it isn't taken: `:verbose nmap <the-key>` inside Neovim
+shows what currently owns it (and, usefully, which file set it).
 
 ---
 
