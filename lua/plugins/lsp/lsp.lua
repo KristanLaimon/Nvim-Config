@@ -467,7 +467,7 @@ return {
 				end,
 				keymap = {
 					preset = "default",
-					["<CR>"] = { "accept_fallback", "fallback" },
+					["<CR>"] = { "accept", "fallback" },
 					["<C-space>"] = { "show", "show_documentation", "hide_documentation" },
 					["<C-@>"] = { "show", "show_documentation", "hide_documentation" },
 					["<Up>"] = { "select_prev", "fallback" },
