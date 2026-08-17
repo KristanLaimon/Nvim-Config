@@ -38,7 +38,7 @@ M.settings = {
 
 	keys = {
 		--- Open the palette. Bound in normal, insert, visual and terminal mode.
-		open = { "<C-S-p>", "<C-S-P>" },
+		open = { "<C-S-p>", "<C-S-P>", "<C-k>", "<C-K>", "<C-p>", "<C-P>", "<leader>cp", "<leader>p" },
 	},
 }
 
@@ -88,6 +88,8 @@ M.commands = {
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "📦 Install Dependencies & Toolchains (Interactive Toggle UI)", cmd = "KrsInstallDependencies", category = "Setup" },
 	{ name = "🔑 Run System Setup (Sudo/Root UI Password Prompt)", cmd = "KrsSystemSetup", category = "Setup" },
+	{ name = "🚀 Install Google Antigravity CLI (agy)", cmd = "KrsInstallAgy", category = "Setup" },
+	{ name = "🤖 Install Claude Code CLI (claude)", cmd = "KrsInstallClaude", category = "Setup" },
 	{ name = "⚡ Fast Automated Batch Installer", cmd = "KrsInstallAll", category = "Setup" },
 	{ name = "⚙️ Check System & LSP Installation Health", cmd = "KrsSetupStatus", category = "Setup" },
 	{ name = "🔄 Reset System Setup Completion State", cmd = "KrsSetupReset", category = "Setup" },
@@ -384,7 +386,12 @@ return setmetatable({
 	name = "krs_command_palette",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = "CommandPalette",
-	keys = { { "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" } },
+	keys = {
+		{ "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
+		{ "<C-k>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette (Mobile/Phone)" },
+		{ "<C-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
+		{ "<leader>cp", mode = { "n", "v" }, desc = "Open Command Palette" },
+	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,
 }, { __index = M })

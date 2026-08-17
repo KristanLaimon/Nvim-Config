@@ -41,7 +41,7 @@ M.settings = {
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
 		buffer_next = { "<A-l>", "<M-l>", "<A-Right>", "<M-Right>" },
 		--- Toggle the neo-tree sidebar.
-		explorer = "<C-S-Space>",
+		explorer = { "<C-S-Space>", "<C-e>", "<C-E>", "<leader>e" },
 		--- Netrw-style directory listing, kept as an escape hatch.
 		netrw = nil,
 		--- Pin active code buffer tab.
@@ -322,6 +322,9 @@ local function toggle_neotree()
 	end
 end
 
-vim.keymap.set({ "n", "i", "t" }, M.settings.keys.explorer, toggle_neotree, opts("Toggle Explorer"))
+local exp_keys = type(M.settings.keys.explorer) == "table" and M.settings.keys.explorer or { M.settings.keys.explorer }
+for _, key in ipairs(exp_keys) do
+	vim.keymap.set({ "n", "i", "t" }, key, toggle_neotree, opts("Toggle Explorer"))
+end
 
 return M

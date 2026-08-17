@@ -60,7 +60,7 @@ local settings = {
 	},
 
 	--- Keys that toggle the sidebar.
-	toggle_keys = { "<C-S-Space>" },
+	toggle_keys = { "<C-S-Space>", "<C-e>", "<C-E>", "<leader>e" },
 }
 
 -- ============================================================================

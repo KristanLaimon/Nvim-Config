@@ -30,31 +30,31 @@ M.settings = {
 	keys = {
 		--- Stage every unstaged and untracked change. Many aliases because Alt and
 		--- Meta combinations arrive differently per terminal and GUI.
-		git_center = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
+		git_center = { "<C-S-g>", "<C-S-G>", "<C-G>", "<C-g>" },
 		git_stage_all = {
-			"<C-S-x>", "<C-S-X>",
+			"<C-S-x>", "<C-S-X>", "<C-X>",
 			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
 			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
 		},
-		smart_launch = { "<C-S-s>", "<C-S-S>" },
-		launch_profiles = { "<C-S-q>", "<C-S-Q>" },
-		task_menu = { "<C-S-t>", "<C-S-T>" },
+		smart_launch = { "<C-S-s>", "<C-S-S>", "<C-S>" },
+		launch_profiles = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
+		task_menu = { "<C-S-t>", "<C-S-T>", "<C-T>" },
 		task_menu_leader = nil,
-		run_default_task = { "<C-S-a>", "<C-S-A>" },
+		run_default_task = { "<C-S-a>", "<C-S-A>", "<C-A>" },
 		--- Toggle the most recent task output. `<C-i>` is omitted because it shares
 		--- the same keycode as <Tab>, which breaks code indentation in buffers.
 		toggle_last_output = { "<F7>" },
 		toggle_last_output_no_terminal = {},
 		--- Prefix for per-slot task output toggles; the slot number is appended.
 		task_slot_prefix = "<C-",
-		explorer = "<C-S-f>",
+		explorer = { "<C-S-f>", "<C-S-F>", "<C-F>" },
 		wsl_explorer = nil,
-		sneak_peek = { "<C-S-o>", "<C-S-O>" },
+		sneak_peek = { "<C-S-o>", "<C-S-O>", "<C-O>" },
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.
-		wiki = { "<C-S-,>", "<C-S-comma>" },
+		wiki = { "<C-S-,>", "<C-S-comma>", "<C-S-d>", "<C-S-D>", "<C-D>" },
 	},
 
 	--- How many task output slots have a direct toggle.
@@ -147,9 +147,9 @@ end
 -- EXPLORERS
 -- ============================================================================
 
-vim.keymap.set({ "n", "i", "v" }, M.settings.keys.explorer, function()
+map_all_modes(M.settings.keys.explorer, function()
 	require("plugins.krs.file_explorer").open_desktop_explorer()
-end, opts("Open Floating Desktop File Explorer"))
+end, "Open Floating Desktop File Explorer")
 
 if M.settings.keys.wsl_explorer then
 	vim.keymap.set({ "n", "v" }, M.settings.keys.wsl_explorer, function()
@@ -183,7 +183,7 @@ end, "Run current .krsnvim file with krsnvimscript")
 
 map_all_modes(M.settings.keys.wiki, function()
 	require("krsnvim").wiki.open()
-end, "Open krsnvimscript Floating Wiki Documentation")
+end, "Open Documentation Center Wiki")
 
 -- ============================================================================
 -- TRANSPILER COMMANDS

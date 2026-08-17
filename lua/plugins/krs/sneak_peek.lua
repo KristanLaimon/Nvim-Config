@@ -33,7 +33,7 @@ M.settings = {
 
 	--- Keymaps to toggle / close sneak-peek.
 	keys = {
-		toggle = { "<C-S-o>", "<C-S-O>" },
+		toggle = { "<C-S-o>", "<C-S-O>", "<C-O>" },
 	},
 }
 
@@ -280,6 +280,9 @@ return setmetatable({
 	name = "krs_sneak_peek",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "SneakPeek", "SneakPeekClose" },
-	keys = { { "<C-S-o>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" } },
+	keys = {
+		{ "<C-S-o>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" },
+		{ "<C-O>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal (Mobile)" },
+	},
 	config = M.setup,
 }, { __index = M })

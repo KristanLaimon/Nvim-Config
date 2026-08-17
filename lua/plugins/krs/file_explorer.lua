@@ -45,7 +45,7 @@ M.settings = {
 
 	keys = {
 		--- Open the explorer. Bound in normal, insert, visual and terminal mode.
-		open = { "<C-S-f>", "<C-S-F>" },
+		open = { "<C-S-f>", "<C-S-F>", "<C-F>" },
 	},
 }
 
@@ -758,6 +758,7 @@ return setmetatable({
 	cmd = { "TelescopeFileBrowserDesktop", "TelescopeFileBrowserWSL" },
 	keys = {
 		{ "<C-S-f>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
+		{ "<C-F>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer (Mobile)" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,

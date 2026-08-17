@@ -1,5 +1,19 @@
-# setup.ps1 - Automated dependency installer for krsnvim (Windows / Scoop)
-# Idempotent: Safe to run multiple times, only installs missing packages.
+param (
+    [switch]$Agy,
+    [switch]$Claude
+)
+
+if ($Agy) {
+    Write-Host "`n[*] Installing Google Antigravity CLI (agy)..." -ForegroundColor Cyan
+    irm https://antigravity.google/cli/install.ps1 | iex
+    exit 0
+}
+
+if ($Claude) {
+    Write-Host "`n[*] Installing Claude Code CLI (claude)..." -ForegroundColor Cyan
+    irm https://claude.ai/install.ps1 | iex
+    exit 0
+}
 
 $ErrorActionPreference = "Stop"
 

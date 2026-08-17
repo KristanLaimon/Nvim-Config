@@ -899,6 +899,178 @@ function M.finish_setup(installed_list)
 	end, 500)
 end
 
+--- Internal execution for Google Antigravity CLI installation.
+--- @param sudo_pass string|nil
+function M.run_install_agy(sudo_pass)
+	M.open_ui()
+	add_log("Starting installation of Google Antigravity CLI (agy)...")
+
+	local cmd = {}
+	if vim.fn.has("win32") == 1 then
+		cmd = { "powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", "irm https://antigravity.google/cli/install.ps1 | iex" }
+	else
+		if sudo_pass and sudo_pass ~= "" then
+			cmd = { "bash", "-c", string.format("echo %s | sudo -S bash -c 'curl -fsSL https://antigravity.google/cli/install.sh | bash'", vim.fn.shellescape(sudo_pass)) }
+		else
+			cmd = { "bash", "-c", "curl -fsSL https://antigravity.google/cli/install.sh | bash" }
+		end
+	end
+
+	local scan = M.scan_status()
+	update_ui_buffer("Downloading Google Antigravity CLI (agy)...", scan.installed_items, { "google-antigravity-cli" }, 40)
+
+	vim.fn.jobstart(cmd, {
+		stdout_buffered = false,
+		stderr_buffered = false,
+		on_stdout = vim.schedule_wrap(function(_, data, _)
+			if data then
+				for _, line in ipairs(data) do
+					if line and line ~= "" then
+						local clean = line:gsub("\27%[[0-9;]*[mK]", ""):gsub("^%s*", "")
+						if clean ~= "" and not clean:lower():match("password") and not (sudo_pass and clean:find(sudo_pass, 1, true)) then
+							add_log(clean)
+						end
+					end
+				end
+			end
+		end),
+		on_stderr = vim.schedule_wrap(function(_, data, _)
+			if data then
+				for _, line in ipairs(data) do
+					if line and line ~= "" then
+						local clean = line:gsub("\27%[[0-9;]*[mK]", ""):gsub("^%s*", "")
+						if clean ~= "" and not clean:lower():match("password") and not (sudo_pass and clean:find(sudo_pass, 1, true)) then
+							add_log("⚠️ " .. clean)
+						end
+					end
+				end
+			end
+		end),
+		on_exit = vim.schedule_wrap(function(_, exit_code, _)
+			if exit_code == 0 then
+				add_log("🎉 Google Antigravity CLI (agy) installed successfully!")
+				update_ui_buffer(nil, M.scan_status().installed_items, {}, 100)
+				vim.notify("🎉 Google Antigravity CLI (agy) installed successfully! Run 'agy' in terminal to start.", vim.log.levels.INFO, {
+					title = "Google Antigravity CLI",
+				})
+			else
+				add_log(string.format("❌ Google Antigravity CLI installation failed with exit code %d.", exit_code))
+				vim.notify(string.format("❌ Google Antigravity CLI installation failed (exit code %d).", exit_code), vim.log.levels.ERROR, {
+					title = "Installation Failed",
+				})
+			end
+		end),
+	})
+end
+
+--- Installs Google Antigravity CLI (`agy`) cross-platform using official oneliner scripts.
+--- Prompts for root/sudo password if non-root on Linux/macOS.
+function M.install_agy()
+	local user_name = vim.env.USER or "user"
+
+	if M.requires_sudo() then
+		vim.ui.input({
+			prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
+		}, function(pass)
+			if not pass or pass == "" then
+				vim.notify("Cancelled Google Antigravity installation: Password is required for sudo execution.", vim.log.levels.WARN, {
+					title = "Root Password Required",
+				})
+				return
+			end
+			M.run_install_agy(pass)
+		end)
+	else
+		M.run_install_agy(nil)
+	end
+end
+
+--- Internal execution for Claude Code CLI installation.
+--- @param sudo_pass string|nil
+function M.run_install_claude(sudo_pass)
+	M.open_ui()
+	add_log("Starting installation of Claude Code CLI (claude)...")
+
+	local cmd = {}
+	if vim.fn.has("win32") == 1 then
+		cmd = { "powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex" }
+	else
+		if sudo_pass and sudo_pass ~= "" then
+			cmd = { "bash", "-c", string.format("echo %s | sudo -S bash -c 'curl -fsSL https://claude.ai/install.sh | bash || npm install -g @anthropic-ai/claude-code'", vim.fn.shellescape(sudo_pass)) }
+		else
+			cmd = { "bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash || npm install -g @anthropic-ai/claude-code" }
+		end
+	end
+
+	local scan = M.scan_status()
+	update_ui_buffer("Downloading Claude Code CLI (claude)...", scan.installed_items, { "claude-code-cli" }, 40)
+
+	vim.fn.jobstart(cmd, {
+		stdout_buffered = false,
+		stderr_buffered = false,
+		on_stdout = vim.schedule_wrap(function(_, data, _)
+			if data then
+				for _, line in ipairs(data) do
+					if line and line ~= "" then
+						local clean = line:gsub("\27%[[0-9;]*[mK]", ""):gsub("^%s*", "")
+						if clean ~= "" and not clean:lower():match("password") and not (sudo_pass and clean:find(sudo_pass, 1, true)) then
+							add_log(clean)
+						end
+					end
+				end
+			end
+		end),
+		on_stderr = vim.schedule_wrap(function(_, data, _)
+			if data then
+				for _, line in ipairs(data) do
+					if line and line ~= "" then
+						local clean = line:gsub("\27%[[0-9;]*[mK]", ""):gsub("^%s*", "")
+						if clean ~= "" and not clean:lower():match("password") and not (sudo_pass and clean:find(sudo_pass, 1, true)) then
+							add_log("⚠️ " .. clean)
+						end
+					end
+				end
+			end
+		end),
+		on_exit = vim.schedule_wrap(function(_, exit_code, _)
+			if exit_code == 0 then
+				add_log("🎉 Claude Code CLI (claude) installed successfully!")
+				update_ui_buffer(nil, M.scan_status().installed_items, {}, 100)
+				vim.notify("🎉 Claude Code CLI (claude) installed successfully! Run 'claude' in terminal to authenticate.", vim.log.levels.INFO, {
+					title = "Claude Code CLI",
+				})
+			else
+				add_log(string.format("❌ Claude Code CLI installation failed with exit code %d.", exit_code))
+				vim.notify(string.format("❌ Claude Code CLI installation failed (exit code %d).", exit_code), vim.log.levels.ERROR, {
+					title = "Installation Failed",
+				})
+			end
+		end),
+	})
+end
+
+--- Installs Claude Code CLI (`claude`) cross-platform using official oneliner scripts.
+--- Prompts for root/sudo password if non-root on Linux/macOS.
+function M.install_claude()
+	local user_name = vim.env.USER or "user"
+
+	if M.requires_sudo() then
+		vim.ui.input({
+			prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
+		}, function(pass)
+			if not pass or pass == "" then
+				vim.notify("Cancelled Claude Code installation: Password is required for sudo execution.", vim.log.levels.WARN, {
+					title = "Root Password Required",
+				})
+				return
+			end
+			M.run_install_claude(pass)
+		end)
+	else
+		M.run_install_claude(nil)
+	end
+end
+
 --- Initializes setup checks on Neovim startup.
 function M.init()
 	-- Register User Commands immediately
@@ -921,6 +1093,30 @@ function M.init()
 	vim.api.nvim_create_user_command("KrsInstallSystemDependencies", function()
 		M.run_system_setup_interactive()
 	end, { desc = "Run system dependency installer script with interactive Sudo UI password prompt" })
+
+	vim.api.nvim_create_user_command("KrsInstallAgy", function()
+		M.install_agy()
+	end, { desc = "Install Google Antigravity CLI (agy) cross-platform" })
+
+	vim.api.nvim_create_user_command("AgyInstall", function()
+		M.install_agy()
+	end, { desc = "Install Google Antigravity CLI (agy) cross-platform" })
+
+	vim.api.nvim_create_user_command("InstallAgy", function()
+		M.install_agy()
+	end, { desc = "Install Google Antigravity CLI (agy) cross-platform" })
+
+	vim.api.nvim_create_user_command("KrsInstallClaude", function()
+		M.install_claude()
+	end, { desc = "Install Claude Code CLI (claude) cross-platform" })
+
+	vim.api.nvim_create_user_command("ClaudeInstall", function()
+		M.install_claude()
+	end, { desc = "Install Claude Code CLI (claude) cross-platform" })
+
+	vim.api.nvim_create_user_command("InstallClaude", function()
+		M.install_claude()
+	end, { desc = "Install Claude Code CLI (claude) cross-platform" })
 
 	vim.api.nvim_create_user_command("KrsInstallAll", function()
 		M.install_all()

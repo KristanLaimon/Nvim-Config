@@ -72,9 +72,9 @@ M.settings = {
 
 	keys = {
 		--- Open the workspace picker.
-		select = { "<C-S-w>", "<C-S-W>" },
+		select = { "<C-S-w>", "<C-S-W>", "<C-W>" },
 		--- Close everything and return to the dashboard.
-		menu = { "<C-S-m>" },
+		menu = { "<C-S-m>", "<C-S-M>", "<C-M>" },
 		--- Leader mappings: save, select, back to menu.
 		leader_save = nil,
 		leader_select = nil,
@@ -912,7 +912,9 @@ return setmetatable({
 	cmd = { "WorkspaceSelect", "Workspaces", "WorkspaceSave", "WorkspaceManage", "WorkspaceClose", "WorkspaceMenu" },
 	keys = {
 		{ "<C-S-w>", mode = { "n", "i" }, desc = "Select Workspace" },
+		{ "<C-W>", mode = { "n", "i" }, desc = "Select Workspace (Mobile)" },
 		{ "<C-S-m>", mode = { "n", "i" }, desc = "Close Workspace" },
+		{ "<C-M>", mode = { "n", "i" }, desc = "Close Workspace (Mobile)" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",

@@ -80,7 +80,7 @@ M.settings = {
 
 	keys = {
 		--- Open the task menu. Bound in normal, insert, visual and terminal mode.
-		menu = { "<C-S-t>", "<C-S-T>" },
+		menu = { "<C-S-t>", "<C-S-T>", "<C-T>" },
 		--- Run the default task, falling back to the menu.
 		run_default = "<F5>",
 		--- Open the task menu (function-key alternative).
@@ -1317,8 +1317,11 @@ return setmetatable({
 	cmd = { "TaskMenu", "TaskRunner", "TaskRestart", "TaskKill", "TaskRunDefault" },
 	keys = {
 		{ "<C-S-t>", mode = { "n", "i" }, desc = "Project Task Menu" },
+		{ "<C-T>", mode = { "n", "i" }, desc = "Project Task Menu (Mobile)" },
 		{ "<C-S-a>", mode = { "n", "i" }, desc = "Run Default Project Task" },
+		{ "<C-A>", mode = { "n", "i" }, desc = "Run Default Project Task (Mobile)" },
 		{ "<C-S-e>", mode = { "n", "i" }, desc = "Restart Active Task" },
+		{ "<C-E>", mode = { "n", "i" }, desc = "Restart Active Task (Mobile)" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = function()

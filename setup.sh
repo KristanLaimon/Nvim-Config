@@ -208,6 +208,23 @@ install_lua_tools() {
   esac
 }
 
+install_agy() {
+  echo -e "\n${BLUE}[*] Installing Google Antigravity CLI (agy)...${NC}"
+  curl -fsSL https://antigravity.google/cli/install.sh | bash
+  echo -e "${GREEN}[+] Google Antigravity CLI (agy) installation finished.${NC}"
+}
+
+install_claude() {
+  echo -e "\n${BLUE}[*] Installing Claude Code CLI (claude)...${NC}"
+  if ! curl -fsSL https://claude.ai/install.sh | bash 2>/dev/null; then
+    if command -v npm >/dev/null 2>&1; then
+      echo -e "${YELLOW}[!] Native installer unavailable, falling back to npm install -g @anthropic-ai/claude-code...${NC}"
+      run_cmd npm install -g @anthropic-ai/claude-code
+    fi
+  fi
+  echo -e "${GREEN}[+] Claude Code CLI (claude) installation finished.${NC}"
+}
+
 install_all() {
   install_core
   install_node
@@ -229,6 +246,14 @@ while [[ $# -gt 0 ]]; do
     --all|-y|--yes)
       AUTO_ALL=true
       shift
+      ;;
+    --agy)
+      install_agy
+      exit 0
+      ;;
+    --claude)
+      install_claude
+      exit 0
       ;;
     *)
       shift

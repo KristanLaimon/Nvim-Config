@@ -80,9 +80,9 @@ M.settings = {
 
 	keys = {
 		--- Smart launch, bound in normal, insert, visual and terminal mode.
-		smart_launch = { "<C-S-s>", "<C-S-S>" },
+		smart_launch = { "<C-S-s>", "<C-S-S>", "<C-S>" },
 		--- Open the management picker.
-		manage = { "<C-S-q>", "<C-S-Q>" },
+		manage = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
 	},
 }
 
@@ -870,7 +870,9 @@ return setmetatable({
 	cmd = { "LaunchProfiles", "LaunchProfilesRun", "LaunchProfilesDebug" },
 	keys = {
 		{ "<C-S-s>", mode = { "n", "i" }, desc = "Open Launch Profiles" },
+		{ "<C-S>", mode = { "n", "i" }, desc = "Open Launch Profiles (Mobile)" },
 		{ "<C-S-q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile" },
+		{ "<C-Q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile (Mobile)" },
 	},
 	config = M.setup,
 }, { __index = M })
