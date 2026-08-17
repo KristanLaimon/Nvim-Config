@@ -52,6 +52,18 @@ describe("Alt / Meta keymaps functionality", function()
 		end
 	end)
 
+	it("binds LSP symbol usages keymaps for Alt+Shift+K and Meta variants", function()
+		local lsp_keys = require("config.keymaps.lsp")
+		expect(lsp_keys.settings.keys.show_usages).toContain("<A-S-k>")
+		expect(lsp_keys.settings.keys.show_usages).toContain("<A-S-K>")
+		expect(lsp_keys.settings.keys.show_usages).toContain("<M-S-k>")
+		expect(lsp_keys.settings.keys.show_usages).toContain("<M-S-K>")
+
+		for _, key in ipairs(lsp_keys.settings.keys.show_usages) do
+			expect(has_normal_keymap(key)).toBe(true)
+		end
+	end)
+
 	it("binds git stage all keymaps for Ctrl+Shift+X, Alt and Meta variants", function()
 		local krs_keys = require("config.keymaps.krs")
 		expect(krs_keys.settings.keys.git_stage_all).toContain("<C-S-x>")

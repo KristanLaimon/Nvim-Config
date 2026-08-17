@@ -108,6 +108,8 @@ M.settings = {
 		refresh = { "<F5>", "<C-r>" },
 		--- Close the diff modal.
 		modal_close = { "q", "<Esc>", "<esc>", "<ESC>", "<C-[>", "<C-c>", "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
+		--- Open selected file in a bufferline tab.
+		open_tab = { "<S-CR>", "<S-Enter>", "<S-Return>" },
 	},
 }
 
@@ -340,6 +342,115 @@ function M.close_git_center()
 	ui.close(tab_win)
 	ui.close(main_win)
 	is_closing = false
+end
+
+--- Finds the 1-indexed line number of the first change in `file_path`.
+--- @param file_path string Target file path.
+--- @param cwd string Base repository directory.
+--- @param target_type string|nil Change type ("staged", "unstaged", "untracked", or commit hash).
+--- @return integer|nil line_number 1-indexed line number, or nil if no diff line found.
+local function get_first_changed_line(file_path, cwd, target_type)
+	if not file_path or file_path == "" or not cwd then
+		return nil
+	end
+
+	if target_type == "untracked" then
+		return 1
+	end
+
+	local rel_path = path_util.relative_to(file_path, cwd) or file_path
+
+	local args = {}
+	if target_type == "staged" then
+		args = { "diff", "--cached", "--no-ext-diff", "-U0", "--", rel_path }
+	elseif target_type == "unstaged" then
+		args = { "diff", "--no-ext-diff", "-U0", "--", rel_path }
+	elseif target_type and target_type:match("^%x+$") then
+		args = { "diff", target_type .. "~1", target_type, "--no-ext-diff", "-U0", "--", rel_path }
+	else
+		args = { "diff", "HEAD", "--no-ext-diff", "-U0", "--", rel_path }
+	end
+
+	local lines = git.lines(args, cwd)
+	if #lines == 0 and target_type and target_type:match("^%x+$") then
+		lines = git.lines({ "show", "--no-ext-diff", "-U0", "--format=", target_type, "--", rel_path }, cwd)
+	end
+
+	for _, line in ipairs(lines) do
+		local new_start = line:match("^@@ %-%d+,?%d* %+(%d+)")
+		if new_start then
+			local line_num = tonumber(new_start)
+			if line_num and line_num > 0 then
+				return line_num
+			end
+		end
+	end
+
+	if not target_type or target_type == "unstaged" then
+		local fallback = git.lines({ "diff", "--no-ext-diff", "-U0", "--", rel_path }, cwd)
+		for _, line in ipairs(fallback) do
+			local new_start = line:match("^@@ %-%d+,?%d* %+(%d+)")
+			if new_start then
+				local line_num = tonumber(new_start)
+				if line_num and line_num > 0 then
+					return line_num
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+--- Opens a file in a bufferline tab.
+--- If the file is already open in a buffer, switches to its existing tab.
+--- Otherwise, opens the file into a new buffer/tab.
+--- Jumps to the first line of changes if available.
+--- Closes Git Center and any active modals first.
+---
+--- @param file_path string Target file path (relative or absolute).
+--- @param cwd string|nil Base directory if file_path is relative.
+--- @param target_type string|nil Change type ("staged", "unstaged", "untracked", or commit hash).
+function M.open_file_in_tab(file_path, cwd, target_type)
+	if not file_path or file_path == "" then
+		return
+	end
+
+	local base_cwd = cwd or (get_active_target() and get_active_target().full_path) or vim.fn.getcwd()
+	local full_path = file_path
+	if not path_util.is_absolute(full_path) then
+		full_path = path_util.join(base_cwd, file_path)
+	else
+		full_path = path_util.normalize(full_path)
+	end
+
+	local first_line = get_first_changed_line(full_path, base_cwd, target_type)
+
+	M.close_git_center()
+
+	vim.schedule(function()
+		local cur_win = vim.api.nvim_get_current_win()
+		local win_config = vim.api.nvim_win_get_config(cur_win)
+		if win_config.relative ~= "" or vim.bo[vim.api.nvim_win_get_buf(cur_win)].buftype ~= "" then
+			for _, win in ipairs(vim.api.nvim_list_wins()) do
+				local cfg = vim.api.nvim_win_get_config(win)
+				if cfg.relative == "" and vim.bo[vim.api.nvim_win_get_buf(win)].buftype == "" then
+					vim.api.nvim_set_current_win(win)
+					break
+				end
+			end
+		end
+
+		local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(full_path))
+		if ok and first_line then
+			local buf_lines = vim.api.nvim_buf_line_count(0)
+			local target_line = math.min(math.max(1, first_line), math.max(1, buf_lines))
+			pcall(vim.api.nvim_win_set_cursor, 0, { target_line, 0 })
+			pcall(vim.cmd, "normal! zz")
+		elseif not ok then
+			notify("Failed to open file: " .. tostring(err), vim.log.levels.ERROR)
+		end
+	end)
 end
 
 --- Opens the Git Center, or closes it when it is already open.
@@ -1423,17 +1534,31 @@ function M.open_commit_log_modal(target_cwd)
 		toggle_log_focus()
 	end
 
-	local function open_right_file_diff()
+	local function current_right_file()
 		if not (right_win and vim.api.nvim_win_is_valid(right_win) and right_buf and vim.api.nvim_buf_is_valid(right_buf)) then
-			return
+			return nil
 		end
 		local cursor_line = vim.api.nvim_win_get_cursor(right_win)[1]
 		local line_text = vim.api.nvim_buf_get_lines(right_buf, cursor_line - 1, cursor_line, false)[1] or ""
-
 		local filepath = line_text:match("^%s*•%s*%[[A-Z%d]+%]%s+(.+)$") or line_text:match("^%s*•%s*(.+)$")
 		if filepath then
-			filepath = filepath:gsub("^%s*", ""):gsub("%s*$", "")
+			return filepath:gsub("^%s*", ""):gsub("%s*$", "")
+		end
+		return nil
+	end
+
+	local function open_right_file_diff()
+		local filepath = current_right_file()
+		if filepath then
 			M.open_diff_modal(filepath, nil, active_cwd)
+		end
+	end
+
+	local function handle_log_shift_enter()
+		local filepath = current_right_file()
+		if filepath then
+			close_log_modal()
+			M.open_file_in_tab(filepath, active_cwd)
 		end
 	end
 
@@ -1444,6 +1569,11 @@ function M.open_commit_log_modal(target_cwd)
 	vim.keymap.set("n", "<CR>", focus_log_right, opts)
 	vim.keymap.set("n", "<CR>", handle_right_enter, right_opts)
 	vim.keymap.set("n", "d", open_right_file_diff, right_opts)
+
+	for _, key in ipairs(M.settings.keys.open_tab) do
+		vim.keymap.set({ "n", "v", "i" }, key, handle_log_shift_enter, opts)
+		vim.keymap.set({ "n", "v", "i" }, key, handle_log_shift_enter, right_opts)
+	end
 
 	for _, key in ipairs({ "<C-h>", "<C-H>" }) do
 		vim.keymap.set({ "n", "v", "i", "t" }, key, focus_log_left, opts)
@@ -1717,6 +1847,18 @@ function M.open_diff_modal(target_file, _target_type, target_cwd)
 		local opts = { buffer = b, noremap = true, silent = true, nowait = true }
 		for _, key in ipairs(M.settings.keys.modal_close) do
 			vim.keymap.set({ "n", "v", "i", "t" }, key, close_modal, opts)
+		end
+
+		local function handle_diff_shift_enter()
+			local item = files[index]
+			if item and item.file then
+				close_modal()
+				M.open_file_in_tab(item.file, active_cwd)
+			end
+		end
+
+		for _, key in ipairs(M.settings.keys.open_tab) do
+			vim.keymap.set({ "n", "v", "i" }, key, handle_diff_shift_enter, opts)
 		end
 
 		for _, key in ipairs({ "<C-h>", "<C-H>" }) do
@@ -2289,6 +2431,18 @@ function M.open_git_center()
 	end
 
 	vim.keymap.set("n", "<CR>", handle_main_enter, key_opts)
+
+	local function handle_main_shift_enter()
+		local item = current_item()
+		if item and item.file then
+			M.open_file_in_tab(item.file, get_active_target().full_path, item.type)
+		end
+	end
+
+	for _, key in ipairs(M.settings.keys.open_tab) do
+		vim.keymap.set({ "n", "v", "i" }, key, handle_main_shift_enter, key_opts)
+		vim.keymap.set({ "n", "v", "i" }, key, handle_main_shift_enter, preview_opts)
+	end
 
 	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_focus, key_opts)
 	vim.keymap.set({ "n", "v", "i", "t" }, "<Tab>", toggle_focus, preview_opts)

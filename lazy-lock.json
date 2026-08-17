@@ -41,6 +41,7 @@
   "render-markdown.nvim": { "branch": "main", "commit": "f422cb5c6855f150e2ddcfaf44e7157b98b34f6a" },
   "schemastore.nvim": { "branch": "main", "commit": "427b0ff24377a6cdd18aa822a984a5adf156c3fa" },
   "snacks.nvim": { "branch": "main", "commit": "882c996cf28183f4d63640de0b4c02ec886d01f2" },
+  "symbol-usage.nvim": { "branch": "main", "commit": "6a449e6b37be61a110606e9a67a7a308774f120f" },
   "telescope-file-browser.nvim": { "branch": "master", "commit": "3610dc7dc91f06aa98b11dca5cc30dfa98626b7e" },
   "telescope.nvim": { "branch": "master", "commit": "427b576c16792edad01a92b89721d923c19ad60f" },
   "vim-blade": { "branch": "master", "commit": "9534101808cc320eef003129a40cab04b026a20c" }

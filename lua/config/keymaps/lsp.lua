@@ -24,6 +24,7 @@ M.settings = {
 		signature_help = "<C-j>",
 		code_action = "<C-.>",
 		goto_definition = { "<A-k>", "<M-k>", "<A-j>", "<M-j>" },
+		show_usages = { "<A-S-k>", "<A-S-K>", "<M-S-k>", "<M-S-K>" },
 		rename = "<F2>",
 		diagnostic_float = nil,
 		diagnostic_prev = nil,
@@ -175,6 +176,71 @@ M.goto_definition_at_mouse = goto_definition_at_mouse
 
 for _, key in ipairs(M.settings.keys.goto_definition) do
 	vim.keymap.set({ "n", "i", "v" }, key, goto_definition, opts("Go to definition"))
+end
+
+--- Shows all usages/references of the symbol under the cursor.
+--- If references are found, opens Telescope lsp_references picker.
+--- If no usages are found, displays a toast notification.
+local function show_symbol_usages()
+	local symbol = vim.fn.expand("<cword>")
+	if not symbol or symbol == "" then
+		vim.notify("No symbol under cursor", vim.log.levels.WARN, { title = "LSP Usages" })
+		return
+	end
+
+	local symbol_label = "'" .. symbol .. "'"
+	local clients = attached_clients()
+	if #clients == 0 then
+		vim.notify("No usages found for " .. symbol_label, vim.log.levels.INFO, { title = "LSP Usages" })
+		return
+	end
+
+	local supports_ref = false
+	for _, client in ipairs(clients) do
+		if client:supports_method("textDocument/references") then
+			supports_ref = true
+			break
+		end
+	end
+
+	if not supports_ref then
+		vim.notify("No usages found for " .. symbol_label, vim.log.levels.INFO, { title = "LSP Usages" })
+		return
+	end
+
+	local has_telescope, builtin = pcall(require, "telescope.builtin")
+
+	local status, err = pcall(function()
+		vim.lsp.buf.references(nil, {
+			on_list = function(options)
+				if not options or not options.items or #options.items == 0 then
+					vim.notify("No usages found for " .. symbol_label, vim.log.levels.INFO, { title = "LSP Usages" })
+					return
+				end
+
+				if has_telescope then
+					builtin.lsp_references({
+						include_declaration = true,
+						show_line = true,
+						prompt_title = "Usages of " .. symbol_label,
+					})
+				else
+					vim.fn.setqflist({}, " ", options)
+					vim.cmd("copen")
+				end
+			end,
+		})
+	end)
+
+	if not status then
+		vim.notify("No usages found for " .. symbol_label, vim.log.levels.INFO, { title = "LSP Usages" })
+	end
+end
+
+M.show_symbol_usages = show_symbol_usages
+
+for _, key in ipairs(M.settings.keys.show_usages) do
+	vim.keymap.set({ "n", "i", "v" }, key, show_symbol_usages, opts("Show symbol usages"))
 end
 
 vim.keymap.set({ "n", "i", "v" }, "<S-LeftMouse>", goto_definition_at_mouse, opts("Shift + Click: Go to definition"))

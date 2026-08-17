@@ -71,6 +71,11 @@ function M.toggle()
 	local new_state = not M.is_enabled()
 	store.save(M.settings.store_file, { enabled = new_state })
 
+	local ok_su, su = pcall(require, "symbol-usage")
+	if ok_su and su.toggle_globally then
+		pcall(su.toggle_globally)
+	end
+
 	if new_state then
 		vim.notify("LSP Reference Counts: ENABLED", vim.log.levels.INFO, { title = "LSP CodeLens" })
 		M.refresh(0)

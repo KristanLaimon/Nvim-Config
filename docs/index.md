@@ -74,23 +74,51 @@ If you have just installed or launched KrsVim for the first time, follow these s
 
 ---
 
-## 🚀 Key Shortcuts at a Glance
+## ⚡ Essential Cheatsheet & Key Shortcuts
 
-| Shortcut | Action / Feature |
-| :--- | :--- |
-| `<C-S-m>` | Dashboard / Main Menu |
-| `<C-S-p>` | Command Palette |
-| `<C-S-w>` | Workspaces Picker |
-| `<C-S-g>` | Git Control Center |
-| `<C-S-f>` | Desktop File Explorer |
-| `<C-S-t>` | Task Runner Menu |
-| `<C-S-s>` | Run Default Launch Profile / Stop Debug Session |
-| `<C-S-q>` | Launch Profile Manager |
-| `<C-S-d>` | This Wiki (`:KrsWiki`) |
-| `<C-b>` | Toggle Breakpoint |
-| `<C-;>` | Toggle Active Terminal |
-| `<A-1>`..`<A-9>` | Switch to Terminal Slot 1..9 |
-| `?` / `<F1>` | Context-Aware Help for Focused Window |
+### 💡 LSP, Code Navigation & Symbol Help
+| Shortcut | Action | Details |
+| :--- | :--- | :--- |
+| `<A-k>` / `<M-k>` | **Go to Definition** | Jump directly to symbol definition (`<C-o>` jumps back) |
+| `<A-S-k>` / `<M-S-k>` | **Show Symbol Usages** | Open Telescope picker with all usages of symbol (or toast if 0 usages) |
+| `K` / `<S-k>` | **Hover Documentation** | Show doc popup under cursor |
+| `<C-j>` / `<C-k>` | **Signature / Parameter Help** | Show function parameter types & signature popup |
+| `<C-.>` | **Code Actions / Quick Fix** | Open caret dropdown for fixes, refactors, and imports |
+| `<F2>` | **Rename Symbol or File** | Rename symbol project-wide or file on disk |
+
+### 🐙 Git Operations & Staging
+| Shortcut | Action | Details |
+| :--- | :--- | :--- |
+| `<C-S-g>` | **Git Control Center** | Interactive staging, live diff, branch manager, commit & push |
+| `<C-S-x>` | **Stage All Changed Files** | Quick global shortcut to stage all unstaged/untracked files |
+| `<S-CR>` / `<S-Enter>` *(in Git Center)* | **Open File at First Change** | Open file in bufferline tab and position cursor on 1st changed line (`zz`) |
+| `<CR>` *(in Git Center)* | **Side-by-Side Diff Modal** | Open full-screen dual-pane diff preview |
+| `s` / `S` *(in Git Center)* | **Stage File / Stage All** | Stage file under cursor or visual selection / stage all |
+| `u` / `U` *(in Git Center)* | **Unstage File / Unstage All** | Unstage file under cursor or selection / unstage all |
+| `r` / `R` *(in Git Center)* | **Restore File / Restore Section** | Discard changes in selected file / discard entire section |
+| `c` / `m` / `t` / `C` *(in Git Center)* | **Commit Form & Commit** | Edit title (`c`), description (`m`), tag (`t`), execute commit (`C`) |
+
+### 🧭 Navigation & Tab Operations
+| Shortcut | Action | Details |
+| :--- | :--- | :--- |
+| `<A-h>` / `<A-l>` | **Switch Tabs (Left / Right)** | Cycle to previous / next bufferline tab (`gt` / `gT`) |
+| `<C-o>` / `<C-i>` | **Jump Back / Jump Forward** | Navigate backward and forward in line jump history |
+| `<C-h>` / `<C-l>` | **Focus Left / Right Pane** | Switch window focus between split panes or float panels |
+| `]c` / `[c` | **Next / Previous Git Hunk** | Jump directly to next or previous change hunk in active file |
+
+### 🎛️ Floating Panels & General Tools
+| Shortcut | Action | Details |
+| :--- | :--- | :--- |
+| `<C-S-m>` | **Main Menu / Dashboard** | Open landing dashboard |
+| `<C-S-p>` | **Command Palette** | Fuzzy-searchable action runner for all commands & tools |
+| `<C-S-f>` | **File Explorer** | Floating desktop & WSL file explorer and project picker |
+| `<C-S-w>` | **Workspaces & Sessions** | Manage per-project session slots and buffer states |
+| `<C-S-t>` | **Task Runner** | Auto-discovered build, test, and package manager tasks |
+| `<C-S-s>` / `<C-S-q>` | **Launch & Debug Profiles** | Run default profile / open launch profile manager |
+| `<C-S-d>` / `:KrsWiki` | **Wiki & Documentation** | Dual-pane offline documentation modal |
+| `?` / `<F1>` | **Context-Aware Help** | Display keyboard shortcuts for the focused panel |
+| `<C-;>` | **Toggle Active Terminal** | Toggle floating terminal buffer |
+| `<A-1>`..`<A-9>` | **Terminal Slots 1..9** | Switch between 9 independent background terminals |
 
 ---
 

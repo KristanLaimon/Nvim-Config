@@ -191,7 +191,37 @@ return {
 				},
 				lemminx = {},
 				dockerls = {},
-				gopls = {},
+				gopls = {
+					settings = {
+						gopls = {
+							codelenses = {
+								gc_details = false,
+								generate = true,
+								regenerate_cgo = true,
+								run_govulncheck = true,
+								test = true,
+								tidy = true,
+								upgrade_dependency = true,
+								vendor = true,
+							},
+							hints = {
+								assignVariableTypes = true,
+								compositeLiteralFields = true,
+								compositeLiteralTypes = true,
+								constantValues = true,
+								functionTypeParameters = true,
+								parameterNames = true,
+								rangeVariableTypes = true,
+							},
+							analyses = {
+								unusedparams = true,
+								shadow = true,
+							},
+							staticcheck = true,
+							gofumpt = true,
+						},
+					},
+				},
 				bashls = {
 					filetypes = { "sh", "bash", "zsh", "csh", "ksh" },
 				},
@@ -298,6 +328,12 @@ return {
 							client.config.settings.Lua.diagnostics = client.config.settings.Lua.diagnostics or {}
 							client.config.settings.Lua.diagnostics.globals = { "vim", "fetch", "console", "import", "krsnvim" }
 							pcall(client.notify, "workspace/didChangeConfiguration", { settings = client.config.settings })
+						end
+					end
+
+					if client and client.supports_method and client:supports_method("textDocument/inlayHint") then
+						if vim.lsp.inlay_hint then
+							pcall(vim.lsp.inlay_hint.enable, true, { bufnr = args.buf })
 						end
 					end
 				end,

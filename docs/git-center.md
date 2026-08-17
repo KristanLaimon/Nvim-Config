@@ -48,6 +48,7 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 | `<Tab>` | Normal | Toggle focus between left control panel and right live preview |
 | `<C-S-j>` / `<C-S-k>` | Normal | Scroll right live diff preview window |
 | `d` | Normal | Open selected file in Side-by-Side Diff Modal UI |
+| `<S-CR>` / `<S-Enter>` | Normal, Visual, Insert | Open file under cursor in bufferline tab (switches to existing tab if open) |
 | `<F5>` / `<C-r>` | Normal | Refresh Git status |
 
 ---

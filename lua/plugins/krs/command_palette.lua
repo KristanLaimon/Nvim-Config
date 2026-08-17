@@ -79,6 +79,11 @@ M.commands = {
 		cmd = "KrsToggleReferences",
 		category = "LSP",
 	},
+	{
+		name = "✨ Open Usages UI Theme Picker (Bubbles, Plain, Labels)",
+		cmd = "KrsUsagesTheme",
+		category = "LSP",
+	},
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 	{ name = "ℹ️ LSP Server Information", cmd = "LspInfo", category = "LSP" },

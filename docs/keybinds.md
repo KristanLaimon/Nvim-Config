@@ -53,6 +53,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | :--- | :---: | :--- |
 | `K` | n | Hover documentation |
 | `<A-k>` / `<M-k>` / `<A-j>` / `<M-j>` | n, i, v | Go to definition |
+| `<A-S-k>` / `<M-S-k>` | n, i, v | Show all usages of symbol (or toast if no usages) |
 | `<C-j>` | i, v | Parameter / signature help (when typing in insert/visual mode) |
 | `<C-.>` | n, i, v | Code actions / quick fix at the caret |
 | `<C-o>` | n | Jump back in the jump list |
@@ -145,6 +146,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | `c` / `m` / `t` | Git Center | Edit commit title / description / tag |
 | `C` | Git Center | Commit (and tag) |
 | `P` | Git Center | Push (with remote branch selector) |
+| `<S-CR>` / `<S-Enter>` | Git Center | Open file under cursor in bufferline tab |
 
 ---
 

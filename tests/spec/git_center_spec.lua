@@ -23,10 +23,12 @@ describe("plugins.krs.git_center", function()
 		expect(type(git_center.open_git_center)).toBe("function")
 		expect(type(git_center.close_git_center)).toBe("function")
 		expect(type(git_center.toggle_git_center)).toBe("function")
+		expect(type(git_center.open_file_in_tab)).toBe("function")
 		expect(type(git_center.is_open)).toBe("function")
 		expect(type(git_center.stage_all_with_modal)).toBe("function")
 		expect(type(git_center.settings)).toBe("table")
 		expect(type(git_center.settings.keys)).toBe("table")
+		expect(type(git_center.settings.keys.open_tab)).toBe("table")
 	end)
 
 	it("includes Ctrl+Shift+X in stage_all key settings and spec", function()
@@ -363,6 +365,24 @@ describe("plugins.krs.git_center", function()
 		expect(vim.api.nvim_get_current_win()).toBe(main_win)
 
 		git_center.close_git_center()
+	end)
+
+	it("binds Shift+Enter keymaps to open files in bufferline tab and closes git-center", function()
+		git_center.open_git_center()
+
+		local main_buf = git_center.main_buf
+		local shift_cr_map = vim.api.nvim_buf_call(main_buf, function()
+			return vim.fn.maparg("<S-CR>", "n", false, true)
+		end)
+		expect(shift_cr_map.rhs or shift_cr_map.callback).toBeDefined()
+
+		local temp_file = vim.fn.tempname() .. ".lua"
+		vim.fn.writefile({ "print('hello')" }, temp_file)
+
+		git_center.open_file_in_tab(temp_file)
+		expect(git_center.is_open()).toBeFalsy()
+
+		vim.fn.delete(temp_file)
 	end)
 end)
 

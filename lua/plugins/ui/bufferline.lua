@@ -129,10 +129,6 @@ return {
 			"<M-H>",
 			"<A-S-Left>",
 			"<M-S-Left>",
-			"<A-S-k>",
-			"<A-K>",
-			"<M-S-k>",
-			"<M-K>",
 		}
 		local move_right_keys = {
 			"<C-A-Right>",
@@ -143,10 +139,6 @@ return {
 			"<M-L>",
 			"<A-S-Right>",
 			"<M-S-Right>",
-			"<A-S-j>",
-			"<A-J>",
-			"<M-S-j>",
-			"<M-J>",
 		}
 
 		for _, key in ipairs(move_left_keys) do
