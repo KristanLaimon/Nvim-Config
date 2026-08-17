@@ -14,6 +14,7 @@
 
 ![krsnv-cover](./.github/cover.png)
 ![krsnv-editor](./.github/editor-example.png)
+![krsnv-editor-v2](./.github/cover-with-transparency)
 
 My personal Neovim setup — a mini-distro, if you like. Fork it, use it, break it. Windows is first-class, WSL is layered on top, plain Linux should mostly hold up (open an issue if it doesn't 🦊).
 
