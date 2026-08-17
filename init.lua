@@ -1,6 +1,8 @@
 -- ============================================================================
--- KrsVim -- entry point.
+-- KrsVim -- entry point (Neovim v0.12.4).
 -- ============================================================================
+-- Target / Current Neovim Version: NVIM v0.12.4
+--
 -- STARTUP ORDER (each step depends on the one before it)
 --   1. config.options   Editor options, filetypes, shell, PATH repair.
 --   2. config.keymaps   Every keybinding, grouped by domain.

@@ -36,6 +36,12 @@ return {
 			},
 			pipe_table = {
 				enabled = true,
+				preset = "round",
+				style = "full",
+				cell = "padded",
+				padding = 1,
+				min_width = 0,
+				alignment_indicator = "━",
 			},
 			callout = {
 				note = { raw = "[!NOTE]", rendered = "󰋽 Note", highlight = "RenderMarkdownInfo" },

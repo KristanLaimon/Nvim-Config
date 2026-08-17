@@ -73,4 +73,32 @@ describe("plugins.krs.wiki_modal", function()
 		expect(has_shift_click).toBe(true)
 		expect(has_nowait_close).toBe(true)
 	end)
+
+	it("defaults reader pane wrap option to false for table grid integrity and binds w keymap to toggle", function()
+		wiki_modal.open()
+		local right_win = nil
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			local buf = vim.api.nvim_win_get_buf(win)
+			if vim.bo[buf].filetype == "markdown" and vim.b[buf].krs_wiki_modal then
+				right_win = win
+				break
+			end
+		end
+
+		expect(right_win).toBeDefined()
+		expect(vim.wo[right_win].wrap).toBe(false)
+		expect(vim.wo[right_win].conceallevel).toBe(3)
+
+		local maps = vim.api.nvim_buf_get_keymap(vim.api.nvim_win_get_buf(right_win), "n")
+		local has_w_map = false
+		for _, map in ipairs(maps) do
+			if map.lhs == "w" and map.desc and map.desc:find("line wrapping") then
+				has_w_map = true
+				break
+			end
+		end
+
+		wiki_modal.close()
+		expect(has_w_map).toBe(true)
+	end)
 end)

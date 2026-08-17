@@ -17,6 +17,8 @@
 
 My personal Neovim setup — a mini-distro, if you like. Fork it, use it, break it. Windows is first-class, WSL is layered on top, plain Linux should mostly hold up (open an issue if it doesn't 🦊).
 
+> 🦊 **Neovim Version:** Currently running on **NVIM v0.12.4** (requires Neovim >= 0.10).
+
 Expect sharp edges and highly opinionated wiring.
 
 ---

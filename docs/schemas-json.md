@@ -8,8 +8,8 @@ This guide explains how offline, 100% local JSON schema validation and autocompl
 
 ## 📁 Directory Structure & Key Files
 
-- **Local JSON Schemas Folder:** `schemas/json/` ([`stdpath("config") .. "/schemas/json/"`](file:///C:/Users/Kristan/AppData/Local/nvim/schemas/json))
-- **LSP Configuration File:** [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua)
+- **Local JSON Schemas Folder:** `schemas/json/` ([`stdpath("config") .. "/schemas/json/"`](../schemas/json))
+- **LSP Configuration File:** [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)
 
 ---
 
@@ -30,7 +30,7 @@ This guide explains how offline, 100% local JSON schema validation and autocompl
 
 ## 🧠 Understanding `select`, `replace`, and `extra` Properties
 
-In [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua), `require("schemastore").json.schemas({...})` uses three main options to filter and override schemas:
+In [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua), `require("schemastore").json.schemas({...})` uses three main options to filter and override schemas:
 
 ### 1. `select` (Whitelisting Schemas)
 - **Purpose**: Restricts Neovim to load **only** the schema names explicitly listed in this array, ignoring all other internet schemas in SchemaStore.
@@ -76,7 +76,7 @@ Follow this step-by-step checklist whenever you want to add a new JSON schema to
   Save the schema `.json` file inside `schemas/json/`.  
   *Example file path:* `C:\Users\Kristan\AppData\Local\nvim\schemas\json\my-schema.json`
 
-- [ ] **Step 2: Open [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua)**
+- [ ] **Step 2: Open [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)**
   Locate `opts.servers.jsonls.settings`.
 
 - [ ] **Step 3: Add schema name to `select` array**

@@ -8,8 +8,8 @@ This guide explains how offline, 100% local TOML schema validation and autocompl
 
 ## 📁 Directory Structure & Key Files
 
-- **Local TOML Schemas Folder:** `schemas/toml/` ([`stdpath("config") .. "/schemas/toml/"`](file:///C:/Users/Kristan/AppData/Local/nvim/schemas/toml))
-- **LSP Configuration File:** [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua)
+- **Local TOML Schemas Folder:** `schemas/toml/` ([`stdpath("config") .. "/schemas/toml/"`](../schemas/toml))
+- **LSP Configuration File:** [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)
 
 ---
 
@@ -23,7 +23,7 @@ This guide explains how offline, 100% local TOML schema validation and autocompl
 
 ## 🧠 How Taplo TOML Schema Association Works
 
-In [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua), Taplo is configured using the `even_better_toml.schema` table:
+In [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua), Taplo is configured using the `even_better_toml.schema` table:
 
 ```lua
 opts.servers.taplo.settings = {
@@ -54,7 +54,7 @@ Follow this step-by-step checklist whenever you want to add a new TOML schema va
   Save the schema `.json` file inside `schemas/toml/`.  
   *Example file path:* `C:\Users\Kristan\AppData\Local\nvim\schemas\toml\cargo.json`
 
-- [ ] **Step 2: Open [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua)**
+- [ ] **Step 2: Open [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)**
   Locate `opts.servers.taplo.settings`.
 
 - [ ] **Step 3: Add a new entry to `associations`**

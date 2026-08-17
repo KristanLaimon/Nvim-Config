@@ -15,7 +15,7 @@ When multiple floating UI components (such as **Git Center**, **File Explorer / 
 
 ### ⚠️ Mandatory Guideline for Humans & AI Agents
 1. **Never hardcode static Z-index numbers** (e.g. `zindex = 100`) when creating new UI plugins, floating windows, or input prompts.
-2. **Always register with `krs.core.z_index`** (`require("krs.core.z_index")` or `require("krs.core").z_index`), or use [`ui.float`](file:///c:/Users/Kristan/AppData/Local/nvim/lua/krs/core/ui.lua) with `opts.name` / `opts.parent`.
+2. **Always register with `krs.core.z_index`** (`require("krs.core.z_index")` or `require("krs.core").z_index`), or use [`ui.float`](../lua/krs/core/ui.lua) with `opts.name` / `opts.parent`.
 3. **In-Memory Only**: Z-index tracking is strictly in-memory per Neovim session. `WinClosed` autocmds clean up stack entries automatically when floating windows close.
 
 ---

@@ -8,9 +8,9 @@ This guide explains how to manage, customize, and extend colorschemes in this Ne
 
 ## 📁 Key Files & Directories
 
-- **Nagatoro Theme System & Picker:** [`lua/plugins/krs/theme_picker.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/theme_picker.lua)
-- **Statusline Theme Picker:** [`lua/plugins/krs/statusline_picker.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/statusline_picker.lua)
-- **Colorify Engine (CMP Completion):** [`lua/krs/lsp/colorify.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/krs/lsp/colorify.lua)
+- **Nagatoro Theme System & Picker:** [`lua/plugins/krs/theme_picker.lua`](../lua/plugins/krs/theme_picker.lua)
+- **Statusline Theme Picker:** [`lua/plugins/krs/statusline_picker.lua`](../lua/plugins/krs/statusline_picker.lua)
+- **Colorify Engine (CMP Completion):** [`lua/krs/lsp/colorify.lua`](../lua/krs/lsp/colorify.lua)
 - **Theme Palette Files:** `colors/nagatoro-krs.lua`, `colors/nagatoro-light.lua`, `colors/onedark-krs.lua`, `colors/catppuccin-krs.lua`, `colors/nord-krs.lua`
 - **Customization Guide:** [`how-to-customize-editor.md`](how-to-customize-editor.md)
 

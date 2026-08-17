@@ -2,6 +2,8 @@
 
 Welcome to the **KrsVim** documentation! KrsVim is a fast, Windows-first, WSL-aware Neovim distribution built around a modular architecture and rounded floating UI modules (`lua/plugins/krs/`).
 
+> 🦊 **Neovim Version:** Currently running on **NVIM v0.12.4** (requires Neovim >= 0.10).
+
 > 🌱 **Never used Vim or Neovim before?** This wiki assumes you know what "buffer", "leader key", and "Normal mode" mean. If you don't, read **[Neovim Basics](neovim-basics.md)** first — 5 minutes, then everything below will make sense.
 
 > 🔎 **Searching this wiki:** inside this modal, press `/` or `Ctrl+F` in either pane to search it (native Neovim search — `n`/`N` repeats). Left pane searches page titles, right pane searches the open page's text.

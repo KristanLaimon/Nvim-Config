@@ -56,7 +56,7 @@ The **Git Control Center** (`<C-S-g>`) is a high-speed, interactive floating Git
 ## 🔧 Customizing
 
 Everything tunable lives in `M.settings` at the top of
-[`lua/plugins/krs/git_center.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/krs/git_center.lua)
+[`lua/plugins/krs/git_center.lua`](../lua/plugins/krs/git_center.lua)
 — sizes, filenames, delays. To make the panel take up (almost) the whole
 screen instead of the default 92%×85%:
 

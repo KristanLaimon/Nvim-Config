@@ -78,6 +78,7 @@ function M.open(doc_file)
 		title_pos = "center",
 	})
 
+	vim.wo[win].wrap = false
 	vim.wo[win].conceallevel = 3
 	vim.wo[win].concealcursor = "nvic"
 	local ok, rm_ui = pcall(require, "render-markdown.core.ui")
@@ -89,6 +90,11 @@ function M.open(doc_file)
 	local opts = { noremap = true, silent = true, buffer = buf }
 	vim.keymap.set("n", "q", "<cmd>close<CR>", opts)
 	vim.keymap.set("n", "<Esc>", "<cmd>close<CR>", opts)
+	vim.keymap.set("n", "w", function()
+		vim.wo[win].wrap = not vim.wo[win].wrap
+		local status = vim.wo[win].wrap and "ON (Text Wrap)" or "OFF (Table Grid View)"
+		vim.notify("krsnvimscript wiki line wrap: " .. status, vim.log.levels.INFO)
+	end, opts)
 
 	for idx, doc in ipairs(docs_files) do
 		vim.keymap.set("n", tostring(idx), function()

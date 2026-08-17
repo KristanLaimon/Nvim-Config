@@ -20,7 +20,7 @@ Search for and install the required Language Server (e.g., `svelte-language-serv
 ---
 
 ### Step 2: Enable the Server in `lua/plugins/lsp/lsp.lua`
-Open [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) and register the `nvim-lspconfig` server name under `opts.servers`:
+Open [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) and register the `nvim-lspconfig` server name under `opts.servers`:
 
 ```lua
 opts = {
@@ -44,7 +44,7 @@ opts = {
 ---
 
 ### Step 3: (Recommended) Add to `ensure_installed` in `mason-lspconfig`
-In the same file ([`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua)), add the LSP server name to `mason-lspconfig` setup:
+In the same file ([`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)), add the LSP server name to `mason-lspconfig` setup:
 
 ```lua
 require("mason-lspconfig").setup({
@@ -64,7 +64,7 @@ require("mason-lspconfig").setup({
 ---
 
 ### Step 4: (Optional) Configure Auto-Formatting in `lua/plugins/lsp/formatting.lua`
-To enable auto-formatting on save or via `<leader>ff`, open [`lua/plugins/lsp/formatting.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/formatting.lua) and add the filetype to `formatters_by_ft`:
+To enable auto-formatting on save or via `<leader>ff`, open [`lua/plugins/lsp/formatting.lua`](../lua/plugins/lsp/formatting.lua) and add the filetype to `formatters_by_ft`:
 
 ```lua
 formatters_by_ft = {
@@ -84,7 +84,7 @@ formatters_by_ft = {
 
 ### Step 4.5: (Optional) Add a Linter
 
-There is **no `nvim-lint`** in this config. Diagnostics come from LSP servers only, so a linter is added exactly like Step 2 + Step 3 — as a server in [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua):
+There is **no `nvim-lint`** in this config. Diagnostics come from LSP servers only, so a linter is added exactly like Step 2 + Step 3 — as a server in [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua):
 
 ```lua
 opts = {
@@ -109,7 +109,7 @@ If a linter has **no** language server (e.g. `shellcheck` alone, `markdownlint`)
 ---
 
 ### Step 5: (Optional) Configure Treesitter Syntax Highlighting in `lua/plugins/lsp/treesitter.lua`
-Open [`lua/plugins/lsp/treesitter.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/treesitter.lua) and add the parser name to `ensure_installed`:
+Open [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) and add the parser name to `ensure_installed`:
 
 ```lua
 ensure_installed = {
@@ -128,11 +128,11 @@ ensure_installed = {
 
 | Component | File to Edit | Key Section |
 |---|---|---|
-| **LSP Server Activation** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add to `opts.servers` |
-| **Auto-Installation** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add to `mason-lspconfig` `ensure_installed` |
-| **Linting** | [`lua/plugins/lsp/lsp.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/lsp.lua) | Add linter's LSP to `opts.servers` (no `nvim-lint`) |
-| **Formatting** | [`lua/plugins/lsp/formatting.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/formatting.lua) | Add to `formatters_by_ft` |
-| **Syntax Highlighting** | [`lua/plugins/lsp/treesitter.lua`](file:///C:/Users/Kristan/AppData/Local/nvim/lua/plugins/lsp/treesitter.lua) | Add to `ensure_installed` |
+| **LSP Server Activation** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add to `opts.servers` |
+| **Auto-Installation** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add to `mason-lspconfig` `ensure_installed` |
+| **Linting** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add linter's LSP to `opts.servers` (no `nvim-lint`) |
+| **Formatting** | [`lua/plugins/lsp/formatting.lua`](../lua/plugins/lsp/formatting.lua) | Add to `formatters_by_ft` |
+| **Syntax Highlighting** | [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) | Add to `ensure_installed` |
 
 ---
 

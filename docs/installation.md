@@ -77,7 +77,7 @@ For manual installation or custom package managers, here is the complete tool ch
 
 | Tool / CLI | Purpose in KrsVim | Windows (Scoop) | Linux / WSL Package |
 |---|---|---|---|
-| **Neovim** (>= 0.10) | Core editor runtime | `scoop install neovim` | `neovim` |
+| **Neovim** (v0.12.4 / >= 0.10) | Core editor runtime (Current setup: `NVIM v0.12.4`) | `scoop install neovim` | `neovim` |
 | **Git** | Mason, Neogit, Lazy.nvim, Git Control Center | `scoop install git` | `git` |
 | **ripgrep** (`rg`) | Telescope live grep (`<C-f>`) | `scoop install ripgrep` | `ripgrep` |
 | **fd** | Fast file finder (`<C-/>`) | `scoop install fd` | `fd-find` (or `fd`) |

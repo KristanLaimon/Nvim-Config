@@ -244,14 +244,14 @@ function M.open()
 		height = geo.total_height,
 		style = "minimal",
 		border = "rounded",
-		title = " 📖 Document Reader (/ or Ctrl+F to search) ",
+		title = " 📖 Document Reader (Press w to toggle wrap, / to search) ",
 		title_pos = "center",
 		zindex = z_base,
 	})
 
 	vim.wo[state.left_win].cursorline = true
 	vim.wo[state.right_win].cursorline = false
-	vim.wo[state.right_win].wrap = true
+	vim.wo[state.right_win].wrap = false
 	vim.wo[state.right_win].conceallevel = 3
 	vim.wo[state.right_win].concealcursor = "nvic"
 
@@ -466,6 +466,16 @@ end
 	vim.keymap.set("n", "gx", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
 	vim.keymap.set("n", "K", follow_link_in_reader, reader_opts("Follow wiki link under cursor"))
 	vim.keymap.set({ "n", "v" }, "<S-LeftMouse>", follow_link_at_mouse, reader_opts("Follow wiki link at mouse click"))
+
+	local function toggle_wrap()
+		if state.right_win and vim.api.nvim_win_is_valid(state.right_win) then
+			vim.wo[state.right_win].wrap = not vim.wo[state.right_win].wrap
+			local status = vim.wo[state.right_win].wrap and "ON (Text Wrap)" or "OFF (Table Grid View)"
+			vim.notify("Wiki Reader line wrap: " .. status, vim.log.levels.INFO)
+		end
+	end
+	vim.keymap.set("n", "w", toggle_wrap, reader_opts("Toggle line wrapping in reader"))
+	vim.keymap.set("n", "<A-w>", toggle_wrap, reader_opts("Toggle line wrapping in reader"))
 
 	-- Index click selection keymap in left buffer
 	local function left_opts(desc)

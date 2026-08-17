@@ -46,7 +46,7 @@ print(bash_script)
 |---|---|---|
 | `function fn(a, b)` | `fn() { local a="$1"; local b="$2";` | `function fn($a, $b) {` |
 | `print(...)` | `echo ...` | `Write-Host ...` |
-| `assert(cond, msg)` | `[ cond ] \|\| { echo msg >&2; exit 1; }` | `if (-not (cond)) { throw msg }` |
+| `assert(cond, msg)` | `[ cond ] &#124;&#124; { echo msg >&2; exit 1; }` | `if (-not (cond)) { throw msg }` |
 | `error(msg)` | `echo msg >&2; exit 1` | `throw msg` |
 | `fs.exists(path)` | `[ -e "path" ]` | `Test-Path "path"` |
 | `fs.mkdir(path)` | `mkdir -p "path"` | `New-Item -ItemType Directory -Force ...` |
@@ -54,9 +54,9 @@ print(bash_script)
 | `fs.write(path, content)` | `echo "content" > "path"` | `Set-Content -Path "path" -Value ...` |
 | `fetch.get(url)` | `curl -sSL "url"` | `Invoke-WebRequest -Uri "url"` |
 | `fetch.json(url)` | `curl -sSL "url"` | `Invoke-RestMethod -Uri "url"` |
-| `yaml.load(file)` | `python3 -c "import yaml..." file` | `Get-Content -Raw file \| ConvertFrom-Json` |
-| `json.encode(obj)` | `echo "obj" \| jq -c .` | `@(...) \| ConvertTo-Json -Compress` |
-| `json.load(file)` | `cat "file" \| jq .` | `Get-Content -Raw "file" \| ConvertFrom-Json` |
+| `yaml.load(file)` | `python3 -c "import yaml..." file` | `Get-Content -Raw file &#124; ConvertFrom-Json` |
+| `json.encode(obj)` | `echo "obj" &#124; jq -c .` | `@(...) &#124; ConvertTo-Json -Compress` |
+| `json.load(file)` | `cat "file" &#124; jq .` | `Get-Content -Raw "file" &#124; ConvertFrom-Json` |
 | `$ "cmd"` | `cmd` | `cmd` |
 | `for i = 1, 10 do` | `for ((i=1; i<=10; i++)); do` | `for ($i=1; $i -le 10; $i++) {` |
 | `for _, item in ipairs(list) do` | `for item in "${list[@]}"; do` | `foreach ($item in $list) {` |
