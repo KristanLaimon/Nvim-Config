@@ -51,6 +51,9 @@ M.ALLOWLIST_SOURCE_PATTERNS = {
 	"plugins/krs/git_center%.lua",
 	"plugins/krs/tasks%.lua",
 	"plugins/krs/wiki_modal%.lua",
+	"plugins/krs/command_palette%.lua",
+	"plugins/krs/file_explorer%.lua",
+	"plugins/editor/neo%-tree%.lua",
 	-- search.lua binds these before telescope loads (see telescope.lua:170-171);
 	-- telescope's own setup() rebinds the same keys to the same underlying
 	-- functions (_G.FindFilesGitignore / _G.FindFilesNoIgnore) once it's up.
