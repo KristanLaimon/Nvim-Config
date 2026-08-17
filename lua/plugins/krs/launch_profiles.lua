@@ -36,11 +36,12 @@
 --   telescope / dap          Picker UI and debug sessions.
 -- ============================================================================
 
-local store = require("krs.core.store")
-local project = require("krs.core.project")
-local path = require("krs.core.path")
-local ui = require("krs.core.ui")
-local runtimes = require("krs.launch.runtimes")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
+local project = lazy_req("krs.core.project")
+local path = lazy_req("krs.core.path")
+local ui = lazy_req("krs.core.ui")
+local runtimes = lazy_req("krs.launch.runtimes")
 
 local M = {}
 

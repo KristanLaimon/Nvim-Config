@@ -18,8 +18,9 @@
 --   plugins.krs.wsl          WSL detection and its own recent list.
 -- ============================================================================
 
-local favorites = require("krs.projects.favorites")
-local path_util = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local favorites = lazy_req("krs.projects.favorites")
+local path_util = lazy_req("krs.core.path")
 
 -- ============================================================================
 -- CONFIGURATION

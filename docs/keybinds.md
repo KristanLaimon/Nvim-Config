@@ -37,6 +37,8 @@ Forgot one? `?` or `<F1>` shows a context-aware cheatsheet for whatever is focus
 > Commenting is mapped across a whole family of keys because `'` is a dead key on US-International, ES and Latam layouts — one of them will reach Neovim whatever your layout does. From terminal mode it leaves insert, hops to the previous window, and comments there.
 >
 > **Why `<leader>?` exists next to `<C-S-d>`:** plain terminals (classic PowerShell/`conhost`, older Windows Terminal) can't tell `Ctrl+D` and `Ctrl+Shift+D` apart — both send the same byte, so the terminal never even tells Neovim Shift was held. Neovide and modern terminals (Windows Terminal 1.19+, kitty, wezterm) *do* report it, so `<C-S-d>` works there. If `<C-S-d>` ever does nothing, `<leader>?` (`Space` then `?`) opens the wiki regardless of terminal — that's why every panel here documented as `<C-S-x>` also has a `:KrsXxx` command as backup.
+>
+> 🛡️ **Leader Key Protection in Insert & Terminal Modes:** All keymaps starting with `<leader>`, `<space>`, or `mapleader` are automatically scoped to Normal and Visual modes. They are **never active or triggerable while typing inside Insert (`i`) or Terminal (`t`) modes**, preventing accidental command execution while writing code or running shell commands.
 
 ---
 

@@ -153,6 +153,14 @@ Two ordering rules matter:
 2. **`plugins.krs` is imported after `editor` and `lsp`.** KRS features assume
    telescope and nvim-dap exist as specs.
 
+### ⚡ Startup Performance & `lazy_require`
+
+To achieve ultra-fast startup times (~260ms total startup time on Windows), KrsVim enforces lazy module resolution during `lazy.nvim` spec discovery:
+
+* **Top-Level Spec Import Deferral (`lazy_require`)**: Spec files in `lua/plugins/krs/` and `lua/plugins/editor/` use `require("krs.core.lazy_require")("krs.module.name")`. This creates a zero-overhead metatable proxy that defers actual module loading until a property or function is accessed at runtime.
+* **Lazy Persistence State**: State reads from disk (such as Neo-tree sidebar width or terminal split height) are wrapped in lazy getters (`get_saved_width()`, `get_terminal_height()`) so no file I/O blocks initial editor startup.
+* **Optimized PATH Repair**: Candidate toolchain directories in `lua/config/options.lua` are checked and appended efficiently without blocking `init.lua`.
+
 ---
 
 ## 🧩 The local plugin spec pattern

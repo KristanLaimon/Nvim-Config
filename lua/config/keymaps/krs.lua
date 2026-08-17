@@ -149,7 +149,7 @@ vim.keymap.set({ "n", "i", "v" }, M.settings.keys.explorer, function()
 	require("plugins.krs.file_explorer").open_desktop_explorer()
 end, opts("Open Floating Desktop File Explorer"))
 
-vim.keymap.set({ "n", "i", "v" }, M.settings.keys.wsl_explorer, function()
+vim.keymap.set({ "n", "v" }, M.settings.keys.wsl_explorer, function()
 	require("plugins.krs.file_explorer").open_wsl_explorer()
 end, opts("Open Floating WSL File Explorer"))
 

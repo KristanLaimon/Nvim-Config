@@ -15,6 +15,13 @@
 --   fire-and-forget vim.notify) precisely so this spec can also see the
 --   collisions that happened during the eager config.keymaps load, which
 --   finishes before any spec file -- including this one -- gets to run.
+--
+--   git_center.lua binds its own toggle/stage_all keys from its lazy.nvim
+--   `config = M.setup` callback, which only runs once the plugin is actually
+--   loaded (its lazy spec `keys` table only stubs the keys, it doesn't load
+--   the plugin outright) -- neither VimEnter nor the eager config.keymaps
+--   load triggers that, so this spec also calls M.setup() directly to
+--   surface collisions from it.
 -- ============================================================================
 
 local t = require("krsnvim.test")
@@ -23,6 +30,7 @@ local describe, it, expect = t.describe, t.it, t.expect
 describe("keymap collisions after a real startup", function()
 	it("has no un-allowlisted mode+lhs collisions once VimEnter has fired", function()
 		vim.api.nvim_exec_autocmds("VimEnter", { modeline = false })
+		require("plugins.krs.git_center").setup()
 
 		local registry = require("krs.core.keymap_registry")
 		local summary = {}

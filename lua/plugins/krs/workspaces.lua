@@ -24,8 +24,9 @@
 --      "buffers": ["src/app.ts"], "tab_count": 2, "neotree_open": true }]
 -- ============================================================================
 
-local store = require("krs.core.store")
-local path = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
+local path = lazy_req("krs.core.path")
 
 local M = {}
 

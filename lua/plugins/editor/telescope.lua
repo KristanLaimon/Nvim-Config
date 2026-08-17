@@ -24,7 +24,7 @@
 
 local settings = {
 	--- Find files, honouring .gitignore.
-	find_keys = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
+	find_keys = { "<C-/>", "<C-_>" },
 
 	--- Find files, ignoring .gitignore. Several aliases: Alt/Meta combinations
 	--- arrive differently depending on terminal and GUI.
@@ -70,8 +70,8 @@ return {
 		"TelescopeFindFilesNoIgnore",
 	},
 	keys = {
-		{ "<C-k>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
-		{ "<C-K>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-/>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-_>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
 		{ "<C-A-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-A-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-M-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },

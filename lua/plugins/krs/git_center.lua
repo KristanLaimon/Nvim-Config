@@ -26,15 +26,16 @@
 --   this file           Windows, panel rendering, tab bar and key handling.
 -- ============================================================================
 
-local git = require("krs.git.cmd")
-local status = require("krs.git.status")
-local diff = require("krs.git.diff")
-local submodules = require("krs.git.submodules")
-local ui = require("krs.core.ui")
-local store = require("krs.core.store")
-local project = require("krs.core.project")
-local path_util = require("krs.core.path")
-local icons = require("krs.core.icons")
+local lazy_req = require("krs.core.lazy_require")
+local git = lazy_req("krs.git.cmd")
+local status = lazy_req("krs.git.status")
+local diff = lazy_req("krs.git.diff")
+local submodules = lazy_req("krs.git.submodules")
+local ui = lazy_req("krs.core.ui")
+local store = lazy_req("krs.core.store")
+local project = lazy_req("krs.core.project")
+local path_util = lazy_req("krs.core.path")
+local icons = lazy_req("krs.core.icons")
 
 local M = {}
 
@@ -93,8 +94,8 @@ M.settings = {
 			"<M-S>",
 		},
 		--- Switch submodule tabs (left / right).
-		tab_prev = { "<C-h>", "<C-H>", "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
-		tab_next = { "<C-l>", "<C-L>", "<A-l>", "<A-L>", "<M-l>", "<M-L>", "<A-Right>", "<M-Right>" },
+		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
+		tab_next = { "<A-l>", "<A-L>", "<M-l>", "<M-L>", "<A-Right>", "<M-Right>" },
 		--- Resize the split between left control panel and right preview pane.
 		resize_left = { "<", ",", "<M-,>", "<A-,>", "<C-w><", "<C-Left>" },
 		resize_right = { ">", ".", "<M-.>", "<A-.>", "<C-w>>", "<C-Right>" },

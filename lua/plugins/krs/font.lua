@@ -18,7 +18,8 @@
 --   font belongs to the terminal emulator and nvim cannot change it.
 -- ============================================================================
 
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
 
 local M = {}
 

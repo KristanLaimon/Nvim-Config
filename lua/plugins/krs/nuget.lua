@@ -14,7 +14,8 @@
 --   a / <C-a> add     u / <C-u> update     d / <C-d> remove
 -- ============================================================================
 
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
 
 local M = {}
 

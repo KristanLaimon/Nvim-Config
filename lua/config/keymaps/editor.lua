@@ -35,6 +35,8 @@ M.settings = {
 		--- Move focus between windows.
 		window_left = "<C-h>",
 		window_right = "<C-l>",
+		window_up = "<C-k>",
+		window_down = "<C-j>",
 		--- Cycle buffers.
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
 		buffer_next = { "<A-l>", "<M-l>", "<A-Right>", "<M-Right>" },
@@ -134,13 +136,77 @@ for _, key in ipairs(M.settings.keys.redo) do
 	vim.keymap.set("i", key, "<C-o><C-r>", opts("Redo"))
 end
 
--- Window focus. `<Cmd>wincmd` rather than `<C-w>h`, because <C-w> itself is
--- remapped below to "close this thing".
+local function is_terminal_win(win)
+	if not win or not vim.api.nvim_win_is_valid(win) then
+		return false
+	end
+	local buf = vim.api.nvim_win_get_buf(win)
+	if not buf or not vim.api.nvim_buf_is_valid(buf) then
+		return false
+	end
+	return (vim.bo[buf].buftype == "terminal" or vim.b[buf].krs_is_multi_term) and true or false
+end
+
+local function focus_window_left()
+	local cur_win = vim.api.nvim_get_current_win()
+	_G._krs_last_win_before_neotree = cur_win
+	pcall(vim.cmd, "wincmd h")
+	local new_win = vim.api.nvim_get_current_win()
+	if is_terminal_win(new_win) and vim.api.nvim_get_mode().mode ~= "t" then
+		pcall(vim.cmd, "startinsert")
+	end
+end
+
+local function focus_window_right()
+	local cur_win = vim.api.nvim_get_current_win()
+	local buf = vim.api.nvim_win_get_buf(cur_win)
+	local is_neotree = vim.bo[buf].filetype == "neo-tree"
+
+	local target_win = _G._krs_last_win_before_neotree
+	if is_neotree and target_win and vim.api.nvim_win_is_valid(target_win) and vim.api.nvim_win_get_tabpage(target_win) == vim.api.nvim_get_current_tabpage() then
+		_G._krs_last_win_before_neotree = nil
+		vim.api.nvim_set_current_win(target_win)
+		if is_terminal_win(target_win) and vim.api.nvim_get_mode().mode ~= "t" then
+			pcall(vim.cmd, "startinsert")
+		end
+		return
+	end
+
+	_G._krs_last_win_before_neotree = nil
+	pcall(vim.cmd, "wincmd l")
+	local new_win = vim.api.nvim_get_current_win()
+	if is_terminal_win(new_win) and vim.api.nvim_get_mode().mode ~= "t" then
+		pcall(vim.cmd, "startinsert")
+	end
+end
+
+local function focus_window_up()
+	pcall(vim.cmd, "wincmd k")
+	local new_win = vim.api.nvim_get_current_win()
+	if is_terminal_win(new_win) and vim.api.nvim_get_mode().mode ~= "t" then
+		pcall(vim.cmd, "startinsert")
+	end
+end
+
+local function focus_window_down()
+	pcall(vim.cmd, "wincmd j")
+	local new_win = vim.api.nvim_get_current_win()
+	if is_terminal_win(new_win) and vim.api.nvim_get_mode().mode ~= "t" then
+		pcall(vim.cmd, "startinsert")
+	end
+end
+
 if M.settings.keys.window_left then
-	vim.keymap.set("n", M.settings.keys.window_left, "<Cmd>wincmd h<CR>", opts("Move to left window"))
+	vim.keymap.set({ "n", "t" }, M.settings.keys.window_left, focus_window_left, opts("Move to left window"))
 end
 if M.settings.keys.window_right then
-	vim.keymap.set("n", M.settings.keys.window_right, "<Cmd>wincmd l<CR>", opts("Move to right window"))
+	vim.keymap.set({ "n", "t" }, M.settings.keys.window_right, focus_window_right, opts("Move to right window"))
+end
+if M.settings.keys.window_up then
+	vim.keymap.set({ "n", "t" }, M.settings.keys.window_up, focus_window_up, opts("Move to upper window"))
+end
+if M.settings.keys.window_down then
+	vim.keymap.set({ "n", "t" }, M.settings.keys.window_down, focus_window_down, opts("Move to lower window"))
 end
 
 -- Ctrl+W closes the smallest sensible thing. The handler lives in the buffer
@@ -157,10 +223,19 @@ vim.keymap.set({ "n", "i", "v", "t" }, M.settings.keys.close, function()
 end, { noremap = true, silent = true, nowait = true, desc = "Close Current Tab / Buffer Immediately" })
 
 local step = M.settings.resize_step
-vim.keymap.set("n", "<C-Right>", "<Cmd>vertical resize -" .. step .. "<CR>", opts("Make window narrower"))
-vim.keymap.set("n", "<C-Left>", "<Cmd>vertical resize +" .. step .. "<CR>", opts("Make window wider"))
-vim.keymap.set("n", "<C-Up>", "<Cmd>resize +" .. step .. "<CR>", opts("Make window taller"))
-vim.keymap.set("n", "<C-Down>", "<Cmd>resize -" .. step .. "<CR>", opts("Make window shorter"))
+local resize_modes = { "n", "i", "t" }
+for _, key in ipairs({ "<C-Right>", "<C-S-Right>" }) do
+	vim.keymap.set(resize_modes, key, "<Cmd>vertical resize -" .. step .. "<CR>", opts("Make window narrower"))
+end
+for _, key in ipairs({ "<C-Left>", "<C-S-Left>" }) do
+	vim.keymap.set(resize_modes, key, "<Cmd>vertical resize +" .. step .. "<CR>", opts("Make window wider"))
+end
+for _, key in ipairs({ "<C-Up>", "<C-S-Up>" }) do
+	vim.keymap.set(resize_modes, key, "<Cmd>resize +" .. step .. "<CR>", opts("Make window taller"))
+end
+for _, key in ipairs({ "<C-Down>", "<C-S-Down>" }) do
+	vim.keymap.set(resize_modes, key, "<Cmd>resize -" .. step .. "<CR>", opts("Make window shorter"))
+end
 
 --- Buffer cycling is disabled inside neo-tree, where those keys navigate the tree.
 --- @param command string Ex command to run.

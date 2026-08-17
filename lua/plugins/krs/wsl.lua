@@ -17,7 +17,8 @@
 --   dashboard.lua (recent WSL projects).
 -- ============================================================================
 
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
 
 local M = {}
 

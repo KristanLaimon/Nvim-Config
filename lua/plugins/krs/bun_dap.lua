@@ -19,7 +19,8 @@
 --   generated file: `setup()` rewrites the file whenever the two differ.
 -- ============================================================================
 
-local path = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local path = lazy_req("krs.core.path")
 
 local M = {}
 

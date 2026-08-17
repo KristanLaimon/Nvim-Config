@@ -10,7 +10,8 @@
 --   * Web links (`http://...` or `https://...`) open in the system default web browser.
 -- ============================================================================
 
-local path = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local path = lazy_req("krs.core.path")
 
 local M = {}
 

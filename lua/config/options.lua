@@ -47,6 +47,7 @@ local settings = {
 		encoding = "utf-8",
 
 		-- Behaviour and performance
+		mouse = "a",
 		autoread = true, -- Pick up files changed outside the editor.
 		clipboard = "unnamedplus", -- Yank straight to the system clipboard.
 		updatetime = 250, -- Faster CursorHold and diagnostics.
@@ -56,6 +57,7 @@ local settings = {
 		swapfile = false,
 		writebackup = false,
 		undofile = true, -- Persistent undo instead.
+		shortmess = "sWICcfotT", -- Suppress unnecessary startup and hit-enter prompts.
 	},
 
 	--- Options set through pcall because a build may not support them.
@@ -218,7 +220,7 @@ local function setup_path_env()
 
 	local uv = vim.uv or vim.loop
 	local separator = is_windows and ";" or ":"
-	local path = vim.env.PATH or ""
+	local current_path = vim.env.PATH or ""
 
 	local env = {
 		APPDATA = vim.env.APPDATA or "",
@@ -233,22 +235,26 @@ local function setup_path_env()
 	local candidates = is_windows and settings.path_candidates.windows(env) or settings.path_candidates.unix(env)
 
 	local seen = {}
+	local valid_paths = {}
+
 	for _, candidate in pairs(candidates) do
 		if type(candidate) == "string" and candidate ~= "" then
 			local normalized = is_windows and candidate:gsub("/", "\\") or candidate
 			if not seen[normalized] then
 				seen[normalized] = true
-				if not path:find(normalized, 1, true) then
+				if not current_path:find(normalized, 1, true) then
 					local stat = uv.fs_stat(normalized)
 					if stat and stat.type == "directory" then
-						path = normalized .. separator .. path
+						table.insert(valid_paths, normalized)
 					end
 				end
 			end
 		end
 	end
 
-	vim.env.PATH = path
+	if #valid_paths > 0 then
+		vim.env.PATH = table.concat(valid_paths, separator) .. separator .. current_path
+	end
 end
 
 setup_path_env()

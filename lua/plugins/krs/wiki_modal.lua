@@ -440,14 +440,16 @@ function M.setup()
 	vim.api.nvim_create_user_command("NvimWiki", M.open, { desc = "Open KrsVim Wiki Documentation Modal" })
 
 	for _, k in ipairs(M.settings.keys.open) do
-		vim.keymap.set({ "n", "v", "i", "t" }, k, M.open, { desc = "Open Documentation Center Wiki" })
+		local modes = k:lower():find("<leader>") and { "n", "v" } or { "n", "v", "i", "t" }
+		vim.keymap.set(modes, k, M.open, { desc = "Open Documentation Center Wiki" })
 	end
 end
 
 -- LAZY.NVIM SPEC
 local lazy_keys = {}
 for _, k in ipairs(M.settings.keys.open) do
-	table.insert(lazy_keys, { k, mode = { "n", "v", "i", "t" }, desc = "Open Documentation Center Wiki" })
+	local modes = k:lower():find("<leader>") and { "n", "v" } or { "n", "v", "i", "t" }
+	table.insert(lazy_keys, { k, mode = modes, desc = "Open Documentation Center Wiki" })
 end
 
 local plugin_spec = {

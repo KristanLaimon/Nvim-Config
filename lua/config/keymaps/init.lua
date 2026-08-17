@@ -23,6 +23,10 @@
 --   The description is what which-key and `:map` show, so write it for a reader.
 -- ============================================================================
 
+pcall(function()
+	require("krs.core.keymap_registry").reset()
+end)
+
 --- Loaded in order. Later modules may rely on earlier ones being set up.
 local modules = {
 	"config.keymaps.editor",

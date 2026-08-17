@@ -36,11 +36,12 @@
 --   telescope -- picker UI only; nothing else here depends on it.
 -- ============================================================================
 
-local store = require("krs.core.store")
-local project = require("krs.core.project")
-local path = require("krs.core.path")
-local ui = require("krs.core.ui")
-local dock = require("krs.core.dock")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
+local project = lazy_req("krs.core.project")
+local path = lazy_req("krs.core.path")
+local ui = lazy_req("krs.core.ui")
+local dock = lazy_req("krs.core.dock")
 
 local M = {}
 

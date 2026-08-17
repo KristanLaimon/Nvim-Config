@@ -28,9 +28,10 @@
 --   still load correctly.
 -- ============================================================================
 
-local store = require("krs.core.store")
-local project = require("krs.core.project")
-local path = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
+local project = lazy_req("krs.core.project")
+local path = lazy_req("krs.core.path")
 
 local M = {}
 

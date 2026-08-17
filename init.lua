@@ -36,6 +36,7 @@ vim.api.nvim_create_user_command("ReloadConfig", function()
 			package.loaded[name] = nil
 		end
 	end
+	require("krs.core.keymap_registry").reset()
 	dofile(vim.env.MYVIMRC)
 	vim.notify("Config reloaded", vim.log.levels.INFO)
 end, {})
@@ -51,7 +52,7 @@ end, { nargs = "?", desc = "Run the KRS unit test suite (optionally filtered by 
 -- If nvim is being run inside Neovide GUI
 if vim.g.neovide then
 	vim.g.neovide_window_blurred = true
-	vim.g.neovide_transparency = 0.80
+	vim.g.neovide_opacity = 0.80
 	vim.g.neovide_normal_opacity = 0.80
 
 	-- Cursor Motion & Trail Animation (Time in seconds)

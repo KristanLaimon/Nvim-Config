@@ -36,14 +36,25 @@ M.collisions = {}
 --   '"+y'/paste-clipboard for copy/paste) -- confirmed via buffer_cleaner.lua,
 --   whose own docstring says a terminal buffer's <C-w> closes the window, not
 --   :bdelete, same as terminal.lua's fallback.
+-- - plugins/krs/git_center.lua's own M.setup() binds toggle/stage_all keys
+--   itself, duplicating config/keymaps/krs.lua's git_center/git_stage_all
+--   binds of the same keys to the same actions (toggle_git_center /
+--   stage_all_with_modal) -- deliberate per krs.lua's own "WHY THE KEYS ARE
+--   DUPLICATED HERE AND IN THE PLUGINS" docstring (krs.lua:17-20): each
+--   plugin binds its own keys so it works standalone even before krs.lua's
+--   eager bind or lazy.nvim's stub handler has run.
 M.ALLOWLIST_SOURCE_PATTERNS = {
 	"lazy/core/handler/keys%.lua",
 	"config/keymaps/debug%.lua",
 	"plugins/krs/terminal%.lua",
+	"plugins/krs/git_center%.lua",
 	-- search.lua binds these before telescope loads (see telescope.lua:170-171);
 	-- telescope's own setup() rebinds the same keys to the same underlying
 	-- functions (_G.FindFilesGitignore / _G.FindFilesNoIgnore) once it's up.
 	"plugins/editor/telescope%.lua",
+	-- Neovim internal string chunks and built-in runtime filetype plugins (e.g. markdown.lua, man.lua)
+	"%%[string",
+	"runtime/",
 }
 
 local function scope_of(opts)
@@ -57,8 +68,9 @@ local function scope_of(opts)
 end
 
 local function source_allowlisted(source)
+	local norm = source:gsub("\\", "/")
 	for _, pattern in ipairs(M.ALLOWLIST_SOURCE_PATTERNS) do
-		if source:find(pattern) then
+		if norm:find(pattern) then
 			return true
 		end
 	end
@@ -81,6 +93,30 @@ local function source_of()
 	return "?"
 end
 
+--- Checks if lhs starts with <leader>, <space>, or the configured mapleader (e.g. " ").
+--- @param lhs string
+--- @return boolean
+local function is_leader_keymap(lhs)
+	if type(lhs) ~= "string" or lhs == "" then
+		return false
+	end
+	local lower = lhs:lower()
+	if lower:find("^<leader>") or lower:find("^<space>") or lhs:sub(1, 1) == " " then
+		return true
+	end
+	local leader = vim.g.mapleader
+	if type(leader) == "string" and leader ~= "" and lhs:sub(1, #leader) == leader then
+		return true
+	end
+	return false
+end
+
+--- Resets tracked keymaps and recorded collisions (e.g. on config reload).
+function M.reset()
+	seen = {}
+	M.collisions = {}
+end
+
 --- Installs the monkeypatch. Idempotent -- calling twice is a no-op.
 function M.install()
 	if M.raw_set then
@@ -89,14 +125,37 @@ function M.install()
 	M.raw_set = vim.keymap.set
 
 	vim.keymap.set = function(mode, lhs, rhs, opts)
-		local modes = type(mode) == "table" and mode or { mode }
+		local raw_modes = type(mode) == "table" and mode or { mode }
+		local modes = {}
+
+		-- Strip insert ('i') and terminal ('t') modes for <leader> starting keymaps
+		-- so typing space in buffers or terminal never triggers leader commands.
+		if is_leader_keymap(lhs) then
+			for _, m in ipairs(raw_modes) do
+				if m ~= "i" and m ~= "t" then
+					table.insert(modes, m)
+				end
+			end
+			if #modes == 0 then
+				return
+			end
+		else
+			modes = raw_modes
+		end
+
 		local scope = scope_of(opts)
 		local source = source_of()
 
 		for _, m in ipairs(modes) do
 			local key = m .. ":" .. lhs .. ":" .. scope
 			local prev = seen[key]
-			local allowed = prev and (source_allowlisted(source) or source_allowlisted(prev.source))
+			-- Same call site rebinding: nvim canonicalizes some key aliases to an
+			-- identical internal keycode (e.g. <C-`> and <C-acute> are the same
+			-- physical key), so a loop offering several alias spellings for one
+			-- action can legitimately rebind its own previous iteration. That's
+			-- never two features fighting over a key, so it's not a collision.
+			local allowed = prev
+				and (source_allowlisted(source) or source_allowlisted(prev.source) or prev.source == source)
 
 			if prev and not allowed then
 				local record = {
@@ -108,25 +167,27 @@ function M.install()
 					second_desc = opts and opts.desc,
 				}
 				table.insert(M.collisions, record)
-				vim.notify(
-					string.format(
-						"Keymap collision on %s (mode %s)\n1st: %s -- %s\n2nd: %s -- %s",
-						lhs,
-						m,
-						record.first_source,
-						record.first_desc or "(no desc)",
-						record.second_source,
-						record.second_desc or "(no desc)"
-					),
-					vim.log.levels.WARN,
-					{ title = "Keymap collision" }
-				)
+				vim.schedule(function()
+					vim.notify(
+						string.format(
+							"Keymap collision on %s (mode %s)\n1st: %s -- %s\n2nd: %s -- %s",
+							lhs,
+							m,
+							record.first_source,
+							record.first_desc or "(no desc)",
+							record.second_source,
+							record.second_desc or "(no desc)"
+						),
+						vim.log.levels.WARN,
+						{ title = "Keymap collision" }
+					)
+				end)
 			end
 
 			seen[key] = { desc = opts and opts.desc, source = source }
 		end
 
-		return M.raw_set(mode, lhs, rhs, opts)
+		return M.raw_set(modes, lhs, rhs, opts)
 	end
 end
 

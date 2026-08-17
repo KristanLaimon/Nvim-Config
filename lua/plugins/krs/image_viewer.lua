@@ -16,8 +16,9 @@
 --   `chafa` on PATH, for the in-terminal preview only.
 -- ============================================================================
 
-local ui = require("krs.core.ui")
-local path = require("krs.core.path")
+local lazy_req = require("krs.core.lazy_require")
+local ui = lazy_req("krs.core.ui")
+local path = lazy_req("krs.core.path")
 
 local M = {}
 

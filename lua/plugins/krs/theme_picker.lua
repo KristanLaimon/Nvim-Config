@@ -7,7 +7,8 @@
 --   vim.ui.select, and persists choice in .krsnvim/theme.json.
 -- ============================================================================
 
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
 
 local M = {}
 

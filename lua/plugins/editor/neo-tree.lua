@@ -21,7 +21,8 @@
 --   <C-/> find files (gitignore)   <C-S-/> find all files
 -- ============================================================================
 
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local store = lazy_req("krs.core.store")
 
 -- ============================================================================
 -- CONFIGURATION
@@ -66,32 +67,40 @@ local settings = {
 -- WIDTH PERSISTENCE
 -- ============================================================================
 
---- Width currently in force.
-local saved_width = tonumber(store.read_file(settings.width_file) or "") or settings.default_width
-if saved_width < settings.min_width or saved_width > settings.max_width then
-	saved_width = settings.default_width
+local saved_width_cached = nil
+local function get_saved_width()
+	if not saved_width_cached then
+		local raw = store.read_file(settings.width_file)
+		local width = tonumber(raw or "") or settings.default_width
+		if width < settings.min_width or width > settings.max_width then
+			width = settings.default_width
+		end
+		saved_width_cached = width
+	end
+	return saved_width_cached
 end
 
 --- Remembers a new width, when it is in range and actually changed.
 --- @param width integer
 local function save_width(width)
 	local max_allowed = math.min(settings.max_width, math.floor((vim.o.columns or 80) * settings.max_width_ratio))
-	if type(width) ~= "number" or width < settings.min_width or width > max_allowed or width == saved_width then
+	if type(width) ~= "number" or width < settings.min_width or width > max_allowed or width == get_saved_width() then
 		return
 	end
 
-	saved_width = width
+	saved_width_cached = width
 	store.write_file(settings.width_file, tostring(width))
 end
 
 --- Forces every neo-tree window back to the remembered width.
 local function pin_width()
+	local target_w = get_saved_width()
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
 		local buf = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win)
 		if buf and vim.bo[buf].filetype == "neo-tree" then
 			vim.wo[win].winfixwidth = true
-			if vim.api.nvim_win_get_width(win) ~= saved_width then
-				pcall(vim.api.nvim_win_set_width, win, saved_width)
+			if vim.api.nvim_win_get_width(win) ~= target_w then
+				pcall(vim.api.nvim_win_set_width, win, target_w)
 			end
 		end
 	end
@@ -335,7 +344,7 @@ return {
 				-- it. Smart quit (<C-q>) still handles quitting explicitly.
 				close_if_last_window = false,
 				window = {
-					width = saved_width,
+					width = get_saved_width(),
 					mappings = settings.mappings,
 				},
 				commands = {

@@ -58,7 +58,7 @@ vim.keymap.set("n", M.settings.keys.hover, function()
 	require("plugins.krs.hover_links").show_or_focus_hover()
 end, opts("Show or focus hover documentation"))
 
-vim.keymap.set({ "n", "i", "v" }, M.settings.keys.signature_help, function()
+vim.keymap.set({ "i", "v" }, M.settings.keys.signature_help, function()
 	if #attached_clients() == 0 then
 		vim.notify("No active LSP for parameter help", vim.log.levels.WARN, { title = "LSP Signature Help" })
 		return

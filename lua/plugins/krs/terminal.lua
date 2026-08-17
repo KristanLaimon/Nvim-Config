@@ -19,8 +19,9 @@
 --   plugins.krs.wsl    Chooses the WSL shell when the project lives under WSL.
 -- ============================================================================
 
-local dock = require("krs.core.dock")
-local store = require("krs.core.store")
+local lazy_req = require("krs.core.lazy_require")
+local dock = lazy_req("krs.core.dock")
+local store = lazy_req("krs.core.store")
 
 local M = {}
 
@@ -41,6 +42,10 @@ M.settings = {
 
 	--- Where the last used terminal height is remembered.
 	height_file = vim.fn.stdpath("state") .. "/terminal_height",
+
+	--- Top border row threshold for mouse height resizing/dragging (in rows).
+	--- Clicking within this top threshold allows dragging the window height instead of entering terminal insert mode.
+	resize_drag_threshold = 2,
 
 	keys = {
 		--- Prefix for per-terminal selection; the number is appended (`<A-1>`).
@@ -69,7 +74,7 @@ local terminals = _G._krs_terminals
 local code_win = nil
 
 --- Current terminal split height, persisted across sessions.
-local terminal_height
+local terminal_height_cached = nil
 
 -- ============================================================================
 -- HEIGHT PERSISTENCE
@@ -86,7 +91,12 @@ local function load_saved_height()
 	return M.settings.default_height
 end
 
-terminal_height = load_saved_height()
+local function get_terminal_height()
+	if not terminal_height_cached then
+		terminal_height_cached = load_saved_height()
+	end
+	return terminal_height_cached
+end
 
 --- Remembers a new height when it is in range and actually changed.
 --- @param height integer
@@ -94,10 +104,10 @@ local function save_height(height)
 	if type(height) ~= "number" or height < M.settings.min_height or height > M.settings.max_height then
 		return
 	end
-	if height == terminal_height then
+	if height == get_terminal_height() then
 		return
 	end
-	terminal_height = height
+	terminal_height_cached = height
 	store.write_file(M.settings.height_file, tostring(height))
 end
 
@@ -309,7 +319,7 @@ function M.open_terminal(n)
 		return
 	end
 
-	t.win = dock.open({ prefer = "terminal", height = terminal_height })
+	t.win = dock.open({ prefer = "terminal", height = get_terminal_height() })
 	fill_window(t, n, t.win)
 	dock.style(t.win)
 	vim.cmd("startinsert")
@@ -452,10 +462,31 @@ function M.setup()
 		return is_valid_buf(bufnr) and (vim.bo[bufnr].buftype == "terminal" or vim.b[bufnr].krs_is_multi_term)
 	end
 
+	local threshold = M.settings.resize_drag_threshold or 2
+
 	local function setup_term_buffer(bufnr)
 		if is_term_buf(bufnr) then
-			pcall(vim.keymap.set, "n", "<LeftMouse>", "<cmd>startinsert<CR>", {
+			pcall(vim.keymap.set, "n", "<LeftMouse>", function()
+				local mouse = vim.fn.getmousepos()
+				-- If click is on statusline, winbar, separator, border, or within the top threshold zone
+				-- (line <= 0 or winrow <= threshold), return "<LeftMouse>" so Neovim executes built-in split resize!
+				if not mouse or mouse.line <= 0 or mouse.winrow <= threshold then
+					return "<LeftMouse>"
+				end
+				-- If click is on a different window than current, let Neovim switch focus first
+				if mouse.winid and mouse.winid ~= vim.api.nvim_get_current_win() then
+					vim.schedule(function()
+						if vim.api.nvim_win_is_valid(mouse.winid) and vim.api.nvim_get_current_win() == mouse.winid then
+							pcall(vim.cmd, "startinsert")
+						end
+					end)
+					return "<LeftMouse>"
+				end
+				pcall(vim.cmd, "startinsert")
+				return ""
+			end, {
 				buffer = bufnr,
+				expr = true,
 				noremap = true,
 				silent = true,
 				desc = "Enter Terminal Mode on Click",

@@ -309,3 +309,12 @@ Per-project build tasks and debugging launch profiles live in `.krsnvim/` inside
 - **Linux / WSL**: `./setup.sh`
 
 *(If external tools are missing, KrsVim degrades gracefully with clear notifications instead of crashing).*
+
+---
+
+## 🖼️ 8. Neovide GUI Options & Transparency
+
+When running inside [Neovide](https://neovide.dev/):
+- **Window Opacity**: Set `vim.g.neovide_opacity = 0.80` in `init.lua` (*Note: `neovide_opacity` replaces the deprecated `neovide_transparency` option*).
+- **Hit-Enter Suppression**: `shortmess = "sWICcfotT"` in `lua/config/options.lua` suppresses hit-enter prompts on startup.
+- **Font & Scale**: Font size can be adjusted live via `<C-+>`, `<C-->`, and `<C-0>`, persisted to `font_config.json`.

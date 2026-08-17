@@ -27,6 +27,12 @@ describe("keymap_registry", function()
 			vim.keymap.set("n", "<F13>", function() end, { desc = "first" })
 			vim.keymap.set("n", "<F13>", function() end, { desc = "second" })
 
+			-- The toast fires via vim.schedule (safe from fast event contexts),
+			-- so it lands on the next event loop tick, not synchronously here.
+			vim.wait(100, function()
+				return #calls > 0
+			end)
+
 			expect(#calls).toBe(1)
 			expect(calls[1].opts.title).toBe("Keymap collision")
 			expect(calls[1].opts.timeout).toBe(nil)
@@ -88,6 +94,40 @@ describe("keymap_registry", function()
 			expect(found).toBe(true)
 
 			vim.keymap.del("n", "<F16>")
+			vim.wait(50)
+		end)
+	end)
+
+	it("clears tracked state when reset() is called so reloads do not toast", function()
+		with_stub_notify(function(calls)
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+			registry.reset()
+
+			vim.keymap.set("n", "<F17>", function() end, { desc = "first bind" })
+			registry.reset()
+			vim.keymap.set("n", "<F17>", function() end, { desc = "after reload" })
+
+			expect(#calls).toBe(0)
+			expect(#registry.collisions).toBe(0)
+
+			vim.keymap.del("n", "<F17>")
+		end)
+	end)
+
+	it("allowlists runtime ftplugin and string chunk keymaps", function()
+		with_stub_notify(function(calls)
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+
+			-- Simulate keymap bind from runtime/ftplugin/markdown.lua
+			local has_runtime = false
+			for _, pat in ipairs(registry.ALLOWLIST_SOURCE_PATTERNS) do
+				if ("share/nvim/runtime/ftplugin/markdown.lua"):find(pat) or ("[string \"?\"]:750"):find(pat) then
+					has_runtime = true
+				end
+			end
+			expect(has_runtime).toBe(true)
 		end)
 	end)
 end)

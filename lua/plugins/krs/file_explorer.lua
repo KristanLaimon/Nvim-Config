@@ -23,8 +23,9 @@
 --   recent list so they show up on the dashboard.
 -- ============================================================================
 
-local path = require("krs.core.path")
-local favorites = require("krs.projects.favorites")
+local lazy_req = require("krs.core.lazy_require")
+local path = lazy_req("krs.core.path")
+local favorites = lazy_req("krs.projects.favorites")
 
 local M = {}
 

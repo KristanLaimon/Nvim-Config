@@ -21,7 +21,7 @@
 ---@field neovide_remember_window_size? boolean Remember and restore window dimensions on startup.
 ---@field neovide_profiler? boolean Enable performance profiler overlay.
 ---@field neovide_has_mouse_grid_detection? boolean Mouse grid detection flag.
----@field neovide_transparency? number Window transparency opacity (0.0 transparent to 1.0 opaque).
+---@field neovide_transparency? number Deprecated: use neovide_opacity instead.
 ---@field neovide_opacity? number Window opacity level (0.0 to 1.0).
 ---@field neovide_normal_opacity? number Opacity of the normal text background surface (0.0 to 1.0).
 ---@field neovide_window_blurred? boolean Enable window background blur / acrylic / vibrancy effect.
