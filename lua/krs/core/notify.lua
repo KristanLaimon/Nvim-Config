@@ -129,6 +129,14 @@ function M.notify(msg, level, opts)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 	vim.bo[buf].modifiable = false
 
+	local copy_fn = function()
+		vim.fn.setreg("+", msg_str)
+		vim.fn.setreg("*", msg_str)
+		vim.api.nvim_echo({ { "📋 Notification text copied to clipboard!", "DiagnosticInfo" } }, true, {})
+	end
+	vim.keymap.set({ "n", "v", "i" }, "<LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+	vim.keymap.set({ "n", "v", "i" }, "<2-LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+
 	-- Compute geometry
 	local width = 0
 	for _, l in ipairs(lines) do

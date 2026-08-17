@@ -72,9 +72,9 @@ M.settings = {
 
 	keys = {
 		--- Open the workspace picker.
-		select = { "<C-S-w>", "<C-S-W>", "<C-W>" },
+		select = { "<C-S-w>", "<C-S-W>", "<leader>ws" },
 		--- Close everything and return to the dashboard.
-		menu = { "<C-S-m>", "<C-S-M>", "<C-M>" },
+		menu = { "<C-S-m>", "<C-S-M>", "<leader>wm" },
 		--- Leader mappings: save, select, back to menu.
 		leader_save = nil,
 		leader_select = nil,
@@ -864,14 +864,14 @@ function M.setup()
 	end
 
 	for _, key in ipairs(M.settings.keys.select) do
-		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(M.select_workspace), {
+		vim.keymap.set({ "n", "i", "v" }, key, from_any_mode(M.select_workspace), {
 			noremap = true,
 			silent = true,
 			desc = "Open Workspaces UI",
 		})
 	end
 	for _, key in ipairs(M.settings.keys.menu) do
-		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(M.close_to_menu), {
+		vim.keymap.set({ "n", "i", "v" }, key, from_any_mode(M.close_to_menu), {
 			noremap = true,
 			silent = true,
 			desc = "Close and return to Menu",
@@ -912,9 +912,9 @@ return setmetatable({
 	cmd = { "WorkspaceSelect", "Workspaces", "WorkspaceSave", "WorkspaceManage", "WorkspaceClose", "WorkspaceMenu" },
 	keys = {
 		{ "<C-S-w>", mode = { "n", "i" }, desc = "Select Workspace" },
-		{ "<C-W>", mode = { "n", "i" }, desc = "Select Workspace (Mobile)" },
 		{ "<C-S-m>", mode = { "n", "i" }, desc = "Close Workspace" },
-		{ "<C-M>", mode = { "n", "i" }, desc = "Close Workspace (Mobile)" },
+		{ "<leader>ws", mode = { "n" }, desc = "Select Workspace" },
+		{ "<leader>wm", mode = { "n" }, desc = "Close Workspace" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",

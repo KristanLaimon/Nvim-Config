@@ -35,6 +35,27 @@ return {
 				background_colour = "Normal",
 				on_open = function(win)
 					pcall(vim.api.nvim_win_set_config, win, { focusable = false })
+					local buf = vim.api.nvim_win_get_buf(win)
+					if buf and vim.api.nvim_buf_is_valid(buf) then
+						local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+						local full_text = table.concat(lines, "\n")
+						local copy_fn = function()
+							local ok_hist, history = pcall(function() return require("notify").history() end)
+							local text_to_copy = full_text
+							if ok_hist and type(history) == "table" and #history > 0 then
+								local last = history[#history]
+								if last and last.message then
+									text_to_copy = type(last.message) == "table" and table.concat(last.message, "\n") or tostring(last.message)
+								end
+							end
+							vim.fn.setreg("+", text_to_copy)
+							vim.fn.setreg("*", text_to_copy)
+							vim.api.nvim_echo({ { "📋 Notification text copied to clipboard!", "DiagnosticInfo" } }, true, {})
+						end
+
+						vim.keymap.set({ "n", "v", "i" }, "<LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+						vim.keymap.set({ "n", "v", "i" }, "<2-LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+					end
 				end,
 			}
 		end,
@@ -45,10 +66,32 @@ return {
 				notify.setup(final_opts)
 				vim.notify = notify
 
-				-- Autocmd: If focus ever lands in a notify float, restore main editor window instantly
+				-- Autocmd: Bind single-click copy and focus protection for notify floating windows
 				vim.api.nvim_create_autocmd("FileType", {
 					pattern = "notify",
 					callback = function(args)
+						local buf = args.buf
+						if buf and vim.api.nvim_buf_is_valid(buf) then
+							local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+							local full_text = table.concat(lines, "\n")
+							local copy_fn = function()
+								local ok_hist, history = pcall(function() return require("notify").history() end)
+								local text_to_copy = full_text
+								if ok_hist and type(history) == "table" and #history > 0 then
+									local last = history[#history]
+									if last and last.message then
+										text_to_copy = type(last.message) == "table" and table.concat(last.message, "\n") or tostring(last.message)
+									end
+								end
+								vim.fn.setreg("+", text_to_copy)
+								vim.fn.setreg("*", text_to_copy)
+								vim.api.nvim_echo({ { "📋 Notification text copied to clipboard!", "DiagnosticInfo" } }, true, {})
+							end
+
+							vim.keymap.set({ "n", "v", "i" }, "<LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+							vim.keymap.set({ "n", "v", "i" }, "<2-LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
+						end
+
 						local win = vim.fn.bufwinid(args.buf)
 						if win and win ~= -1 then
 							pcall(vim.api.nvim_win_set_config, win, { focusable = false })
@@ -61,7 +104,27 @@ return {
 					end,
 				})
 
-				-- User commands to dismiss all notifications
+				local copy_last_notification = function()
+					local ok_hist, history = pcall(function() return require("notify").history() end)
+					local text_to_copy = nil
+					if ok_hist and type(history) == "table" and #history > 0 then
+						local last = history[#history]
+						if last and last.message then
+							text_to_copy = type(last.message) == "table" and table.concat(last.message, "\n") or tostring(last.message)
+						end
+					end
+					if text_to_copy and text_to_copy ~= "" then
+						vim.fn.setreg("+", text_to_copy)
+						vim.fn.setreg("*", text_to_copy)
+						vim.notify("📋 Last notification text copied to clipboard!", vim.log.levels.INFO, { title = "Clipboard" })
+					else
+						vim.notify("⚠️ No recent notification history found", vim.log.levels.WARN, { title = "Clipboard" })
+					end
+				end
+
+				-- User commands to copy or dismiss notifications
+				vim.api.nvim_create_user_command("NotifyCopyLast", copy_last_notification, { desc = "Copy last notification full text to system clipboard" })
+
 				vim.api.nvim_create_user_command("NotifyDismiss", function()
 					notify.dismiss({ silent = true })
 				end, { desc = "Dismiss all floating toast notifications" })
@@ -70,7 +133,9 @@ return {
 					notify.dismiss({ silent = true })
 				end, { desc = "Dismiss all floating toast notifications" })
 
-				-- Quick keymap to clear toasts
+				-- Quick keymap to copy last notification or clear toasts
+				vim.keymap.set("n", "<leader>nc", copy_last_notification, { desc = "Copy last notification full text" })
+
 				vim.keymap.set("n", "<leader>nd", function()
 					notify.dismiss({ silent = true })
 				end, { desc = "Dismiss active notifications" })

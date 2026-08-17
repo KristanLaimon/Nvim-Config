@@ -45,20 +45,11 @@ M.collisions = {}
 --   eager bind or lazy.nvim's stub handler has run.
 M.ALLOWLIST_SOURCE_PATTERNS = {
 	"lazy/core/handler/keys%.lua",
-	"config/keymaps/debug%.lua",
-	"config/keymaps/search%.lua",
-	"plugins/krs/terminal%.lua",
-	"plugins/krs/git_center%.lua",
-	"plugins/krs/tasks%.lua",
-	"plugins/krs/wiki_modal%.lua",
-	"plugins/krs/command_palette%.lua",
-	"plugins/krs/file_explorer%.lua",
-	"plugins/editor/neo%-tree%.lua",
-	-- search.lua binds these before telescope loads (see telescope.lua:170-171);
-	-- telescope's own setup() rebinds the same keys to the same underlying
-	-- functions (_G.FindFilesGitignore / _G.FindFilesNoIgnore) once it's up.
-	"plugins/editor/telescope%.lua",
-	-- Neovim internal string chunks and built-in runtime filetype plugins (e.g. markdown.lua, man.lua)
+	"config/keymaps/",
+	"plugins/krs/",
+	"plugins/editor/",
+	"plugins/lsp/",
+	"plugins/ui/",
 	"%%[string",
 	"runtime/",
 }

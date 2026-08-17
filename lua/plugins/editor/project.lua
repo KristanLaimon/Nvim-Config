@@ -532,7 +532,15 @@ return {
 		end
 
 		-- `Telescope projects` and the dashboard both route here.
-		require("telescope").extensions.projects.projects = open_projects_picker
+		pcall(function()
+			local tel = require("telescope")
+			tel.load_extension("projects")
+			if tel.extensions and tel.extensions.projects then
+				tel.extensions.projects.projects = open_projects_picker
+			end
+		end)
+
+		_G.OpenRecentProjects = open_projects_picker
 
 		if settings.key then
 			vim.keymap.set("n", settings.key, function()
