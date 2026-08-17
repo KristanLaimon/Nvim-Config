@@ -114,7 +114,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | `<C-f>` | n, i | Live grep across the project |
 | `<C-S-o>` | n, i, v, t | Sneak-Peek project modal (90% width & height on-top window) |
 | `<C-S-f>` | n, i, v | Floating Desktop file explorer |
-| `<C-S-r>` | n | Recent projects modal |
+| `<C-r>` | n | Recent projects modal |
 | `<C-S-p>` | n, i, v, t | Command palette |
 
 ---

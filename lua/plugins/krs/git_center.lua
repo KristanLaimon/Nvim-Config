@@ -2786,13 +2786,25 @@ function M.setup()
 		M.toggle_git_center()
 	end, { desc = "Toggle Git Control Center" })
 
-	--- Leaves terminal mode first, so the mapping works from a terminal too.
 	local function from_any_mode(fn)
 		return function()
-			if vim.fn.mode() ~= "n" then
+			local cur_buf = vim.api.nvim_get_current_buf()
+			local is_term = vim.bo[cur_buf].buftype == "terminal" or vim.b[cur_buf].krs_is_multi_term
+			local mode = vim.fn.mode()
+
+			if mode ~= "n" then
 				pcall(vim.cmd, "stopinsert")
 			end
+
 			fn()
+
+			if is_term and mode == "t" then
+				vim.schedule(function()
+					if vim.api.nvim_get_current_buf() == cur_buf then
+						pcall(vim.cmd, "startinsert")
+					end
+				end)
+			end
 		end
 	end
 

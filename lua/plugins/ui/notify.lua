@@ -26,12 +26,16 @@ return {
 
 			return {
 				stages = is_mobile and "static" or "fade_in_slide_out",
-				timeout = is_mobile and 2000 or 3000,
+				timeout = is_mobile and 1800 or 3000,
 				top_down = true,
-				render = "default",
+				render = is_mobile and "compact" or "default",
 				fps = is_mobile and 5 or 30,
-				max_width = is_mobile and 45 or 75,
-				max_height = is_mobile and 6 or 10,
+				max_width = is_mobile and function()
+					return math.max(20, math.min(30, math.floor((vim.o.columns or 80) * 0.55)))
+				end or 75,
+				max_height = is_mobile and function()
+					return math.max(2, math.min(3, math.floor((vim.o.lines or 24) * 0.15)))
+				end or 10,
 				background_colour = "Normal",
 				on_open = function(win)
 					pcall(vim.api.nvim_win_set_config, win, { focusable = false })
@@ -96,8 +100,15 @@ return {
 						if win and win ~= -1 then
 							pcall(vim.api.nvim_win_set_config, win, { focusable = false })
 							if vim.api.nvim_get_current_win() == win then
+								local prev_win = vim.fn.win_getid(vim.fn.winnr("#"))
 								vim.schedule(function()
-									vim.cmd("wincmd p")
+									if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() == win then
+										if prev_win and prev_win ~= 0 and vim.api.nvim_win_is_valid(prev_win) then
+											pcall(vim.api.nvim_set_current_win, prev_win)
+										else
+											pcall(vim.cmd, "wincmd p")
+										end
+									end
 								end)
 							end
 						end

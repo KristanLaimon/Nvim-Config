@@ -239,12 +239,15 @@ end
 --- @param n integer Slot number.
 --- @param win integer Window to fill.
 local function fill_window(t, n, win)
+	if is_valid_win(win) then
+		vim.api.nvim_set_current_win(win)
+	end
+
 	if is_valid_buf(t.buf) then
 		vim.api.nvim_win_set_buf(win, t.buf)
 		return
 	end
 
-	vim.api.nvim_set_current_win(win)
 	vim.cmd(terminal_open_cmd())
 	t.buf = vim.api.nvim_get_current_buf()
 	vim.bo[t.buf].buflisted = false
@@ -278,6 +281,7 @@ function M.select_terminal(n)
 
 	if is_valid_win(active_win) then
 		t.win = active_win
+		vim.api.nvim_set_current_win(t.win)
 		fill_window(t, n, t.win)
 		vim.api.nvim_set_current_win(t.win)
 		vim.cmd("startinsert")
@@ -314,14 +318,18 @@ function M.open_terminal(n)
 	-- Another terminal is on screen: take over its pane.
 	if is_valid_win(active_win) then
 		t.win = active_win
+		vim.api.nvim_set_current_win(t.win)
 		fill_window(t, n, t.win)
+		vim.api.nvim_set_current_win(t.win)
 		vim.cmd("startinsert")
 		return
 	end
 
 	t.win = dock.open({ prefer = "terminal", height = get_terminal_height() })
+	vim.api.nvim_set_current_win(t.win)
 	fill_window(t, n, t.win)
 	dock.style(t.win)
+	vim.api.nvim_set_current_win(t.win)
 	vim.cmd("startinsert")
 end
 
@@ -407,13 +415,23 @@ function M.setup()
 	for n = 1, M.settings.count do
 		for _, prefix in ipairs({ M.settings.keys.select_prefix, "<M-" }) do
 			vim.keymap.set({ "n", "i", "t" }, prefix .. n .. ">", function()
-				if vim.api.nvim_get_mode().mode == "t" then
-					pcall(vim.cmd, "stopinsert")
-				end
 				M.select_terminal(n)
 			end, { noremap = true, silent = true, desc = "Select Terminal #" .. n })
 		end
 	end
+
+	vim.api.nvim_create_user_command("TerminalToggle", function()
+		M.toggle_selected_terminal()
+	end, { desc = "Toggle selected terminal window" })
+
+	vim.api.nvim_create_user_command("TerminalSelect", function(opts)
+		local num = tonumber(opts.args)
+		if num then
+			M.select_terminal(num)
+		else
+			M.toggle_selected_terminal()
+		end
+	end, { nargs = "?", desc = "Select terminal by number" })
 
 	for _, key in ipairs(M.settings.keys.toggle) do
 		vim.keymap.set({ "n", "i", "t" }, key, M.toggle_selected_terminal, {
@@ -499,7 +517,7 @@ function M.setup()
 		if not is_term_buf(bufnr) then
 			return
 		end
-		if vim.api.nvim_get_mode().mode ~= "t" then
+		if vim.api.nvim_get_current_buf() == bufnr and vim.api.nvim_get_mode().mode ~= "t" then
 			pcall(vim.cmd, "startinsert")
 		end
 	end

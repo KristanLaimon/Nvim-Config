@@ -138,12 +138,23 @@ function M.notify(msg, level, opts)
 	vim.keymap.set({ "n", "v", "i" }, "<2-LeftMouse>", copy_fn, { buffer = buf, silent = true, noremap = true })
 
 	-- Compute geometry
+	local is_mobile = false
+	local env_ok, env_mod = pcall(require, "krs.core.environment")
+	if env_ok then
+		local env = env_mod.detect()
+		is_mobile = env.is_mobile or env.is_termux or env.is_proot
+	else
+		is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1 or (vim.o.columns or 80) < 72
+	end
+
 	local width = 0
 	for _, l in ipairs(lines) do
 		width = math.max(width, #l + 2)
 	end
-	width = math.min(width, math.floor(vim.o.columns * 0.7))
-	local height = #lines
+	local max_w = is_mobile and math.max(20, math.min(30, math.floor((vim.o.columns or 80) * 0.55))) or math.floor((vim.o.columns or 80) * 0.7)
+	width = math.min(width, max_w)
+	local max_h = is_mobile and 3 or 10
+	local height = math.min(#lines, max_h)
 
 	-- Calculate initial row in queue
 	local target_row = 1
@@ -217,7 +228,7 @@ function M.notify(msg, level, opts)
 	end))
 
 	-- 2. Auto-dismiss & Exit Animation (Slide out right + Slide remaining up)
-	local timeout = opts.timeout or 2500
+	local timeout = opts.timeout or (is_mobile and 1800 or 2500)
 	vim.defer_fn(function()
 		local exit_steps = 5
 		local exit_step = 0

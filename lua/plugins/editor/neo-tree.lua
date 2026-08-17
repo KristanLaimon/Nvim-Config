@@ -255,11 +255,34 @@ local function delete_path(path)
 end
 
 --- Directory a new entry should be created in: the selected directory, or the
---- parent of the selected file.
---- @param node table neo-tree node.
+--- parent of the selected file. Falls back to active buffer dir or CWD.
+--- @param node table|nil neo-tree node.
 --- @return string dir
 local function target_dir(node)
-	return node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+	if node and node.path then
+		return node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
+	end
+
+	local ok, manager = pcall(require, "neo-tree.sources.manager")
+	if ok and manager then
+		local state = manager.get_state("filesystem")
+		if state and state.tree then
+			local curr_node = state.tree:get_node()
+			if curr_node and curr_node.path then
+				return curr_node.type == "directory" and curr_node.path or vim.fn.fnamemodify(curr_node.path, ":h")
+			end
+		end
+	end
+
+	local buf_path = vim.api.nvim_buf_get_name(0)
+	if buf_path ~= "" and vim.bo.filetype ~= "neo-tree" then
+		local parent = vim.fn.fnamemodify(buf_path, ":h")
+		if vim.fn.isdirectory(parent) == 1 then
+			return parent
+		end
+	end
+
+	return vim.fn.getcwd()
 end
 
 --- Prompts for a name and creates a file or a folder in `parent_dir`.
@@ -309,6 +332,17 @@ local function create_entry(parent_dir, kind)
 	})
 end
 
+local function add_file_prompt(node)
+	create_entry(target_dir(node), "file")
+end
+
+local function add_folder_prompt(node)
+	create_entry(target_dir(node), "folder")
+end
+
+_G.Neotree_Create_File = add_file_prompt
+_G.Neotree_Create_Folder = add_folder_prompt
+
 --- Wraps a command so it only runs with a usable node selected.
 --- @param fn fun(node: table, state: table)
 --- @param needs_path boolean|nil Require the node to have a path.
@@ -331,7 +365,13 @@ return {
 	{
 		"nvim-neo-tree/neo-tree.nvim",
 		branch = "v3.x",
-		cmd = "Neotree",
+		cmd = {
+			"Neotree",
+			"NeotreeCreateFile",
+			"NeotreeAddFile",
+			"NeotreeCreateFolder",
+			"NeotreeAddFolder",
+		},
 		keys = (function()
 			local k = {}
 			for _, key in ipairs(settings.toggle_keys) do
@@ -353,6 +393,18 @@ return {
 					silent = true,
 					desc = "Toggle Explorer",
 				})
+			end
+
+			local user_cmds = {
+				NeotreeCreateFile = { function() add_file_prompt() end, "Create new file in Neo-tree target directory" },
+				NeotreeAddFile = { function() add_file_prompt() end, "Create new file in Neo-tree target directory" },
+				NeotreeCreateFolder = { function() add_folder_prompt() end, "Create new folder in Neo-tree target directory" },
+				NeotreeAddFolder = { function() add_folder_prompt() end, "Create new folder in Neo-tree target directory" },
+			}
+			for name, spec in pairs(user_cmds) do
+				if vim.fn.exists(":" .. name) == 0 then
+					vim.api.nvim_create_user_command(name, spec[1], { desc = spec[2] })
+				end
 			end
 
 			require("neo-tree").setup({
@@ -406,13 +458,15 @@ return {
 						})
 					end, true),
 
-					add_file_with_modal = with_node(function(node)
-						create_entry(target_dir(node), "file")
-					end),
+					add_file_with_modal = function(state)
+						local node = state and state.tree and state.tree:get_node()
+						add_file_prompt(node)
+					end,
 
-					add_folder_with_modal = with_node(function(node)
-						create_entry(target_dir(node), "folder")
-					end),
+					add_folder_with_modal = function(state)
+						local node = state and state.tree and state.tree:get_node()
+						add_folder_prompt(node)
+					end,
 
 					search_respect_gitignore = function()
 						if _G.FindFilesGitignore then

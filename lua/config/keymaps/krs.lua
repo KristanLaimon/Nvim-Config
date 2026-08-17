@@ -39,7 +39,7 @@ M.settings = {
 		},
 		smart_launch = { "<C-S-s>", "<C-S-S>", "<C-S>" },
 		launch_profiles = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
-		task_menu = { "<C-S-t>", "<C-S-T>", "<C-T>" },
+		task_menu = { "<C-S-t>", "<C-S-T>" },
 		task_menu_leader = nil,
 		run_default_task = { "<C-S-a>", "<C-S-A>", "<C-A>" },
 		--- Toggle the most recent task output. `<C-i>` is omitted because it shares
@@ -54,7 +54,7 @@ M.settings = {
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.
-		wiki = { "<C-S-,>", "<C-S-comma>", "<C-S-d>", "<C-S-D>", "<C-D>" },
+		wiki = { "<C-S-,>", "<C-S-comma>", "<C-S-d>", "<C-S-D>" },
 	},
 
 	--- How many task output slots have a direct toggle.
@@ -69,15 +69,25 @@ local function opts(desc)
 	return { noremap = true, silent = true, desc = desc }
 end
 
---- Wraps a handler so it also works from terminal mode.
---- @param fn function
---- @return function
 local function from_any_mode(fn)
 	return function()
-		if vim.fn.mode() ~= "n" then
+		local cur_buf = vim.api.nvim_get_current_buf()
+		local is_term = vim.bo[cur_buf].buftype == "terminal" or vim.b[cur_buf].krs_is_multi_term
+		local mode = vim.fn.mode()
+
+		if mode ~= "n" then
 			pcall(vim.cmd, "stopinsert")
 		end
+
 		fn()
+
+		if is_term and mode == "t" then
+			vim.schedule(function()
+				if vim.api.nvim_get_current_buf() == cur_buf then
+					pcall(vim.cmd, "startinsert")
+				end
+			end)
+		end
 	end
 end
 

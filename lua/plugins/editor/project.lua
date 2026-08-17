@@ -1,5 +1,5 @@
 -- ============================================================================
--- PLUGIN: project.nvim -- recent projects, with a custom picker (<C-S-r>).
+-- PLUGIN: project.nvim -- recent projects, with a custom picker (<C-r>).
 -- ============================================================================
 -- WHY THE PICKER IS CUSTOM
 --   The stock `Telescope projects` list cannot show WSL projects, favorites, or
@@ -79,7 +79,7 @@ local settings = {
 	invalid_paths = { "c:", "c:/" },
 
 	--- Open the picker.
-	key = "<C-S-r>",
+	key = "<C-r>",
 }
 
 return {
