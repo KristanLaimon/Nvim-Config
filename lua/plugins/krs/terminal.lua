@@ -51,7 +51,7 @@ M.settings = {
 		--- Prefix for per-terminal selection; the number is appended (`<A-1>`).
 		select_prefix = "<A-",
 		--- Toggle the selected terminal.
-		toggle = { "<C-;>", "<A-;>", "<C-\\>", "<leader>t", "<leader>ft", "<F4>" },
+		toggle = { "<C-t>", "<C-T>", "<C-\\>", "<leader>t", "<leader>ft", "<F4>", "<C-;>", "<A-;>" },
 		--- Close the terminal window from inside terminal mode.
 		close = "<C-w>",
 		--- Clipboard bridges, because a terminal has no access to registers.
@@ -539,9 +539,11 @@ return setmetatable({
 	event = { "TermOpen", "BufEnter" },
 	cmd = { "TerminalToggle", "TerminalSelect" },
 	keys = {
-		{ "<C-;>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal" },
+		{ "<C-t>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal (Mobile)" },
+		{ "<C-T>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal (Mobile)" },
 		{ "<C-\\>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal (Mobile)" },
 		{ "<leader>t", mode = { "n", "v" }, desc = "Toggle Selected Terminal" },
+		{ "<F4>", mode = { "n", "i", "t" }, desc = "Toggle Selected Terminal (F4)" },
 	},
 	config = M.setup,
 }, { __index = M })

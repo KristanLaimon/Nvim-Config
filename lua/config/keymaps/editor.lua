@@ -41,11 +41,11 @@ M.settings = {
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
 		buffer_next = { "<A-l>", "<M-l>", "<A-Right>", "<M-Right>" },
 		--- Toggle the neo-tree sidebar.
-		explorer = { "<C-S-Space>", "<C-e>", "<C-E>", "<leader>e" },
+		explorer = { "<C-S-Space>", "<C-e>", "<C-E>", "<leader>e", "<leader>fe" },
 		--- Netrw-style directory listing, kept as an escape hatch.
 		netrw = nil,
 		--- Pin active code buffer tab.
-		pin_tab = "<C-p>",
+		pin_tab = { "<A-p>", "<M-p>", "<leader>pin", "<leader>bp" },
 	},
 
 	--- Window resize step, in cells.
@@ -114,9 +114,11 @@ end
 
 vim.keymap.set({ "n", "v", "i" }, M.settings.keys.save, "<Cmd>w<CR>", opts("Save file"))
 
-vim.keymap.set("n", M.settings.keys.pin_tab, function()
-	require("plugins.krs.pinned_tabs").toggle_pin()
-end, opts("Toggle pin tab (code buffer only)"))
+for _, key in ipairs(M.settings.keys.pin_tab) do
+	vim.keymap.set("n", key, function()
+		require("plugins.krs.pinned_tabs").toggle_pin()
+	end, opts("Toggle pin tab (code buffer only)"))
+end
 
 
 -- Clipboard: the OS clipboard, not vim registers, because that is what the rest
