@@ -74,7 +74,7 @@ describe("plugins.krs.wiki_modal", function()
 		expect(has_nowait_close).toBe(true)
 	end)
 
-	it("defaults reader pane wrap option to false for table grid integrity and binds w keymap to toggle", function()
+	it("defaults reader pane wrap option to true for mobile readability and binds w keymap to toggle", function()
 		wiki_modal.open()
 		local right_win = nil
 		for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -86,7 +86,7 @@ describe("plugins.krs.wiki_modal", function()
 		end
 
 		expect(right_win).toBeDefined()
-		expect(vim.wo[right_win].wrap).toBe(false)
+		expect(vim.wo[right_win].wrap).toBe(true)
 		expect(vim.wo[right_win].conceallevel).toBe(3)
 
 		local maps = vim.api.nvim_buf_get_keymap(vim.api.nvim_win_get_buf(right_win), "n")

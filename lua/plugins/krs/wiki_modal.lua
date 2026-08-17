@@ -251,7 +251,9 @@ function M.open()
 
 	vim.wo[state.left_win].cursorline = true
 	vim.wo[state.right_win].cursorline = false
-	vim.wo[state.right_win].wrap = false
+	vim.wo[state.right_win].wrap = true
+	vim.wo[state.right_win].linebreak = true
+	vim.wo[state.right_win].breakindent = true
 	vim.wo[state.right_win].conceallevel = 3
 	vim.wo[state.right_win].concealcursor = "nvic"
 

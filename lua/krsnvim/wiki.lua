@@ -78,7 +78,9 @@ function M.open(doc_file)
 		title_pos = "center",
 	})
 
-	vim.wo[win].wrap = false
+	vim.wo[win].wrap = true
+	vim.wo[win].linebreak = true
+	vim.wo[win].breakindent = true
 	vim.wo[win].conceallevel = 3
 	vim.wo[win].concealcursor = "nvic"
 	local ok, rm_ui = pcall(require, "render-markdown.core.ui")

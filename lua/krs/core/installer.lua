@@ -544,7 +544,9 @@ function M.start_toggle_installation()
 	toggle_win = nil
 	toggle_buf = nil
 
-	M.install_selected(selected_pkgs)
+	M.ensure_sudo_pass(function(sudo_pass)
+		M.install_selected(selected_pkgs, sudo_pass)
+	end)
 end
 
 --- Performs automated installation of a specific list of selected packages.
@@ -598,7 +600,18 @@ end
 -- ROOT / SUDO SYSTEM SETUP EXECUTION WITH UI PASSWORD PROMPT
 -------------------------------------------------------------------------------
 
---- Checks if running as a non-root user on Linux/macOS requiring sudo password authentication.
+--- Cached sudo password in-memory for the current Neovim session.
+M.cached_sudo_pass = M.cached_sudo_pass or nil
+
+--- Checks if running inside Termux / Android / Mobile.
+--- @return boolean
+function M.is_mobile_or_termux()
+	return vim.env.TERMUX_VERSION ~= nil
+		or vim.fn.isdirectory("/data/data/com.termux") == 1
+		or (vim.fn.filereadable("/proc/version") == 1 and (vim.fn.readfile("/proc/version")[1] or ""):lower():match("android") ~= nil)
+end
+
+--- Checks if running as a non-root user on Linux/macOS/Termux requiring sudo password authentication.
 --- @return boolean
 function M.requires_sudo()
 	if vim.fn.has("win32") == 1 then
@@ -610,28 +623,43 @@ function M.requires_sudo()
 	if getuid_ok and uid == 0 then
 		return false
 	end
-	return vim.fn.executable("sudo") == 1
+	return vim.fn.executable("sudo") == 1 or M.is_mobile_or_termux()
+end
+
+--- Obtains sudo password via UI prompt if non-root on Linux/Termux/macOS, or re-uses cached password for session.
+--- @param callback function(sudo_pass: string|nil)
+function M.ensure_sudo_pass(callback)
+	if not M.requires_sudo() then
+		callback(nil)
+		return
+	end
+
+	if M.cached_sudo_pass and M.cached_sudo_pass ~= "" then
+		callback(M.cached_sudo_pass)
+		return
+	end
+
+	local user_name = vim.env.USER or "user"
+	vim.ui.input({
+		prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
+	}, function(pass)
+		if not pass or pass == "" then
+			vim.notify("Cancelled installation: Password is required for sudo execution.", vim.log.levels.WARN, {
+				title = "Root Password Required",
+			})
+			callback(nil)
+			return
+		end
+		M.cached_sudo_pass = pass
+		callback(pass)
+	end)
 end
 
 --- Prompts user for root/sudo password in UI prompt if non-root, then executes setup.sh.
 function M.run_system_setup_interactive()
-	local user_name = vim.env.USER or "user"
-
-	if M.requires_sudo() then
-		vim.ui.input({
-			prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
-		}, function(pass)
-			if not pass or pass == "" then
-				vim.notify("Cancelled system setup: Password is required for sudo execution.", vim.log.levels.WARN, {
-					title = "Root Password Required",
-				})
-				return
-			end
-			M.run_setup_script(pass)
-		end)
-	else
-		M.run_setup_script(nil)
-	end
+	M.ensure_sudo_pass(function(pass)
+		M.run_setup_script(pass)
+	end)
 end
 
 --- Executes setup.sh (or setup.ps1) with live activity modal feed and optional sudo password.
@@ -801,15 +829,16 @@ end
 --- Performs automated incremental installation (Stage 1 Essentials + Stage 2 Heavy LSPs).
 --- Displays real-time progress toast bar & live modal UI feed.
 function M.install_all()
-	M.open_ui()
-	add_log("Starting automated incremental system setup...")
+	M.ensure_sudo_pass(function(sudo_pass)
+		M.open_ui()
+		add_log("Starting automated incremental system setup...")
 
-	local scan = M.scan_status()
-	local installed_list = scan.installed_items
-	local missing_lsps = scan.missing_lsps
-	local missing_count = #missing_lsps
+		local scan = M.scan_status()
+		local installed_list = scan.installed_items
+		local missing_lsps = scan.missing_lsps
+		local missing_count = #missing_lsps
 
-	update_ui_buffer("Syncing lazy.nvim plugins...", installed_list, missing_lsps, math.max(15, scan.percentage))
+		update_ui_buffer("Syncing lazy.nvim plugins...", installed_list, missing_lsps, math.max(15, scan.percentage))
 
 	vim.schedule(function()
 		-- Step 1: Ensure Lazy plugins and Mason are loaded (15% -> 25%)
@@ -866,6 +895,7 @@ function M.install_all()
 			M.finish_setup(installed_list)
 		end
 	end)
+end)
 end
 
 --- Finalizes setup execution and persists state.
@@ -964,25 +994,11 @@ function M.run_install_agy(sudo_pass)
 end
 
 --- Installs Google Antigravity CLI (`agy`) cross-platform using official oneliner scripts.
---- Prompts for root/sudo password if non-root on Linux/macOS.
+--- Prompts for root/sudo password if non-root on Linux/macOS/Termux.
 function M.install_agy()
-	local user_name = vim.env.USER or "user"
-
-	if M.requires_sudo() then
-		vim.ui.input({
-			prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
-		}, function(pass)
-			if not pass or pass == "" then
-				vim.notify("Cancelled Google Antigravity installation: Password is required for sudo execution.", vim.log.levels.WARN, {
-					title = "Root Password Required",
-				})
-				return
-			end
-			M.run_install_agy(pass)
-		end)
-	else
-		M.run_install_agy(nil)
-	end
+	M.ensure_sudo_pass(function(pass)
+		M.run_install_agy(pass)
+	end)
 end
 
 --- Internal execution for Claude Code CLI installation.
@@ -1050,25 +1066,11 @@ function M.run_install_claude(sudo_pass)
 end
 
 --- Installs Claude Code CLI (`claude`) cross-platform using official oneliner scripts.
---- Prompts for root/sudo password if non-root on Linux/macOS.
+--- Prompts for root/sudo password if non-root on Linux/macOS/Termux.
 function M.install_claude()
-	local user_name = vim.env.USER or "user"
-
-	if M.requires_sudo() then
-		vim.ui.input({
-			prompt = string.format("🔑 Root/Sudo Password for user '%s': ", user_name),
-		}, function(pass)
-			if not pass or pass == "" then
-				vim.notify("Cancelled Claude Code installation: Password is required for sudo execution.", vim.log.levels.WARN, {
-					title = "Root Password Required",
-				})
-				return
-			end
-			M.run_install_claude(pass)
-		end)
-	else
-		M.run_install_claude(nil)
-	end
+	M.ensure_sudo_pass(function(pass)
+		M.run_install_claude(pass)
+	end)
 end
 
 --- Initializes setup checks on Neovim startup.
