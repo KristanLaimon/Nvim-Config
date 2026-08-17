@@ -14,28 +14,35 @@ return {
 		"rcarriga/nvim-notify",
 		lazy = false,
 		priority = 1000,
-		opts = {
-			stages = "fade_in_slide_out", -- Original smooth ease-in-out slide & auto slide-UP
-			timeout = 3000, -- Auto-hide after 3 seconds
-			top_down = true,
-			render = "default", -- Original beautiful render style with borders & icons
-			fps = 30, -- Smooth 30fps animation
-			max_width = 75,
-			max_height = 10,
-			background_colour = "Normal",
-			on_open = function(win)
-				-- Enforce focusable = false on every opened notification window
-				pcall(vim.api.nvim_win_set_config, win, { focusable = false })
-				local buf = vim.api.nvim_win_get_buf(win)
-				if buf and vim.api.nvim_buf_is_valid(buf) then
-					pcall(vim.api.nvim_buf_set_option, buf, "focusable", false)
-				end
-			end,
-		},
+		opts = function()
+			local is_mobile = false
+			local env_ok, env_mod = pcall(require, "krs.core.environment")
+			if env_ok then
+				local env = env_mod.detect()
+				is_mobile = env.is_mobile or env.is_termux or env.is_proot
+			else
+				is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+			end
+
+			return {
+				stages = is_mobile and "static" or "fade_in_slide_out",
+				timeout = is_mobile and 2000 or 3000,
+				top_down = true,
+				render = "default",
+				fps = is_mobile and 5 or 30,
+				max_width = is_mobile and 45 or 75,
+				max_height = is_mobile and 6 or 10,
+				background_colour = "Normal",
+				on_open = function(win)
+					pcall(vim.api.nvim_win_set_config, win, { focusable = false })
+				end,
+			}
+		end,
 		config = function(_, opts)
 			local ok, notify = pcall(require, "notify")
 			if ok then
-				notify.setup(opts)
+				local final_opts = type(opts) == "function" and opts() or opts
+				notify.setup(final_opts)
 				vim.notify = notify
 
 				-- Autocmd: If focus ever lands in a notify float, restore main editor window instantly

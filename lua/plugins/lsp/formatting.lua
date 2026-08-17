@@ -137,8 +137,19 @@ return {
 		event = { "BufReadPre", "BufNewFile" },
 		dependencies = { "williamboman/mason.nvim", "stevearc/conform.nvim" },
 		config = function()
+			local env_ok, env_mod = pcall(require, "krs.core.environment")
+			local is_mobile = false
+			if env_ok then
+				local env = env_mod.detect()
+				is_mobile = env.is_mobile or env.is_termux or env.is_proot
+			else
+				is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+			end
+
 			local ok, installer = pcall(require, "krs.core.installer")
-			local ignore_list = ok and installer.mason_packages or {
+			local ignore_list = {}
+
+			local base_list = (ok and type(installer.mason_packages) == "table") and installer.mason_packages or {
 				"stylua",
 				"gofumpt",
 				"goimports",
@@ -150,6 +161,50 @@ return {
 				"biome",
 				"eslint",
 			}
+
+			for _, pkg in ipairs(base_list) do
+				table.insert(ignore_list, pkg)
+			end
+
+			-- Conditional & project-specific formatters MUST NOT be auto-installed by mason-conform on any platform
+			local extra_ignores = {
+				"pint",
+				"php_cs_fixer",
+				"php-cs-fixer",
+				"dockerfmt",
+			}
+
+			for _, pkg in ipairs(extra_ignores) do
+				if not vim.tbl_contains(ignore_list, pkg) then
+					table.insert(ignore_list, pkg)
+				end
+			end
+
+			-- On mobile / Termux, ignore ALL formatters from background auto-install on file open to prevent hangs/freezes
+			if is_mobile then
+				local all_formatters = {
+					"goimports",
+					"gofumpt",
+					"stylua",
+					"protolint",
+					"prettierd",
+					"prettier",
+					"biome",
+					"dockerfmt",
+					"pint",
+					"php_cs_fixer",
+					"php-cs-fixer",
+					"blade-formatter",
+					"beautysh",
+					"eslint",
+				}
+				for _, fmt in ipairs(all_formatters) do
+					if not vim.tbl_contains(ignore_list, fmt) then
+						table.insert(ignore_list, fmt)
+					end
+				end
+			end
+
 			require("mason-conform").setup({
 				ignore_install = ignore_list,
 			})
