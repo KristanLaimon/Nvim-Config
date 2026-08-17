@@ -44,9 +44,8 @@ describe("plugins.krs.sneak_peek", function()
 		expect(peek.settings.width).toBe(0.90)
 		expect(peek.settings.height).toBe(0.90)
 		expect(peek.settings.border).toBe("rounded")
-		expect(peek.settings.keys.toggle).toContain("<C-S-o>")
-		expect(peek.settings.keys.toggle).toContain("<C-S-O>")
-		expect(peek.settings.keys.toggle).toContain("<C-O>")
+		expect(peek.settings.keys.toggle).toContain("<C-S-y>")
+		expect(peek.settings.keys.toggle).toContain("<C-S-Y>")
 		expect(peek.is_open()).toBeFalsy()
 	end)
 
@@ -116,7 +115,7 @@ describe("plugins.krs.sneak_peek", function()
 		local has_keymap = false
 		for _, mode in ipairs({ "n", "i", "v", "t" }) do
 			for _, map in ipairs(vim.api.nvim_buf_get_keymap(sneak_buf, mode)) do
-				if map.lhs:lower():find("c%-s%-o") or map.lhs == "<C-S-o>" or map.lhs == "<C-S-O>" then
+				if map.lhs:lower():find("c%-s%-y") or map.lhs == "<C-S-y>" or map.lhs == "<C-S-Y>" then
 					has_keymap = true
 					break
 				end

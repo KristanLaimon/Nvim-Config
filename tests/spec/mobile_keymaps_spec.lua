@@ -16,13 +16,11 @@ local function has_normal_keymap(lhs)
 end
 
 describe("Mobile & Phone Termux keymap aliases", function()
-	it("binds Command Palette shortcuts for Ctrl+k, Ctrl+p, capital variants and leader aliases", function()
+	it("binds Command Palette shortcuts for Ctrl+Shift+P and leader aliases", function()
 		local palette = require("plugins.krs.command_palette")
 		palette.setup()
-		expect(palette.settings.keys.open).toContain("<C-k>")
-		expect(palette.settings.keys.open).toContain("<C-K>")
-		expect(palette.settings.keys.open).toContain("<C-p>")
-		expect(palette.settings.keys.open).toContain("<C-P>")
+		expect(palette.settings.keys.open).toContain("<C-S-p>")
+		expect(palette.settings.keys.open).toContain("<C-S-P>")
 		expect(palette.settings.keys.open).toContain("<leader>cp")
 	end)
 

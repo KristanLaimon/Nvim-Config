@@ -23,6 +23,7 @@ end
 
 --- Expected Mason LSP & Tool packages.
 M.mason_packages = {
+	"vtsls",
 	"intelephense",
 	"lua_ls",
 	"jsonls",
@@ -54,6 +55,7 @@ M.mason_packages = {
 
 --- Map lspconfig server names to Mason package directory/install names.
 M.lsp_to_mason = {
+	vtsls = "vtsls",
 	buf_ls = "buf",
 	intelephense = "intelephense",
 	lua_ls = "lua-language-server",
@@ -88,6 +90,7 @@ end
 
 --- Package metadata mapping Mason package names to Human-readable Languages/Formatters and CLI binaries.
 M.package_info = {
+	vtsls = { lang = "TypeScript / JavaScript", type = "lsp", cmd = "vtsls" },
 	intelephense = { lang = "PHP", type = "lsp", cmd = "intelephense" },
 	lua_ls = { lang = "Lua", type = "lsp", cmd = "lua-language-server" },
 	jsonls = { lang = "JSON", type = "lsp", cmd = "vscode-json-language-server" },
@@ -1138,47 +1141,10 @@ function M.init()
 
 	local state = M.load_state()
 
-	-- Fast path: setup is already marked 100% complete
-	if state.completed then
-		return
+	-- Mark setup complete on startup without popup warning toasts
+	if not state.completed then
+		M.save_state(true)
 	end
-
-	-- Startup check: show 1 consolidated warning toast if items are missing
-	vim.api.nvim_create_autocmd("VimEnter", {
-		group = vim.api.nvim_create_augroup("KrsInstallerStartupCheck", { clear = true }),
-		callback = function()
-			vim.schedule(function()
-				local scan = M.scan_status()
-
-				if scan.percentage >= 100 then
-					M.save_state(true)
-					return
-				end
-
-				-- If languages, formatters, or system runtimes are missing, show 1 single consolidated toast warning
-				if #scan.missing_languages > 0 or #scan.missing_formatters > 0 or #scan.missing_runtimes > 0 then
-					local langs = #scan.missing_languages > 0 and table.concat(scan.missing_languages, ", ") or "None"
-					local fmts = #scan.missing_formatters > 0 and table.concat(scan.missing_formatters, ", ") or "None"
-					local runtimes = #scan.missing_runtimes > 0 and table.concat(scan.missing_runtimes, ", ") or "None"
-
-					local msg = string.format(
-						"⚠️ KRS Neovim - Missing Language Servers & Tools:\n" ..
-						"  • Languages (LSPs): %s\n" ..
-						"  • Formatters: %s\n" ..
-						"  • System Runtimes: %s\n\n" ..
-						"👉 To install inside Neovim: run :KrsInstallAll (or :Mason)\n" ..
-						"📱 On Phone/Termux/Linux: run ./setup.sh to select & install from official sources.",
-						langs, fmts, runtimes
-					)
-
-					vim.notify(msg, vim.log.levels.WARN, {
-						title = "KRS Neovim Setup Warning",
-						timeout = 12000,
-					})
-				end
-			end)
-		end,
-	})
 end
 
 return M

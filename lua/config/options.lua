@@ -37,8 +37,8 @@ local settings = {
 		cmdheight = 0, -- No dead row at the bottom when idle.
 		laststatus = 3, -- One global statusline.
 
-		-- Indentation: real tabs, two columns wide.
-		expandtab = false,
+		-- Indentation: spaces, two columns wide (standard for Astro, JS/TS, Tailwind, Biome, HTML, JSON).
+		expandtab = true,
 		shiftwidth = 2,
 		tabstop = 2,
 		softtabstop = 2,

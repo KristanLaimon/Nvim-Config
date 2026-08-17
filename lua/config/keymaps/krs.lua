@@ -26,6 +26,15 @@ local M = {}
 -- CONFIGURATION
 -- ============================================================================
 
+local env_ok, env_mod = pcall(require, "krs.core.environment")
+local is_mobile = false
+if env_ok then
+	local env = env_mod.detect()
+	is_mobile = env.is_mobile or env.is_termux or env.is_proot
+else
+	is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+end
+
 M.settings = {
 	keys = {
 		--- Stage every unstaged and untracked change. Many aliases because Alt and
@@ -37,7 +46,7 @@ M.settings = {
 			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
 		},
-		smart_launch = { "<C-S-s>", "<C-S-S>", "<C-S>" },
+		smart_launch = is_mobile and { "<C-S-s>", "<C-S-S>", "<C-S>", "<C-s>" } or { "<C-S-s>", "<C-S-S>" },
 		launch_profiles = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
 		task_menu = { "<C-S-t>", "<C-S-T>" },
 		task_menu_leader = nil,
@@ -50,7 +59,7 @@ M.settings = {
 		task_slot_prefix = "<C-",
 		explorer = { "<C-S-f>", "<C-S-F>", "<C-F>" },
 		wsl_explorer = nil,
-		sneak_peek = { "<C-S-o>", "<C-S-O>", "<C-O>" },
+		sneak_peek = is_mobile and { "<C-S-y>", "<C-S-Y>", "<C-Y>", "<C-y>" } or { "<C-S-y>", "<C-S-Y>" },
 		--- Run the current .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.

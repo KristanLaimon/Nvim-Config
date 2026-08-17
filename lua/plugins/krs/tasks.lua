@@ -81,8 +81,8 @@ M.settings = {
 	keys = {
 		--- Open the task menu. Bound in normal, insert, visual and terminal mode.
 		menu = { "<C-S-t>", "<C-S-T>", "<leader>tm" },
-		--- Run the default task, falling back to the menu.
-		run_default = "<F5>",
+		--- Run the default task, falling back to launch profile or menu.
+		run_default = { "<C-S-a>", "<C-S-A>", "<C-A>", "<F5>" },
 		--- Open the task menu (function-key alternative).
 		menu_fkey = "<F6>",
 		--- Toggle the most recently used task output.
@@ -915,9 +915,19 @@ function M.run_default_or_menu()
 
 	if pdata and pdata.default_task then
 		M.run_task_item(pdata.default_task, root)
-	else
-		M.open_task_menu()
+		return
 	end
+
+	local ok_lp, lp = pcall(require, "plugins.krs.launch_profiles")
+	if ok_lp and lp.get_default_profile then
+		local def_prof = lp.get_default_profile(root)
+		if def_prof then
+			lp.run_profile(def_prof, root)
+			return
+		end
+	end
+
+	M.open_task_menu()
 end
 
 -- ============================================================================
@@ -1265,11 +1275,14 @@ function M.setup()
 		})
 	end
 
-	vim.keymap.set("n", M.settings.keys.run_default, M.run_default_or_menu, {
-		noremap = true,
-		silent = true,
-		desc = "Run Default Project Task",
-	})
+	local run_def_keys = type(M.settings.keys.run_default) == "table" and M.settings.keys.run_default or { M.settings.keys.run_default }
+	for _, key in ipairs(run_def_keys) do
+		vim.keymap.set({ "n", "i", "v", "t" }, key, from_any_mode(M.run_default_or_menu), {
+			noremap = true,
+			silent = true,
+			desc = "Run Default Project Task / Profile",
+		})
+	end
 	vim.keymap.set("n", M.settings.keys.menu_fkey, M.open_task_menu, {
 		noremap = true,
 		silent = true,
@@ -1316,9 +1329,11 @@ return setmetatable({
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "TaskMenu", "TaskRunner", "TaskRestart", "TaskKill", "TaskRunDefault" },
 	keys = {
-		{ "<C-S-t>", mode = { "n", "i" }, desc = "Project Task Menu" },
-		{ "<C-S-a>", mode = { "n", "i" }, desc = "Run Default Project Task" },
-		{ "<C-S-e>", mode = { "n", "i" }, desc = "Restart Active Task" },
+		{ "<C-S-t>", mode = { "n", "i", "v", "t" }, desc = "Project Task Menu" },
+		{ "<C-S-a>", mode = { "n", "i", "v", "t" }, desc = "Run Default Project Task" },
+		{ "<C-S-A>", mode = { "n", "i", "v", "t" }, desc = "Run Default Project Task" },
+		{ "<C-A>", mode = { "n", "i", "v", "t" }, desc = "Run Default Project Task" },
+		{ "<C-S-e>", mode = { "n", "i", "v", "t" }, desc = "Restart Active Task" },
 		{ "<leader>tm", mode = { "n", "i" }, desc = "Project Task Menu (Leader)" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },

@@ -147,14 +147,21 @@ function M.notify(msg, level, opts)
 		is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1 or (vim.o.columns or 80) < 72
 	end
 
-	local width = 0
+	local max_w = is_mobile and math.max(25, math.min(45, math.floor((vim.o.columns or 80) * 0.7)))
+		or math.max(40, math.min(120, math.floor((vim.o.columns or 80) * 0.8)))
+
+	local max_line_len = 0
+	local total_visual_lines = 0
+
 	for _, l in ipairs(lines) do
-		width = math.max(width, #l + 2)
+		max_line_len = math.max(max_line_len, #l + 2)
+		local visual_l = math.max(1, math.ceil((#l + 1) / math.max(1, max_w - 2)))
+		total_visual_lines = total_visual_lines + visual_l
 	end
-	local max_w = is_mobile and math.max(20, math.min(30, math.floor((vim.o.columns or 80) * 0.55))) or math.floor((vim.o.columns or 80) * 0.7)
-	width = math.min(width, max_w)
-	local max_h = is_mobile and 3 or 10
-	local height = math.min(#lines, max_h)
+
+	local width = math.min(max_line_len, max_w)
+	local max_h = is_mobile and 6 or 15
+	local height = math.min(total_visual_lines, max_h)
 
 	-- Calculate initial row in queue
 	local target_row = 1
@@ -185,6 +192,8 @@ function M.notify(msg, level, opts)
 		return
 	end
 
+	pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
+	pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
 	pcall(vim.api.nvim_win_set_option, win, "winblend", 80)
 
 	local win_item = {

@@ -84,7 +84,11 @@ end
 --- @param str string|nil
 --- @return string|nil hex_code
 function M.extract_hex_color(str)
-	if not str or type(str) ~= "string" then
+	if not str or type(str) ~= "string" or #str < 4 then
+		return nil
+	end
+
+	if not (str:find("#", 1, true) or str:find("rgb", 1, true)) then
 		return nil
 	end
 

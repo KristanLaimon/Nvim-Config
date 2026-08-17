@@ -38,7 +38,7 @@ M.settings = {
 
 	keys = {
 		--- Open the palette. Bound in normal, insert, visual and terminal mode.
-		open = { "<C-S-p>", "<C-S-P>", "<C-k>", "<C-K>", "<C-p>", "<C-P>", "<leader>cp", "<leader>p" },
+		open = { "<C-S-p>", "<C-S-P>", "<leader>cp", "<leader>p" },
 	},
 }
 
@@ -390,8 +390,7 @@ return setmetatable({
 	cmd = "CommandPalette",
 	keys = {
 		{ "<C-S-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
-		{ "<C-k>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette (Mobile/Phone)" },
-		{ "<C-p>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
+		{ "<C-S-P>", mode = { "n", "i", "v", "t" }, desc = "Open Command Palette" },
 		{ "<leader>cp", mode = { "n", "v" }, desc = "Open Command Palette" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },

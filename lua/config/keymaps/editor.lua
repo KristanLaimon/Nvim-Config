@@ -25,7 +25,7 @@ M.settings = {
 	keys = {
 		--- Toggle comment. One entry per keyboard layout that produces it.
 		comment = { "<C-'>", "<C-S-'>", '<C-">', "<C-`>", "<C-~>", "<C-^>", "<C-acute>" },
-		save = "<C-s>",
+		save = { "<C-s>", "<C-S>" },
 		copy = { "<C-c>", "<C-S-c>" },
 		paste = { "<C-v>", "<C-S-v>" },
 		undo = "<C-z>",
@@ -112,7 +112,10 @@ for _, key in ipairs(M.settings.keys.comment) do
 	vim.keymap.set("t", key, feed_from_any_mode("gcc"), opts("Comment line from terminal"))
 end
 
-vim.keymap.set({ "n", "v", "i" }, M.settings.keys.save, "<Cmd>w<CR>", opts("Save file"))
+local save_keys = type(M.settings.keys.save) == "table" and M.settings.keys.save or { M.settings.keys.save }
+for _, key in ipairs(save_keys) do
+	vim.keymap.set({ "n", "v", "i" }, key, "<Cmd>w<CR>", opts("Save file"))
+end
 
 for _, key in ipairs(M.settings.keys.pin_tab) do
 	vim.keymap.set("n", key, function()

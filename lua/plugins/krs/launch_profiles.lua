@@ -80,7 +80,7 @@ M.settings = {
 
 	keys = {
 		--- Smart launch, bound in normal, insert, visual and terminal mode.
-		smart_launch = { "<C-S-s>", "<C-S-S>", "<C-S>" },
+		smart_launch = is_mobile_lp and { "<C-S-s>", "<C-S-S>", "<C-S>", "<C-s>" } or { "<C-S-s>", "<C-S-S>" },
 		--- Open the management picker.
 		manage = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
 	},
@@ -820,6 +820,20 @@ function M.handle_smart_launch()
 	M.open_management_menu(root)
 end
 
+--- Returns the primary default launch profile for a project root, if any.
+--- @param root string|nil
+--- @return table|nil
+function M.get_default_profile(root)
+	root = root or M.get_project_root()
+	local data = M.load_profiles(root)
+	for _, p in ipairs(data.profiles) do
+		if p.is_default then
+			return p
+		end
+	end
+	return nil
+end
+
 -- ============================================================================
 -- SETUP
 -- ============================================================================
@@ -868,11 +882,14 @@ return setmetatable({
 	name = "krs_launch_profiles",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "LaunchProfiles", "LaunchProfilesRun", "LaunchProfilesDebug" },
-	keys = {
+	keys = is_mobile_lp and {
 		{ "<C-S-s>", mode = { "n", "i" }, desc = "Open Launch Profiles" },
 		{ "<C-S>", mode = { "n", "i" }, desc = "Open Launch Profiles (Mobile)" },
 		{ "<C-S-q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile" },
 		{ "<C-Q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile (Mobile)" },
+	} or {
+		{ "<C-S-s>", mode = { "n", "i" }, desc = "Open Launch Profiles" },
+		{ "<C-S-q>", mode = { "n", "i" }, desc = "Quick Launch Default Profile" },
 	},
 	config = M.setup,
 }, { __index = M })

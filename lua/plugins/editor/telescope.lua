@@ -36,7 +36,7 @@ local settings = {
 	},
 	live_grep_key = "<C-f>",
 	help_tags_key = nil,
-	open_folder_key = "<C-S-o>",
+	open_folder_key = "<C-S-y>",
 	desktop_explorer_key = "<C-S-f>",
 	wsl_explorer_key = nil,
 
@@ -84,7 +84,7 @@ return {
 		{ "<M-C-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<M-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-f>", "<cmd>Telescope live_grep<CR>", mode = { "n", "i" }, desc = "Telescope live grep" },
-		{ "<C-S-o>", "<cmd>TelescopeOpenFolder<CR>", mode = { "n", "i" }, desc = "Telescope open folder" },
+		{ "<C-S-y>", "<cmd>TelescopeOpenFolder<CR>", mode = { "n", "i" }, desc = "Telescope open folder" },
 		{ "<C-S-f>", "<cmd>TelescopeFileBrowserDesktop<CR>", mode = { "n", "i", "v" }, desc = "Open Desktop File Explorer" },
 	},
 	dependencies = {

@@ -21,6 +21,15 @@ local M = {}
 -- CONFIGURATION
 -- ============================================================================
 
+local is_mobile_sp = false
+local env_ok, env_mod = pcall(require, "krs.core.environment")
+if env_ok then
+	local env = env_mod.detect()
+	is_mobile_sp = env.is_mobile or env.is_termux or env.is_proot
+else
+	is_mobile_sp = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+end
+
 M.settings = {
 	--- Width as fraction of editor (0.90 = 90%).
 	width = 0.90,
@@ -33,7 +42,7 @@ M.settings = {
 
 	--- Keymaps to toggle / close sneak-peek.
 	keys = {
-		toggle = { "<C-S-o>", "<C-S-O>", "<C-O>" },
+		toggle = is_mobile_sp and { "<C-S-y>", "<C-S-Y>", "<C-Y>", "<C-y>" } or { "<C-S-y>", "<C-S-Y>" },
 	},
 }
 
@@ -280,9 +289,11 @@ return setmetatable({
 	name = "krs_sneak_peek",
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "SneakPeek", "SneakPeekClose" },
-	keys = {
-		{ "<C-S-o>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" },
-		{ "<C-O>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal (Mobile)" },
+	keys = is_mobile_sp and {
+		{ "<C-S-y>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" },
+		{ "<C-Y>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal (Mobile)" },
+	} or {
+		{ "<C-S-y>", mode = { "n", "i" }, desc = "Sneak-Peek Project Modal" },
 	},
 	config = M.setup,
 }, { __index = M })

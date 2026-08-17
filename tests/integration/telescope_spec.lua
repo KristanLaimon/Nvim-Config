@@ -49,7 +49,7 @@ describe("telescope plugin configuration", function()
 	end)
 
 	it("binds telescope search and navigation keys", function()
-		for _, key in ipairs({ "<C-f>", "<C-S-o>", "<C-S-f>", "<C-/>", "<C-k>", "<C-K>" }) do
+		for _, key in ipairs({ "<C-f>", "<C-S-y>", "<C-S-f>", "<C-/>", "<C-k>", "<C-K>" }) do
 			expect({ key, has_keymap(key, { "n", "i" }) }).toEqual({ key, true })
 		end
 	end)

@@ -30,15 +30,25 @@ return {
 				top_down = true,
 				render = is_mobile and "compact" or "default",
 				fps = is_mobile and 5 or 30,
-				max_width = is_mobile and function()
-					return math.max(20, math.min(30, math.floor((vim.o.columns or 80) * 0.55)))
-				end or 75,
-				max_height = is_mobile and function()
-					return math.max(2, math.min(3, math.floor((vim.o.lines or 24) * 0.15)))
-				end or 10,
+				max_width = function()
+					local cols = vim.o.columns or 80
+					if is_mobile then
+						return math.max(25, math.min(45, math.floor(cols * 0.7)))
+					end
+					return math.max(40, math.min(120, math.floor(cols * 0.8)))
+				end,
+				max_height = function()
+					local lines_cnt = vim.o.lines or 24
+					if is_mobile then
+						return math.max(3, math.min(6, math.floor(lines_cnt * 0.25)))
+					end
+					return math.max(8, math.min(20, math.floor(lines_cnt * 0.4)))
+				end,
 				background_colour = "Normal",
 				on_open = function(win)
 					pcall(vim.api.nvim_win_set_config, win, { focusable = false })
+					pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
+					pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
 					local buf = vim.api.nvim_win_get_buf(win)
 					if buf and vim.api.nvim_buf_is_valid(buf) then
 						local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
@@ -99,6 +109,8 @@ return {
 						local win = vim.fn.bufwinid(args.buf)
 						if win and win ~= -1 then
 							pcall(vim.api.nvim_win_set_config, win, { focusable = false })
+							pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
+							pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
 							if vim.api.nvim_get_current_win() == win then
 								local prev_win = vim.fn.win_getid(vim.fn.winnr("#"))
 								vim.schedule(function()

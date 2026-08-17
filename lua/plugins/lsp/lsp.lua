@@ -94,15 +94,12 @@ return {
 				taplo = {},
 				yamlls = {},
 				jsonls = {},
-				tsgo = {
-					-- nvim 0.11+ signature: (bufnr, on_dir). Must CALL on_dir; return value is ignored.
+				vtsls = {
 					root_dir = function(bufnr, on_dir)
 						local root = vim.fs.root(bufnr, {
 							"tsconfig.json",
 							"jsconfig.json",
 							"package.json",
-							".krsnvim",
-							".nvimkrs",
 						})
 						local home = vim.fs.normalize(vim.env.USERPROFILE or vim.env.HOME or ""):lower()
 						if not root or vim.fs.normalize(root):lower() == home then
@@ -112,12 +109,43 @@ return {
 						end
 					end,
 					settings = {
-						["js/ts"] = {
-							disableAutomaticTypeAcquisition = true,
+						vtsls = {
+							autoUseWorkspaceTsdk = true,
+							experimental = {
+								completion = { enableServerSideFuzzyMatch = true },
+							},
+						},
+						typescript = {
+							tsserver = { maxTsServerMemory = 8192 },
+							inlayHints = {
+								parameterNames = { enabled = "all" },
+								parameterTypes = { enabled = true },
+								variableTypes = { enabled = true },
+								propertyDeclarationTypes = { enabled = true },
+								functionLikeReturnTypes = { enabled = true },
+								enumMemberValues = { enabled = true },
+							},
+						},
+						javascript = {
+							inlayHints = {
+								parameterNames = { enabled = "all" },
+								parameterTypes = { enabled = true },
+								variableTypes = { enabled = true },
+								propertyDeclarationTypes = { enabled = true },
+								functionLikeReturnTypes = { enabled = true },
+								enumMemberValues = { enabled = true },
+							},
 						},
 					},
 				},
-				biome = {},
+				biome = {
+					root_dir = function(bufnr, on_dir)
+						local root = vim.fs.root(bufnr, { "biome.json", "biome.jsonc" })
+						if root then
+							on_dir(root)
+						end
+					end,
+				},
 				eslint = {},
 				svelte = {
 					on_attach = function(client, _)
@@ -129,7 +157,23 @@ return {
 						})
 					end,
 				},
-				astro = {},
+				astro = {
+					init_options = {
+						typescript = {
+							tsdk = (function()
+								local mason_path = vim.fs.normalize(vim.fn.stdpath("data") .. "/mason/packages")
+								local candidate_vtsls = mason_path .. "/vtsls/node_modules/typescript/lib"
+								local candidate_ts = mason_path .. "/typescript-language-server/node_modules/typescript/lib"
+								if (vim.uv or vim.loop).fs_stat(candidate_vtsls) then
+									return candidate_vtsls
+								elseif (vim.uv or vim.loop).fs_stat(candidate_ts) then
+									return candidate_ts
+								end
+								return nil
+							end)(),
+						},
+					},
+				},
 				html = {
 					filetypes = { "html", "templ", "hbs", "php", "blade" },
 				},
@@ -155,8 +199,26 @@ return {
 						"php",
 						"blade",
 					},
+					root_dir = function(bufnr, on_dir)
+						local root = vim.fs.root(bufnr, {
+							"tailwind.config.js",
+							"tailwind.config.cjs",
+							"tailwind.config.mjs",
+							"tailwind.config.ts",
+							"postcss.config.js",
+							"astro.config.mjs",
+							"package.json",
+						})
+						if root then
+							on_dir(root)
+						end
+					end,
 					settings = {
 						tailwindCSS = {
+							validate = true,
+							hovers = true,
+							suggestions = true,
+							codeActions = true,
 							experimental = {
 								classRegex = {
 									{ "cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*)" },
@@ -272,9 +334,6 @@ return {
 				ensure_installed = {},
 				handlers = {
 					function(server_name)
-						if server_name == "vtsls" or server_name == "ts_ls" or server_name == "tsserver" then
-							return
-						end
 						local config = opts.servers[server_name] or {}
 						if has_blink then
 							config.capabilities = blink.get_lsp_capabilities(config.capabilities)
@@ -287,15 +346,13 @@ return {
 
 			-- 2. Setup configured servers in opts.servers
 			for server_name, config in pairs(opts.servers) do
-				if not (server_name == "vtsls" or server_name == "ts_ls" or server_name == "tsserver") then
-					if config.enabled ~= false then
-						local cfg = vim.deepcopy(config)
-						if has_blink then
-							cfg.capabilities = blink.get_lsp_capabilities(cfg.capabilities)
-						end
-						vim.lsp.config(server_name, cfg)
-						vim.lsp.enable(server_name)
+				if config.enabled ~= false then
+					local cfg = vim.deepcopy(config)
+					if has_blink then
+						cfg.capabilities = blink.get_lsp_capabilities(cfg.capabilities)
 					end
+					vim.lsp.config(server_name, cfg)
+					vim.lsp.enable(server_name)
 				end
 			end
 
@@ -412,16 +469,6 @@ return {
 				},
 			}
 
-			-- Stop duplicate TS LSP servers so only tsgo runs
-			vim.api.nvim_create_autocmd("LspAttach", {
-				callback = function(args)
-					local client = vim.lsp.get_client_by_id(args.data.client_id)
-					if client and (client.name == "vtsls" or client.name == "ts_ls" or client.name == "tsserver") then
-						client:stop()
-					end
-				end,
-			})
-
 			-- Stop all active LSP clients whenever the working directory/project changes.
 			-- When you open a file in the new project, Neovim will automatically launch only the needed LSP.
 			vim.api.nvim_create_autocmd("DirChanged", {
@@ -432,18 +479,6 @@ return {
 					end
 				end,
 			})
-
-			for server, config in pairs(opts.servers) do
-				if server ~= "vtsls" and server ~= "ts_ls" and server ~= "tsserver" then
-					if config and config.enabled ~= false then
-						if has_blink then
-							config.capabilities = blink.get_lsp_capabilities(config.capabilities)
-						end
-						vim.lsp.config(server, config)
-						vim.lsp.enable(server)
-					end
-				end
-			end
 		end,
 	},
 	{
@@ -489,22 +524,28 @@ return {
 								kind_icon = {
 									ellipsis = false,
 									text = function(ctx)
-										local colorify = require("krs.lsp.colorify")
-										local hex = colorify.extract_hex_color(ctx.label)
-											or colorify.extract_hex_color(ctx.label_description)
-										if hex then
-											return " ██ "
+										local label = ctx.label or ""
+										local desc = ctx.label_description or ""
+										if ctx.kind == 16 or ctx.kind_name == "Color" or label:find("#", 1, true) or label:find("rgb", 1, true) or desc:find("#", 1, true) or desc:find("rgb", 1, true) then
+											local colorify = require("krs.lsp.colorify")
+											local hex = colorify.extract_hex_color(label) or colorify.extract_hex_color(desc)
+											if hex then
+												return " ██ "
+											end
 										end
-										return colorify.get_kind_icon(ctx.kind)
+										return require("krs.lsp.colorify").get_kind_icon(ctx.kind)
 									end,
 									highlight = function(ctx)
-										local colorify = require("krs.lsp.colorify")
-										local hex = colorify.extract_hex_color(ctx.label)
-											or colorify.extract_hex_color(ctx.label_description)
-										if hex then
-											return colorify.get_or_create_color_hl(hex)
+										local label = ctx.label or ""
+										local desc = ctx.label_description or ""
+										if ctx.kind == 16 or ctx.kind_name == "Color" or label:find("#", 1, true) or label:find("rgb", 1, true) or desc:find("#", 1, true) or desc:find("rgb", 1, true) then
+											local colorify = require("krs.lsp.colorify")
+											local hex = colorify.extract_hex_color(label) or colorify.extract_hex_color(desc)
+											if hex then
+												return colorify.get_or_create_color_hl(hex)
+											end
 										end
-										return colorify.get_kind_hl(ctx.kind)
+										return require("krs.lsp.colorify").get_kind_hl(ctx.kind)
 									end,
 								},
 								kind = {
