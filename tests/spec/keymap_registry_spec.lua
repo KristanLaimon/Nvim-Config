@@ -130,4 +130,49 @@ describe("keymap_registry", function()
 			expect(has_runtime).toBe(true)
 		end)
 	end)
+
+	it("safely handles nil or non-string lhs without crashing", function()
+		with_stub_notify(function()
+			local registry = require("krs.core.keymap_registry")
+			registry.install()
+
+			-- Nil shortcut
+			local ok_nil, err_nil = pcall(function()
+				vim.keymap.set("n", nil, function() end)
+			end)
+			expect(ok_nil).toBe(true)
+			expect(err_nil).toBe(nil)
+
+			-- Empty string shortcut
+			local ok_empty, err_empty = pcall(function()
+				vim.keymap.set("n", "", function() end)
+			end)
+			expect(ok_empty).toBe(true)
+			expect(err_empty).toBe(nil)
+
+			-- False shortcut
+			local ok_false, err_false = pcall(function()
+				vim.keymap.set("n", false, function() end)
+			end)
+			expect(ok_false).toBe(true)
+			expect(err_false).toBe(nil)
+
+			-- Table containing valid shortcut along with nil and empty string
+			local ok_table, err_table = pcall(function()
+				vim.keymap.set("n", { "<F18>", nil, "" }, function() end, { desc = "mixed table" })
+			end)
+			expect(ok_table).toBe(true)
+			expect(err_table).toBe(nil)
+
+			local maps = vim.api.nvim_get_keymap("n")
+			local found_f18 = false
+			for _, m in ipairs(maps) do
+				if m.lhs == "<F18>" then
+					found_f18 = true
+				end
+			end
+			expect(found_f18).toBe(true)
+			vim.keymap.del("n", "<F18>")
+		end)
+	end)
 end)

@@ -446,8 +446,8 @@ function M.load_workspace(ws_or_identifier)
 		end
 	end
 
-	-- Workspaces saved before `neotree_open` existed fall back to what is on screen.
-	if target.neotree_open == true or (target.neotree_open == nil and current_neotree_was_open) then
+	-- Workspaces open neo-tree by default unless explicitly disabled.
+	if target.neotree_open ~= false then
 		show_neotree(target.cwd or vim.fn.getcwd())
 	end
 
@@ -848,8 +848,8 @@ function M.setup()
 	--- Leaves terminal mode first, so the mapping also works from a terminal.
 	local function from_any_mode(fn)
 		return function()
-			if vim.fn.mode() == "t" then
-				vim.cmd("stopinsert")
+			if vim.fn.mode() ~= "n" then
+				pcall(vim.cmd, "stopinsert")
 			end
 			fn()
 		end

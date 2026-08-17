@@ -482,8 +482,9 @@ function M.setup()
 					end)
 					return "<LeftMouse>"
 				end
-				pcall(vim.cmd, "startinsert")
-				return ""
+				-- When inside terminal window in Normal mode, return <LeftMouse> so mouse clicking
+				-- and mouse text selection (drag) work natively.
+				return "<LeftMouse>"
 			end, {
 				buffer = bufnr,
 				expr = true,

@@ -29,6 +29,7 @@ local settings = {
 	--- Find files, ignoring .gitignore. Several aliases: Alt/Meta combinations
 	--- arrive differently depending on terminal and GUI.
 	find_all_keys = {
+		"<C-k>", "<C-K>",
 		"<C-A-k>", "<C-A-K>", "<C-M-k>", "<C-M-K>",
 		"<A-C-k>", "<A-C-K>", "<M-C-k>", "<M-C-K>",
 		"<C-S-/>", "<C-?>",
@@ -72,6 +73,8 @@ return {
 	keys = {
 		{ "<C-/>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
 		{ "<C-_>", function() if _G.FindFilesGitignore then _G.FindFilesGitignore() else require("telescope.builtin").git_files({ recurse_submodules = true }) end end, mode = { "n", "i" }, desc = "Telescope find files (excludes .gitignore)" },
+		{ "<C-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
+		{ "<C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-A-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-A-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-M-k>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
@@ -189,8 +192,12 @@ return {
 			})
 		end
 
-		vim.keymap.set({ "n", "i" }, settings.live_grep_key, builtin.live_grep, { desc = "Telescope live grep" })
-		vim.keymap.set("n", settings.help_tags_key, builtin.help_tags, { desc = "Telescope help tags" })
+		if settings.live_grep_key then
+			vim.keymap.set({ "n", "i" }, settings.live_grep_key, builtin.live_grep, { desc = "Telescope live grep" })
+		end
+		if settings.help_tags_key then
+			vim.keymap.set("n", settings.help_tags_key, builtin.help_tags, { desc = "Telescope help tags" })
+		end
 
 		-- ------------------------------------------------------------------
 		-- Folder picker
@@ -329,16 +336,20 @@ return {
 		vim.api.nvim_create_user_command("TelescopeOpenFolder", function()
 			open_folder_picker()
 		end, { desc = "Browse folders and open one as the active project" })
-		vim.keymap.set({ "n", "i" }, settings.open_folder_key, function()
-			require("plugins.krs.sneak_peek").toggle_or_pick()
-		end, { desc = "Sneak-Peek Project Modal (Ctrl+Shift+O)" })
+		if settings.open_folder_key then
+			vim.keymap.set({ "n", "i" }, settings.open_folder_key, function()
+				require("plugins.krs.sneak_peek").toggle_or_pick()
+			end, { desc = "Sneak-Peek Project Modal (Ctrl+Shift+O)" })
+		end
 
 		vim.api.nvim_create_user_command("TelescopeFileBrowserDesktop", function()
 			require("plugins.krs.file_explorer").open_desktop_explorer()
 		end, { desc = "Open the floating desktop file explorer" })
-		vim.keymap.set({ "n", "i" }, settings.desktop_explorer_key, function()
-			require("plugins.krs.file_explorer").open_desktop_explorer()
-		end, { desc = "Open Desktop File Explorer" })
+		if settings.desktop_explorer_key then
+			vim.keymap.set({ "n", "i" }, settings.desktop_explorer_key, function()
+				require("plugins.krs.file_explorer").open_desktop_explorer()
+			end, { desc = "Open Desktop File Explorer" })
+		end
 
 		-- ------------------------------------------------------------------
 		-- Split finders

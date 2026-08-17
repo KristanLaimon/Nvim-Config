@@ -1878,6 +1878,8 @@ function M.open_git_center()
 		title_pos = "center",
 	})
 
+	pcall(vim.cmd, "stopinsert")
+
 	M.tab_win = vim.api.nvim_open_win(tab_buf, false, {
 		relative = "editor",
 		width = left_width + 2,
@@ -2657,7 +2659,7 @@ function M.setup()
 	--- Leaves terminal mode first, so the mapping works from a terminal too.
 	local function from_any_mode(fn)
 		return function()
-			if vim.fn.mode() == "t" then
+			if vim.fn.mode() ~= "n" then
 				pcall(vim.cmd, "stopinsert")
 			end
 			fn()

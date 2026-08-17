@@ -51,7 +51,7 @@ M.settings = {
 		--- Open with the OS default application, from any mode.
 		open_external = { "<C-S-CR>", "<C-S-Enter>", "<C-S-Return>" },
 		--- Render the image inside the editor.
-		preview = nil,
+		preview = "<leader>i",
 		--- Dismiss the preview float.
 		close_preview = { "q", "<Esc>" },
 	},
@@ -222,11 +222,13 @@ function M.setup()
 		M.open_project_root_in_explorer()
 	end, { desc = "Open current project root in the OS file explorer" })
 
-	vim.keymap.set("n", M.settings.keys.preview, M.view_current_image, {
-		noremap = true,
-		silent = true,
-		desc = "View image with Chafa",
-	})
+	if M.settings.keys.preview and M.settings.keys.preview ~= "" then
+		vim.keymap.set("n", M.settings.keys.preview, M.view_current_image, {
+			noremap = true,
+			silent = true,
+			desc = "View image with Chafa",
+		})
+	end
 
 	for _, key in ipairs(M.settings.keys.open_external) do
 		vim.keymap.set({ "n", "i", "v", "t" }, key, function()

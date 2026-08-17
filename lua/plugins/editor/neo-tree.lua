@@ -144,6 +144,17 @@ vim.api.nvim_create_autocmd("WinClosed", {
 	end,
 })
 
+-- Open Neo-tree automatically when Neovim opens a directory target
+vim.api.nvim_create_autocmd("VimEnter", {
+	group = fix_group,
+	callback = function(data)
+		local file = data.file
+		if file ~= "" and vim.fn.isdirectory(file) == 1 then
+			vim.cmd("Neotree show dir=" .. vim.fn.fnameescape(file))
+		end
+	end,
+})
+
 -- `equalalways` should already balance the other splits, but neo-tree's own
 -- resize event does not always trigger it.
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufWinLeave" }, {
@@ -318,10 +329,13 @@ return {
 		"nvim-neo-tree/neo-tree.nvim",
 		branch = "v3.x",
 		cmd = "Neotree",
-		keys = {
-			{ settings.toggle_keys[1], toggle_neotree, mode = { "n", "i", "t" }, desc = "Toggle Explorer" },
-			{ settings.toggle_keys[2], toggle_neotree, mode = { "n", "i", "t" }, desc = "Toggle Explorer" },
-		},
+		keys = (function()
+			local k = {}
+			for _, key in ipairs(settings.toggle_keys) do
+				table.insert(k, { key, toggle_neotree, mode = { "n", "i", "t" }, desc = "Toggle Explorer" })
+			end
+			return k
+		end)(),
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"MunifTanjim/nui.nvim",

@@ -117,6 +117,35 @@ function M.reset()
 	M.collisions = {}
 end
 
+--- Filters and validates keymap LHS argument(s).
+--- Returns nil if the key (or all keys in a table) is nil, empty, or invalid.
+--- @param lhs any
+--- @return string|string[]|nil
+local function clean_lhs(lhs)
+	if lhs == nil or lhs == false then
+		return nil
+	end
+	if type(lhs) == "string" then
+		return lhs ~= "" and lhs or nil
+	end
+	if type(lhs) == "table" then
+		local valid = {}
+		for _, item in ipairs(lhs) do
+			if type(item) == "string" and item ~= "" then
+				table.insert(valid, item)
+			end
+		end
+		if #valid == 0 then
+			return nil
+		elseif #valid == 1 then
+			return valid[1]
+		else
+			return valid
+		end
+	end
+	return nil
+end
+
 --- Installs the monkeypatch. Idempotent -- calling twice is a no-op.
 function M.install()
 	if M.raw_set then
@@ -125,69 +154,68 @@ function M.install()
 	M.raw_set = vim.keymap.set
 
 	vim.keymap.set = function(mode, lhs, rhs, opts)
-		local raw_modes = type(mode) == "table" and mode or { mode }
-		local modes = {}
-
-		-- Strip insert ('i') and terminal ('t') modes for <leader> starting keymaps
-		-- so typing space in buffers or terminal never triggers leader commands.
-		if is_leader_keymap(lhs) then
-			for _, m in ipairs(raw_modes) do
-				if m ~= "i" and m ~= "t" then
-					table.insert(modes, m)
-				end
-			end
-			if #modes == 0 then
-				return
-			end
-		else
-			modes = raw_modes
+		local cleaned = clean_lhs(lhs)
+		if not cleaned then
+			return
 		end
 
+		local keys = type(cleaned) == "table" and cleaned or { cleaned }
+		local raw_modes = type(mode) == "table" and mode or { mode }
 		local scope = scope_of(opts)
 		local source = source_of()
 
-		for _, m in ipairs(modes) do
-			local key = m .. ":" .. lhs .. ":" .. scope
-			local prev = seen[key]
-			-- Same call site rebinding: nvim canonicalizes some key aliases to an
-			-- identical internal keycode (e.g. <C-`> and <C-acute> are the same
-			-- physical key), so a loop offering several alias spellings for one
-			-- action can legitimately rebind its own previous iteration. That's
-			-- never two features fighting over a key, so it's not a collision.
-			local allowed = prev
-				and (source_allowlisted(source) or source_allowlisted(prev.source) or prev.source == source)
-
-			if prev and not allowed then
-				local record = {
-					lhs = lhs,
-					mode = m,
-					first_source = prev.source,
-					first_desc = prev.desc,
-					second_source = source,
-					second_desc = opts and opts.desc,
-				}
-				table.insert(M.collisions, record)
-				vim.schedule(function()
-					vim.notify(
-						string.format(
-							"Keymap collision on %s (mode %s)\n1st: %s -- %s\n2nd: %s -- %s",
-							lhs,
-							m,
-							record.first_source,
-							record.first_desc or "(no desc)",
-							record.second_source,
-							record.second_desc or "(no desc)"
-						),
-						vim.log.levels.WARN,
-						{ title = "Keymap collision" }
-					)
-				end)
+		for _, key_str in ipairs(keys) do
+			local modes = {}
+			if is_leader_keymap(key_str) then
+				for _, m in ipairs(raw_modes) do
+					if m ~= "i" and m ~= "t" then
+						table.insert(modes, m)
+					end
+				end
+			else
+				modes = raw_modes
 			end
 
-			seen[key] = { desc = opts and opts.desc, source = source }
-		end
+			if #modes > 0 then
+				for _, m in ipairs(modes) do
+					local key = m .. ":" .. key_str .. ":" .. scope
+					local prev = seen[key]
+					local allowed = prev
+						and (source_allowlisted(source) or source_allowlisted(prev.source) or prev.source == source)
 
-		return M.raw_set(modes, lhs, rhs, opts)
+					if prev and not allowed then
+						local record = {
+							lhs = key_str,
+							mode = m,
+							first_source = prev.source,
+							first_desc = prev.desc,
+							second_source = source,
+							second_desc = opts and opts.desc,
+						}
+						table.insert(M.collisions, record)
+						vim.schedule(function()
+							vim.notify(
+								string.format(
+									"Keymap collision on %s (mode %s)\n1st: %s -- %s\n2nd: %s -- %s",
+									key_str,
+									m,
+									record.first_source,
+									record.first_desc or "(no desc)",
+									record.second_source,
+									record.second_desc or "(no desc)"
+								),
+								vim.log.levels.WARN,
+								{ title = "Keymap collision" }
+							)
+						end)
+					end
+
+					seen[key] = { desc = opts and opts.desc, source = source }
+				end
+
+				M.raw_set(modes, key_str, rhs, opts)
+			end
+		end
 	end
 end
 

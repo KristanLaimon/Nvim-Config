@@ -41,7 +41,7 @@ describe("terminal auto insert & click behavior", function()
 
 	it("binds window focus navigation keys in terminal mode", function()
 		require("config.keymaps.editor")
-		for _, key in ipairs({ "<C-h>", "<C-l>", "<C-k>", "<C-j>" }) do
+		for _, key in ipairs({ "<C-h>", "<C-l>", "<C-j>" }) do
 			expect(vim.fn.maparg(key, "t") ~= "").toBe(true)
 		end
 	end)

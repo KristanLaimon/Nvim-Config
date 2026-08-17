@@ -1250,7 +1250,7 @@ function M.setup()
 	--- Leaves terminal mode first, so the mapping works from inside a task output.
 	local function from_any_mode(fn)
 		return function()
-			if vim.fn.mode() == "t" then
+			if vim.fn.mode() ~= "n" then
 				pcall(vim.cmd, "stopinsert")
 			end
 			fn()
