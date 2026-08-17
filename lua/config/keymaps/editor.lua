@@ -35,7 +35,7 @@ M.settings = {
 		--- Move focus between windows.
 		window_left = "<C-h>",
 		window_right = "<C-l>",
-		window_up = "<C-k>",
+		window_up = { "<C-k>", "<C-S-A-k>", "<C-A-S-k>", "<C-S-M-k>", "<C-M-S-k>", "<C-S-A-K>", "<C-A-S-K>", "<C-S-M-K>", "<C-M-S-K>" },
 		window_down = "<C-j>",
 		--- Cycle buffers.
 		buffer_prev = { "<A-h>", "<M-h>", "<A-Left>", "<M-Left>" },
@@ -198,18 +198,20 @@ local function focus_window_down()
 	end
 end
 
-if M.settings.keys.window_left then
-	vim.keymap.set({ "n", "t" }, M.settings.keys.window_left, focus_window_left, opts("Move to left window"))
+local function set_window_keymaps(keys, fn, desc)
+	if not keys then
+		return
+	end
+	local list = type(keys) == "table" and keys or { keys }
+	for _, key in ipairs(list) do
+		vim.keymap.set({ "n", "t" }, key, fn, opts(desc))
+	end
 end
-if M.settings.keys.window_right then
-	vim.keymap.set({ "n", "t" }, M.settings.keys.window_right, focus_window_right, opts("Move to right window"))
-end
-if M.settings.keys.window_up then
-	vim.keymap.set({ "n", "t" }, M.settings.keys.window_up, focus_window_up, opts("Move to upper window"))
-end
-if M.settings.keys.window_down then
-	vim.keymap.set({ "n", "t" }, M.settings.keys.window_down, focus_window_down, opts("Move to lower window"))
-end
+
+set_window_keymaps(M.settings.keys.window_left, focus_window_left, "Move to left window")
+set_window_keymaps(M.settings.keys.window_right, focus_window_right, "Move to right window")
+set_window_keymaps(M.settings.keys.window_up, focus_window_up, "Move to upper window")
+set_window_keymaps(M.settings.keys.window_down, focus_window_down, "Move to lower window")
 
 -- Ctrl+W closes the smallest sensible thing. The handler lives in the buffer
 -- cleaner plugin; this falls back to `:bdelete` if that has not loaded yet.

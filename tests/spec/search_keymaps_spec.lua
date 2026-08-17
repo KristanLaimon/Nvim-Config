@@ -13,10 +13,18 @@ describe("search keymaps configuration", function()
 		local has_ck, has_ck_upper = false, false
 		local has_cak, has_cak_upper = false, false
 		for _, key in ipairs(find_all) do
-			if key == "<C-k>" then has_ck = true end
-			if key == "<C-K>" then has_ck_upper = true end
-			if key == "<C-A-k>" then has_cak = true end
-			if key == "<C-A-K>" then has_cak_upper = true end
+			if key == "<C-k>" then
+				has_ck = true
+			end
+			if key == "<C-K>" then
+				has_ck_upper = true
+			end
+			if key == "<C-A-k>" then
+				has_cak = true
+			end
+			if key == "<C-A-K>" then
+				has_cak_upper = true
+			end
 		end
 
 		expect(has_ck).toBe(true)

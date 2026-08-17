@@ -37,7 +37,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
 | `<C-h>` / `<C-l>` | n, t | Focus left / right window |
-| `<C-j>` / `<C-k>` | n, t | Focus lower / upper window |
+| `<C-j>` / `<C-k>` / `<C-S-A-k>` | n, t | Focus lower / upper window |
 | `<C-S-h>` / `<C-S-j>` / `<C-S-k>` / `<C-S-l>` | n, i, v | Find a file and open it in a split (left / down / up / right) |
 | `<C-Left>` / `<C-Right>` | n, i, v, t | Widen / narrow the window |
 | `<C-Up>` / `<C-Down>` | n, i, v, t | Taller / shorter |

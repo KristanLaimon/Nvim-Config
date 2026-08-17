@@ -99,4 +99,16 @@ describe("Alt / Meta keymaps functionality", function()
 			expect(status).toBe(true)
 		end
 	end)
+
+	it("binds window focus upper keymaps for Ctrl+Shift+Alt+K and variants", function()
+		local editor = require("config.keymaps.editor")
+		expect(editor.settings.keys.window_up).toContain("<C-S-A-k>")
+		expect(editor.settings.keys.window_up).toContain("<C-A-S-k>")
+		expect(editor.settings.keys.window_up).toContain("<C-S-M-k>")
+		expect(editor.settings.keys.window_up).toContain("<C-M-S-k>")
+
+		for _, key in ipairs(editor.settings.keys.window_up) do
+			expect(has_normal_keymap(key)).toBe(true)
+		end
+	end)
 end)
