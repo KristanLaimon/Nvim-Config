@@ -24,10 +24,9 @@ local M = {}
 M.settings = {
 	keys = {
 		--- Fuzzy find, honouring .gitignore.
-		find_files = { "<C-/>", "<C-_>" },
+		find_files = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
 		--- Fuzzy find everything, ignored and hidden files included.
 		find_all_files = {
-			"<C-k>", "<C-K>",
 			"<C-A-k>", "<C-A-K>", "<C-M-k>", "<C-M-K>",
 			"<A-C-k>", "<A-C-K>", "<M-C-k>", "<M-C-K>",
 			"<C-S-/>", "<C-?>",

@@ -53,7 +53,7 @@ return {
 	},
 	{
 		"neovim/nvim-lspconfig",
-		event = { "BufReadPre", "BufNewFile" },
+		event = { "BufReadPre", "BufReadPost", "BufNewFile", "FileType" },
 		cmd = { "LspInfo", "LspInstall", "LspStart" },
 		dependencies = {
 			"williamboman/mason.nvim",
@@ -251,6 +251,7 @@ return {
 					organize_imports_on_format = true,
 					enable_import_completion = true,
 				},
+				csharp_ls = {},
 				lemminx = {},
 				dockerls = {},
 				gopls = {
@@ -355,6 +356,16 @@ return {
 					vim.lsp.enable(server_name)
 				end
 			end
+
+			-- Re-trigger FileType autocmd for loaded buffers so newly enabled LSP servers attach
+			-- immediately to the buffer whose opening triggered lazy-loading of nvim-lspconfig.
+			vim.schedule(function()
+				for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+					if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype ~= "" then
+						pcall(vim.api.nvim_exec_autocmds, "FileType", { buffer = buf })
+					end
+				end
+			end)
 
 			vim.diagnostic.config({
 				virtual_text = {
@@ -483,7 +494,7 @@ return {
 	},
 	{
 		"saghen/blink.cmp",
-		event = { "BufReadPre", "BufNewFile", "InsertEnter" },
+		event = { "BufReadPre", "BufReadPost", "BufNewFile", "InsertEnter" },
 		dependencies = { "rafamadriz/friendly-snippets" },
 		version = "*",
 		opts = function()
@@ -524,28 +535,20 @@ return {
 								kind_icon = {
 									ellipsis = false,
 									text = function(ctx)
-										local label = ctx.label or ""
-										local desc = ctx.label_description or ""
-										if ctx.kind == 16 or ctx.kind_name == "Color" or label:find("#", 1, true) or label:find("rgb", 1, true) or desc:find("#", 1, true) or desc:find("rgb", 1, true) then
-											local colorify = require("krs.lsp.colorify")
-											local hex = colorify.extract_hex_color(label) or colorify.extract_hex_color(desc)
-											if hex then
-												return " ██ "
-											end
+										local colorify = require("krs.lsp.colorify")
+										local hex = colorify.extract_color_from_ctx(ctx)
+										if hex then
+											return " ██ "
 										end
-										return require("krs.lsp.colorify").get_kind_icon(ctx.kind)
+										return colorify.get_kind_icon(ctx.kind)
 									end,
 									highlight = function(ctx)
-										local label = ctx.label or ""
-										local desc = ctx.label_description or ""
-										if ctx.kind == 16 or ctx.kind_name == "Color" or label:find("#", 1, true) or label:find("rgb", 1, true) or desc:find("#", 1, true) or desc:find("rgb", 1, true) then
-											local colorify = require("krs.lsp.colorify")
-											local hex = colorify.extract_hex_color(label) or colorify.extract_hex_color(desc)
-											if hex then
-												return colorify.get_or_create_color_hl(hex)
-											end
+										local colorify = require("krs.lsp.colorify")
+										local hex = colorify.extract_color_from_ctx(ctx)
+										if hex then
+											return colorify.get_or_create_color_hl(hex)
 										end
-										return require("krs.lsp.colorify").get_kind_hl(ctx.kind)
+										return colorify.get_kind_hl(ctx.kind)
 									end,
 								},
 								kind = {

@@ -109,8 +109,8 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 
 | Shortcut | Mode | Action |
 | :--- | :---: | :--- |
-| `<C-/>` / `<C-_>` | n, i | Find files, respecting `.gitignore` |
-| `<C-S-/>` / `<C-?>` | n, i, v | Find files, ignoring `.gitignore` |
+| `<C-k>` / `<C-K>` / `<C-/>` / `<C-_>` | n, i | Find files, respecting `.gitignore` |
+| `<C-A-k>` / `<C-S-/>` / `<C-?>` | n, i, v | Find files, ignoring `.gitignore` |
 | `<C-f>` | n, i | Live grep across the project |
 | `<C-S-y>` | n, i, v, t | Sneak-Peek project modal (90% width & height on-top window) |
 | `<C-S-f>` | n, i, v | Floating Desktop file explorer |

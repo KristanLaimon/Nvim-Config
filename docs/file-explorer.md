@@ -13,8 +13,8 @@ KRS Neovim includes native floating file explorers for Desktop, WSL, folder pick
 3. **Sneak-Peek Project Modal (`<C-S-y>`)**: Open any folder in an on-top modal window (90% width x 90% height) with fresh LSP initialization and full process tree cleanup on close.
 4. **Neo-tree Move File Picker (`m`)**: Pressing `m` on a file in Neo-tree opens the floating file explorer starting at project root (`getcwd()`). Navigate to target folder and press `O` to move file without renaming.
 5. **Gitignore vs All Files Search in Neo-tree**:
-   - `<C-/>` / `<C-_>`: Find files **respecting `.gitignore`**.
-   - `<C-S-/>` / `<C-?>`: Find **all files ignoring `.gitignore`**.
+   - `<C-k>` / `<C-K>` / `<C-/>` / `<C-_>`: Find files **respecting `.gitignore`**.
+   - `<C-A-k>` / `<C-S-/>` / `<C-?>`: Find **all files ignoring `.gitignore`**.
 
 ---
 
@@ -27,5 +27,5 @@ KRS Neovim includes native floating file explorers for Desktop, WSL, folder pick
 - `O` / `o` (in Move Picker): Confirm target folder to move file into
 - `r` (in Neo-tree): Rename file/folder via `input_modal`
 - `a` (in Neo-tree): Create new file or folder via `input_modal`
-- `<C-/>`: Search files respecting `.gitignore`
-- `<C-S-/>`: Search all files ignoring `.gitignore`
+- `<C-k>` / `<C-/>`: Search files respecting `.gitignore`
+- `<C-A-k>` / `<C-S-/>`: Search all files ignoring `.gitignore`

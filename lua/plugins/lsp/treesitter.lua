@@ -44,6 +44,7 @@ local parsers = {
 	"phpdoc",
 	"blade",
 	"proto",
+	"c_sharp",
 }
 
 return {

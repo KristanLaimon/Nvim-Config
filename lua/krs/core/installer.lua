@@ -38,6 +38,7 @@ M.mason_packages = {
 	"tailwindcss",
 	"emmet_ls",
 	"omnisharp",
+	"netcoredbg",
 	"lemminx",
 	"dockerls",
 	"gopls",
@@ -51,6 +52,7 @@ M.mason_packages = {
 	"blade-formatter",
 	"beautysh",
 	"protolint",
+	"csharpier",
 }
 
 --- Map lspconfig server names to Mason package directory/install names.
@@ -71,6 +73,7 @@ M.lsp_to_mason = {
 	tailwindcss = "tailwindcss-language-server",
 	emmet_ls = "emmet-ls",
 	omnisharp = "omnisharp",
+	netcoredbg = "netcoredbg",
 	lemminx = "lemminx",
 	dockerls = "dockerfile-language-server",
 	gopls = "gopls",
@@ -105,6 +108,7 @@ M.package_info = {
 	tailwindcss = { lang = "Tailwind CSS", type = "lsp", cmd = "tailwindcss-language-server" },
 	emmet_ls = { lang = "Emmet", type = "lsp", cmd = "emmet-ls" },
 	omnisharp = { lang = "C#", type = "lsp", cmd = "OmniSharp" },
+	netcoredbg = { lang = "C# Debugger", type = "dap", cmd = "netcoredbg" },
 	lemminx = { lang = "XML", type = "lsp", cmd = "lemminx" },
 	dockerls = { lang = "Docker", type = "lsp", cmd = "docker-langserver" },
 	gopls = { lang = "Go", type = "lsp", cmd = "gopls" },
@@ -118,6 +122,7 @@ M.package_info = {
 	["blade-formatter"] = { name = "blade-formatter", type = "formatter", cmd = "blade-formatter" },
 	beautysh = { name = "beautysh", type = "formatter", cmd = "beautysh" },
 	protolint = { name = "protolint", type = "formatter", cmd = "protolint" },
+	csharpier = { name = "csharpier", type = "formatter", cmd = "csharpier" },
 }
 
 --- Expected essential CLI tools.

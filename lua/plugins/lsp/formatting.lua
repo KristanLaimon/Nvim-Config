@@ -83,6 +83,7 @@ return {
 				zsh = { "beautysh" },
 				csh = { "beautysh" },
 				ksh = { "beautysh" },
+				cs = { "csharpier" },
 			},
 			formatters = {
 				pint = {

@@ -37,6 +37,7 @@ describe("telescope plugin configuration", function()
 		for _, name in ipairs({
 			"Telescope",
 			"TelescopeOpenFolder",
+			"TelescopeFindFilesGitignore",
 			"TelescopeFindFilesNoIgnore",
 			"TelescopeFileBrowserDesktop",
 			"TelescopeFindFilesSplitLeft",

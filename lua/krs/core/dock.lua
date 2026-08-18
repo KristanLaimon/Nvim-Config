@@ -97,8 +97,12 @@ function M.is_code_win(win)
 	local ft = vim.bo[buf].filetype
 	local bt = vim.bo[buf].buftype
 
-	if ft == "neo-tree" or ft == "alpha" or ft == "qf" or ft == "help" then
+	if ft == "neo-tree" or ft == "qf" or ft == "help" then
 		return false
+	end
+
+	if ft == "alpha" or ft == "dashboard" or ft == "starter" or ft == "snacks_dashboard" then
+		return true
 	end
 
 	if bt == "nofile" or bt == "quickfix" or bt == "prompt" then
