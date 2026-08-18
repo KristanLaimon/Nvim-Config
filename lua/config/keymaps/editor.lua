@@ -240,12 +240,9 @@ set_window_keymaps(M.settings.keys.window_right, focus_window_right, "Move to ri
 set_window_keymaps(M.settings.keys.window_up, focus_window_up, "Move to upper window")
 set_window_keymaps(M.settings.keys.window_down, focus_window_down, "Move to lower window")
 
--- Ctrl+W closes the smallest sensible thing. The handler lives in the buffer
--- cleaner plugin; this falls back to `:bdelete` if that has not loaded yet.
-vim.keymap.set({ "n", "i", "v", "t" }, M.settings.keys.close, function()
-	if vim.fn.mode() == "t" then
-		pcall(vim.cmd, "stopinsert")
-	end
+-- Ctrl+W closes the smallest sensible thing in normal/insert/visual modes.
+-- In terminal insert mode ('t'), Ctrl+W is preserved for shell word deletion.
+vim.keymap.set({ "n", "i", "v" }, M.settings.keys.close, function()
 	if _G.Neotree_Smart_Quit then
 		_G.Neotree_Smart_Quit()
 	else

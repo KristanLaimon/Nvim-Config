@@ -446,15 +446,17 @@ function M.setup()
 		desc = "Toggle Selected Terminal",
 	})
 
-	vim.keymap.set("t", M.settings.keys.close, function()
-		pcall(vim.cmd, "stopinsert")
-		-- Neo-tree installs a smarter close that also handles its own window.
-		if _G.Neotree_Smart_Quit then
-			_G.Neotree_Smart_Quit()
-		else
-			pcall(vim.cmd, "close")
-		end
-	end, { noremap = true, silent = true, nowait = true, desc = "Close Terminal Window" })
+	-- Note: <C-w> in terminal mode is preserved for native shell word deletion (Ctrl+W)
+	if M.settings.keys.close and M.settings.keys.close ~= "<C-w>" then
+		vim.keymap.set("t", M.settings.keys.close, function()
+			pcall(vim.cmd, "stopinsert")
+			if _G.Neotree_Smart_Quit then
+				_G.Neotree_Smart_Quit()
+			else
+				pcall(vim.cmd, "close")
+			end
+		end, { noremap = true, silent = true, nowait = true, desc = "Close Terminal Window" })
+	end
 
 	for _, key in ipairs(M.settings.keys.paste) do
 		vim.keymap.set("t", key, paste_clipboard, {

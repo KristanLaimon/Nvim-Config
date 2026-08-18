@@ -208,6 +208,38 @@ install_lua_tools() {
   esac
 }
 
+install_dotnet() {
+  echo -e "\n${BLUE}[*] Installing .NET SDK & C# Tools (dotnet, csharp-ls)...${NC}"
+  case "$PKG_MANAGER" in
+    pkg)
+      run_cmd pkg install -y dotnet-sdk 2>/dev/null || true
+      ;;
+    apt)
+      run_cmd apt-get update
+      run_cmd apt-get install -y dotnet-sdk-8.0 2>/dev/null || run_cmd apt-get install -y dotnet-sdk-9.0 2>/dev/null || true
+      ;;
+    dnf)
+      run_cmd dnf install -y dotnet-sdk-8.0 2>/dev/null || true
+      ;;
+    pacman)
+      run_cmd pacman -Sy --needed dotnet-sdk 2>/dev/null || true
+      ;;
+    brew)
+      run_cmd brew install dotnet-sdk 2>/dev/null || true
+      ;;
+    apk)
+      run_cmd apk add dotnet8-sdk 2>/dev/null || true
+      ;;
+  esac
+
+  if check_cmd dotnet; then
+    if ! check_cmd csharp-ls; then
+      echo -e "${BLUE}[*] Installing csharp-ls dotnet global tool...${NC}"
+      dotnet tool install -g csharp-ls 2>/dev/null || true
+    fi
+  fi
+}
+
 install_agy() {
   echo -e "\n${BLUE}[*] Installing Google Antigravity CLI (agy)...${NC}"
   curl -fsSL https://antigravity.google/cli/install.sh | bash
@@ -231,6 +263,7 @@ install_all() {
   install_go
   install_python
   install_lua_tools
+  install_dotnet
 }
 
 # Menu / CLI flags parsing
@@ -270,15 +303,16 @@ if [ "$AUTO_ALL" = true ]; then
   install_all
 else
   echo -e "\n${YELLOW}Select component toolchains to install from official package manager sources:${NC}\n"
-  echo "  1) ALL Recommended Dependencies (Core, Node/npm, Go, Python, Lua tools) [Default]"
+  echo "  1) ALL Recommended Dependencies (Core, Node/npm, Go, Python, Lua tools, .NET/C#) [Default]"
   echo "  2) Core Utilities only (neovim, git, ripgrep, fd, compiler, chafa)"
   echo "  3) Node.js & Web Toolchain (node, npm, prettier)"
   echo "  4) Go Toolchain (go)"
   echo "  5) Python Toolchain (python3, pip)"
-  echo "  6) Custom Selection (choose step-by-step)"
+  echo "  6) .NET & C# Toolchain (dotnet-sdk, csharp-ls)"
+  echo "  7) Custom Selection (choose step-by-step)"
   echo "  Q) Quit"
   echo ""
-  read -p "Enter choice [1-6, Q] (Default: 1): " CHOICE
+  read -p "Enter choice [1-7, Q] (Default: 1): " CHOICE
   CHOICE="${CHOICE:-1}"
 
   case "$CHOICE" in
@@ -298,6 +332,9 @@ else
       install_python
       ;;
     6)
+      install_dotnet
+      ;;
+    7)
       read -p "Install Core Utilities (neovim, git, ripgrep, fd, compiler)? [Y/n]: " C_CORE
       [[ "${C_CORE:-y}" =~ ^[Yy] ]] && install_core
 
@@ -312,6 +349,9 @@ else
 
       read -p "Install Stylua / Lua tools? [Y/n]: " C_LUA
       [[ "${C_LUA:-y}" =~ ^[Yy] ]] && install_lua_tools
+
+      read -p "Install .NET SDK & C# tools (csharp-ls)? [Y/n]: " C_DOTNET
+      [[ "${C_DOTNET:-y}" =~ ^[Yy] ]] && install_dotnet
       ;;
     [qQ]*)
       echo "Exiting setup."

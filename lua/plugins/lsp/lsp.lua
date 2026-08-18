@@ -252,7 +252,41 @@ return {
 					enable_import_completion = true,
 				},
 				csharp_ls = {},
-				lemminx = {},
+				lemminx = {
+					settings = {
+						xml = {
+							validation = {
+								enabled = true,
+								noGrammar = "hint",
+							},
+							completion = {
+								autoCloseTags = true,
+							},
+							fileAssociations = {
+								{
+									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+									pattern = "*.csproj",
+								},
+								{
+									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+									pattern = "*.props",
+								},
+								{
+									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+									pattern = "*.targets",
+								},
+								{
+									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+									pattern = "*.fsproj",
+								},
+								{
+									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+									pattern = "*.vbproj",
+								},
+							},
+						},
+					},
+				},
 				dockerls = {},
 				gopls = {
 					settings = {

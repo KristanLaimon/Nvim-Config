@@ -90,7 +90,23 @@ foreach ($dep in $Dependencies) {
     }
 }
 
-# 4. Final summary
+# 4. C# / .NET global tools
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    if (-not (Get-Command csharp-ls -ErrorAction SilentlyContinue)) {
+        Write-Host "[*] Installing csharp-ls dotnet global tool..." -ForegroundColor Yellow
+        try {
+            dotnet tool install -g csharp-ls
+            Write-Host "[+] csharp-ls installed successfully." -ForegroundColor Green
+            $InstalledCount++
+        } catch {
+            Write-Host "[!] Warning: Failed to install csharp-ls." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "  - csharp-ls: Already installed" -ForegroundColor Gray
+    }
+}
+
+# 5. Final summary
 if ($InstalledCount -eq 0) {
     Write-Host "`n[+] Nothing to install: all dependencies are synced!" -ForegroundColor Green
 } else {

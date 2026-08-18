@@ -165,16 +165,41 @@ end
 function _G.Neotree_Smart_Quit(force)
 	local cur_buf = vim.api.nvim_get_current_buf()
 	local ft = vim.bo[cur_buf].filetype
+	local buftype = vim.bo[cur_buf].buftype
+
+	-- Never close/delete neo-tree sidebar when Ctrl+W is pressed inside neo-tree;
+	-- shift focus back to code window to preserve UI layout.
+	if ft == "neo-tree" or ft == "NvimTree" then
+		local target_win = nil
+		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+			if vim.api.nvim_win_is_valid(win) then
+				local b = vim.api.nvim_win_get_buf(win)
+				local bft = vim.bo[b].filetype
+				local btype = vim.bo[b].buftype
+				if bft ~= "neo-tree" and bft ~= "NvimTree" and btype == "" then
+					target_win = win
+					break
+				end
+			end
+		end
+		if target_win then
+			vim.api.nvim_set_current_win(target_win)
+		else
+			pcall(vim.cmd, "Neotree close")
+		end
+		return
+	end
 
 	if ft == M.settings.dashboard_filetype then
 		vim.cmd(force and "qa!" or "qa")
 		return
 	end
-	if ft == "neo-tree" then
-		pcall(vim.cmd, "Neotree close")
-		return
-	end
-	if vim.bo[cur_buf].buftype == "terminal" then
+
+	-- Do not close terminal if currently in terminal insert mode ('t')
+	if buftype == "terminal" then
+		if vim.fn.mode() == "t" then
+			return
+		end
 		pcall(vim.cmd, force and "close!" or "close")
 		return
 	end
