@@ -212,9 +212,7 @@ for name, value in pairs(shell_settings or {}) do
 	vim.opt[name] = value
 end
 
-if is_windows then
-	vim.env.MSYS_NO_PATHCONV = "1"
-end
+-- Shell settings for Windows/Unix are applied via shell_settings.
 
 -- ============================================================================
 -- PATH REPAIR

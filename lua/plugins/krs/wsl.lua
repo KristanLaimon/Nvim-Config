@@ -175,10 +175,6 @@ function M.shell_command_for_cwd(cwd)
 		linux_path = "/"
 	end
 
-	if M.is_windows() then
-		vim.env.MSYS_NO_PATHCONV = "1"
-	end
-
 	return string.format('wsl.exe -d %s --cd "%s"', distro, linux_path:gsub('"', '\\"'))
 end
 
