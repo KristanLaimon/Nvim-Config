@@ -23,7 +23,6 @@ local path = lazy_req("krs.core.path")
 local M = {}
 
 M.settings = {
-	auto_save_folds = true,
 	max_lines_for_persistence = 10000,
 	keys = {
 		--- Toggle fold at cursor / selection across modes.
@@ -118,9 +117,6 @@ end
 --- Saves fold view state for a buffer into `.krsnvim/views/` (asynchronously).
 --- @param bufnr integer|nil
 function M.save_fold_view(bufnr)
-	if not M.settings.auto_save_folds then
-		return
-	end
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	if not M.is_code_buffer(bufnr) then
 		return
@@ -280,15 +276,7 @@ function M.setup()
 		callback = function(args)
 			vim.schedule(function()
 				M.apply_fold_options(args.buf)
-				M.restore_fold_view(args.buf)
 			end)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd({ "BufWinLeave", "BufWritePost", "VimLeavePre" }, {
-		group = group,
-		callback = function(args)
-			M.save_fold_view(args.buf)
 		end,
 	})
 

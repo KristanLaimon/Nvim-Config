@@ -246,12 +246,54 @@ return {
 					},
 				},
 				omnisharp = {
-					cmd = { "omnisharp" },
+					cmd = { "omnisharp", "--languageserver", "--hostPID", tostring(vim.fn.getpid()) },
 					enable_roslyn_analyzers = true,
 					organize_imports_on_format = true,
 					enable_import_completion = true,
+					root_dir = function(bufnr, on_dir)
+						local util = require("lspconfig.util")
+						local fname = vim.api.nvim_buf_get_name(bufnr)
+						local root = util.root_pattern("*.sln")(fname)
+							or util.root_pattern("*.csproj", "omnisharp.json", "global.json", ".git")(fname)
+						if root then
+							on_dir(root)
+						else
+							on_dir(vim.fs.dirname(fname))
+						end
+					end,
+					settings = {
+						FormattingOptions = {
+							EnableEditorConfigSupport = true,
+							OrganizeImports = true,
+						},
+						MsBuild = {
+							LoadProjectsOnDemand = false,
+						},
+						RoslynExtensionsOptions = {
+							EnableAnalyzersSupport = true,
+							EnableImportCompletion = true,
+							AnalyzeOpenDocumentsOnly = false,
+							DiagnosticWorkersThreadCount = 4,
+						},
+						Sdk = {
+							IncludePrereleases = true,
+						},
+					},
 				},
-				csharp_ls = {},
+				csharp_ls = {
+					enabled = false,
+					root_dir = function(bufnr, on_dir)
+						local util = require("lspconfig.util")
+						local fname = vim.api.nvim_buf_get_name(bufnr)
+						local root = util.root_pattern("*.sln")(fname)
+							or util.root_pattern("*.csproj", ".git")(fname)
+						if root then
+							on_dir(root)
+						else
+							on_dir(vim.fs.dirname(fname))
+						end
+					end,
+				},
 				lemminx = {
 					settings = {
 						xml = {
@@ -370,6 +412,9 @@ return {
 				handlers = {
 					function(server_name)
 						local config = opts.servers[server_name] or {}
+						if config.enabled == false then
+							return
+						end
 						if has_blink then
 							config.capabilities = blink.get_lsp_capabilities(config.capabilities)
 						end

@@ -7,9 +7,8 @@
 --   <C-.>            Code actions, in a dropdown at the caret
 --   <A-j> / <A-k>    Go to definition (jump back with <C-o>)
 --   <F2>             Rename: LSP symbol, neo-tree entry, or the file on disk
---   <leader>k        Diagnostic under the cursor
---   <leader>u / <leader>o  Previous / next diagnostic
---   <leader>ff       Format buffer or selection
+--   [d / ]d          Previous / next diagnostic (built-in Neovim)
+--   gl               Diagnostic under the cursor (built-in Neovim)
 -- ============================================================================
 
 local M = {}
