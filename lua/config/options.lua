@@ -70,7 +70,9 @@ local settings = {
 		writebackup = false,
 		undofile = true, -- Persistent undo instead.
 		shortmess = "sWICcFsotT", -- Suppress unnecessary startup, file info, and hit-enter prompts.
+		fileformats = "unix,dos", -- Preserve LF (\n) and CRLF (\r\n) line endings automatically on open/save.
 	},
+
 
 	--- Options set through pcall because a build may not support them.
 	optional_options = { fileencoding = "utf-8" },

@@ -33,7 +33,9 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **Pixel-Art Image Viewer** | `image_viewer.lua` | Renders images as terminal pixel art via `chafa`, or hands off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
 | **Input Modal** | `input_modal.lua` | The shared floating input dialog; overrides `vim.ui.input` globally. | used everywhere |
 | **Font Manager** | `font.lua` | Live GUI font sizing, persisted to `font_config.json` in `nvim-data`. | `<C-+>`, `<C-->`, `<C-0>` |
+| **Line Endings Manager** | `line_endings.lua` | Detects/preserves LF and CRLF line endings. UI selection modal for current file and repo-wide line ending conversion. | `:ChangeLineEndings`, `:ChangeRepoLineEndings` |
 | **PHP Tools Modal** | `php_tools_modal.lua` | Checks PHP, Composer, Intelephense, Pint and the debug adapter on host *and* WSL, with install steps. | `:PHPCheckTools` |
+
 | **WSL Helpers** | `wsl.lua` | Distro detection and path translation; also decides whether the dashboard shows the WSL button. | internal |
 | **launch.json IntelliSense** | `launch_cmp.lua` | blink.cmp source for `launch.json` — tasks, runtimes, modes. | automatic |
 
