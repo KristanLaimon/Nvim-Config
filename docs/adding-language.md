@@ -133,6 +133,8 @@ ensure_installed = {
 | **Linting** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add linter's LSP to `opts.servers` (no `nvim-lint`) |
 | **Formatting** | [`lua/plugins/lsp/formatting.lua`](../lua/plugins/lsp/formatting.lua) | Add to `formatters_by_ft` |
 | **Syntax Highlighting** | [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) | Add to `ensure_installed` |
+| **Language Defaults** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) | Register in `lua/krs/langs/init.lua` |
+
 
 ---
 

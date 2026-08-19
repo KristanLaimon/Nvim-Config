@@ -48,9 +48,21 @@ return {
 		-- match any filetype and let pcall skip ones without a parser.
 		vim.api.nvim_create_autocmd("FileType", {
 			pattern = "*",
-			callback = function()
-				pcall(vim.treesitter.start)
+			callback = function(args)
+				local buf = args.buf
+				pcall(vim.treesitter.start, buf)
+
+				local ft = vim.bo[buf].filetype
+				if ft and ft ~= "" then
+					local lang = vim.treesitter.language.get_lang(ft) or ft
+					local has_parser = pcall(vim.treesitter.get_parser, buf, lang)
+					if has_parser then
+						vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter.indent'.get_indent(v:lnum)"
+					end
+				end
+				vim.bo[buf].autoindent = true
 			end,
 		})
 	end,
 }
+

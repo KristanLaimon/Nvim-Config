@@ -13,6 +13,8 @@ When adding support for a new programming language (or updating an existing one)
 1. **Update `installer.lua` (`M.language_bundles`)**: Add the language bundle specifying its Mason packages (`mason_pkgs`) and Treesitter parsers (`treesitter`).
 2. **Add to Interactive Selection UI**: Ensure the language appears as an **optional selectable bundle** in the Language Tooling Manager (`:LanguageManager`, `:KrsLanguageManager`, `:KrsInstallDependencies`, `:KrsSetup`).
 3. **Update LSP, Formatter, DAP & Wiki Specs**: Register server options in `lua/plugins/lsp/lsp.lua`, formatters in `lua/plugins/lsp/formatting.lua`, debugger profiles in `lua/plugins/krs/debuggers/<lang>.lua`, and document it in a dedicated file under [`docs/languages/<lang>.md`](docs/languages/).
+4. **Per-Language Defaults in `lua/krs/langs/`**: Put all non-UI, non-plugin-specific language configuration (such as default indentation settings when no `.editorconfig` exists, environment path resolution, and language setup hooks) inside `lua/krs/langs/<language>/init.lua` and register the submodule in `lua/krs/langs/init.lua`.
+
 
 ### 🌙 1.2 Minimal Fresh Setup Rule (Lua Only)
 * **Default Fresh Behavior**: On a fresh Neovim installation, the default toolchain installation MUST remain **minimal** (Lua language server `lua_ls`, `stylua` formatter, and core editor parsers `lua`, `vim`, `vimdoc`, `markdown` only).
@@ -102,3 +104,5 @@ Detailed setup, Ex commands, DAP debug profiles, and plugin integrations for eac
 > 2. **Always list new languages in `:LanguageManager`** as optional UI selections.
 > 3. **Prefer Command Palette options** over assigning `<leader>` keymaps.
 > 4. **Reference dedicated wiki pages** under [`docs/languages/`](docs/languages/) for language-specific toolchain details.
+> 5. **Place all non-UI, non-plugin per-language defaults** in `lua/krs/langs/<language>/init.lua` and register them in `lua/krs/langs/init.lua`.
+

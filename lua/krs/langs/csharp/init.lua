@@ -1,18 +1,14 @@
 -- ============================================================================
--- KRS PHP: Centralized PHP Language Configuration Entry Point
+-- KRS CSHARP: Centralized C# / .NET Language Configuration
 -- ============================================================================
 -- WHAT IT DOES
---   - Sets PSR-12 standard PHP indentation defaults (4 spaces) when no .editorconfig exists.
---   - Integrates Composer vendor bin PATH prepending (`krs.langs.php.composer`).
---   - Integrates PHP/Laravel toolchain check modal (`plugins.krs.php_tools_modal`).
+--   Sets standard Microsoft C# 4-space indentation defaults for C# buffers when no
+--   .editorconfig file specifies buffer settings.
 -- ============================================================================
 
 local M = {}
 
-M.composer = require("krs.langs.php.composer")
-M.modal = require("plugins.krs.php_tools_modal")
-
---- Standard PSR-12 defaults for PHP (4 spaces).
+--- Standard C# / .NET defaults (4 spaces).
 M.defaults = {
 	expandtab = true,
 	shiftwidth = 4,
@@ -21,7 +17,7 @@ M.defaults = {
 	autoindent = true,
 }
 
---- Apply PHP language defaults if no .editorconfig is present.
+--- Apply C# language defaults if no .editorconfig is present.
 --- @param buf integer Buffer handle.
 function M.apply_defaults(buf)
 	local ok, langs = pcall(require, "krs.langs")
@@ -32,11 +28,10 @@ function M.apply_defaults(buf)
 	end
 end
 
---- Initialize PHP language configurations.
+--- Initialize C# language configuration autocmds.
 function M.setup()
-	M.composer.setup()
 	vim.api.nvim_create_autocmd("FileType", {
-		pattern = { "php", "blade" },
+		pattern = { "cs" },
 		callback = function(args)
 			M.apply_defaults(args.buf)
 		end,

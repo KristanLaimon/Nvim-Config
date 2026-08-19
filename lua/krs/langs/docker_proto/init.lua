@@ -1,27 +1,23 @@
 -- ============================================================================
--- KRS PHP: Centralized PHP Language Configuration Entry Point
+-- KRS DOCKER & PROTO: Centralized Dockerfile & Protobuf Language Configuration
 -- ============================================================================
 -- WHAT IT DOES
---   - Sets PSR-12 standard PHP indentation defaults (4 spaces) when no .editorconfig exists.
---   - Integrates Composer vendor bin PATH prepending (`krs.langs.php.composer`).
---   - Integrates PHP/Laravel toolchain check modal (`plugins.krs.php_tools_modal`).
+--   Sets standard 2-space indentation defaults for Dockerfile and Protobuf buffers
+--   when no .editorconfig file specifies buffer settings.
 -- ============================================================================
 
 local M = {}
 
-M.composer = require("krs.langs.php.composer")
-M.modal = require("plugins.krs.php_tools_modal")
-
---- Standard PSR-12 defaults for PHP (4 spaces).
+--- Standard defaults for Dockerfile & Protobuf (2 spaces).
 M.defaults = {
 	expandtab = true,
-	shiftwidth = 4,
-	tabstop = 4,
-	softtabstop = 4,
+	shiftwidth = 2,
+	tabstop = 2,
+	softtabstop = 2,
 	autoindent = true,
 }
 
---- Apply PHP language defaults if no .editorconfig is present.
+--- Apply Docker / Proto language defaults if no .editorconfig is present.
 --- @param buf integer Buffer handle.
 function M.apply_defaults(buf)
 	local ok, langs = pcall(require, "krs.langs")
@@ -32,11 +28,10 @@ function M.apply_defaults(buf)
 	end
 end
 
---- Initialize PHP language configurations.
+--- Initialize Dockerfile & Protobuf language configuration autocmds.
 function M.setup()
-	M.composer.setup()
 	vim.api.nvim_create_autocmd("FileType", {
-		pattern = { "php", "blade" },
+		pattern = { "dockerfile", "proto" },
 		callback = function(args)
 			M.apply_defaults(args.buf)
 		end,

@@ -42,6 +42,8 @@ local settings = {
 		shiftwidth = 2,
 		tabstop = 2,
 		softtabstop = 2,
+		autoindent = true,
+		smartindent = false,
 
 		-- Encoding
 		encoding = "utf-8",
@@ -194,6 +196,16 @@ vim.api.nvim_create_autocmd({ "VimEnter", "UIEnter" }, {
 		vim.opt.cmdheight = settings.options.cmdheight
 	end,
 })
+
+-- Ensure autoindent is always enabled for all filetypes, preventing legacy runtime
+-- indent scripts (such as `indent/php.vim`) from disabling autoindent on newlines/cc.
+vim.api.nvim_create_autocmd({ "FileType", "BufReadPost", "BufNewFile" }, {
+	pattern = "*",
+	callback = function(args)
+		vim.bo[args.buf].autoindent = true
+	end,
+})
+
 
 if vim.g.neovide then
 	for name, value in pairs(settings.neovide) do
