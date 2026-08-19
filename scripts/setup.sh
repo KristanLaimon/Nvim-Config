@@ -56,7 +56,7 @@ elif command -v apk >/dev/null 2>&1; then
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "mingw"* ]]; then
   echo -e "${YELLOW}[*] Windows environment detected. Delegating to setup.ps1...${NC}"
   if command -v powershell.exe >/dev/null 2>&1; then
-    exec powershell.exe -ExecutionPolicy Bypass -File "./setup.ps1"
+    exec powershell.exe -ExecutionPolicy Bypass -File "$(dirname "$0")/setup.ps1"
   else
     echo -e "${RED}[!] powershell.exe not found.${NC}"
     exit 1

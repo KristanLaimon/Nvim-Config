@@ -32,7 +32,7 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **Live Colorscheme Preview** | `colorscheme_preview.lua` | Previews themes live while tabbing through `:colorscheme`, reverts on cancel. | `:colorscheme <Tab>` |
 | **Pixel-Art Image Viewer** | `image_viewer.lua` | Renders images as terminal pixel art via `chafa`, or hands off to the OS default app. | `<leader>i`, `<C-S-Enter>` |
 | **Input Modal** | `input_modal.lua` | The shared floating input dialog; overrides `vim.ui.input` globally. | used everywhere |
-| **Font Manager** | `font.lua` | Live GUI font sizing, persisted to `font_config.json`. | `<C-+>`, `<C-->`, `<C-0>` |
+| **Font Manager** | `font.lua` | Live GUI font sizing, persisted to `font_config.json` in `nvim-data`. | `<C-+>`, `<C-->`, `<C-0>` |
 | **PHP Tools Modal** | `php_tools_modal.lua` | Checks PHP, Composer, Intelephense, Pint and the debug adapter on host *and* WSL, with install steps. | `:PHPCheckTools` |
 | **WSL Helpers** | `wsl.lua` | Distro detection and path translation; also decides whether the dashboard shows the WSL button. | internal |
 | **launch.json IntelliSense** | `launch_cmp.lua` | blink.cmp source for `launch.json` — tasks, runtimes, modes. | automatic |

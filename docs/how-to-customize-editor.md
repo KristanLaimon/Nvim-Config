@@ -305,8 +305,8 @@ Per-project build tasks and debugging launch profiles live in `.krsnvim/` inside
   - C Compiler (`gcc`, `clang`, or `zig`) for Treesitter parser compilation.
 
 ### Automated Setup Scripts:
-- **Windows**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
-- **Linux / WSL**: `./setup.sh`
+- **Windows**: `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1`
+- **Linux / WSL**: `./scripts/setup.sh`
 
 *(If external tools are missing, KrsVim degrades gracefully with clear notifications instead of crashing).*
 
@@ -317,4 +317,4 @@ Per-project build tasks and debugging launch profiles live in `.krsnvim/` inside
 When running inside [Neovide](https://neovide.dev/):
 - **Window Opacity**: Set `vim.g.neovide_opacity = 0.80` in `init.lua` (*Note: `neovide_opacity` replaces the deprecated `neovide_transparency` option*).
 - **Hit-Enter Suppression**: `shortmess = "sWICcfotT"` in `lua/config/options.lua` suppresses hit-enter prompts on startup.
-- **Font & Scale**: Font size can be adjusted live via `<C-+>`, `<C-->`, and `<C-0>`, persisted to `font_config.json`.
+- **Font & Scale**: Font size can be adjusted live via `<C-+>`, `<C-->`, and `<C-0>`, persisted to `font_config.json` in `nvim-data` (`stdpath("data")`).

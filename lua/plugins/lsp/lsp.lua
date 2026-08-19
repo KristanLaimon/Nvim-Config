@@ -373,7 +373,7 @@ return {
 							},
 
 							diagnostics = {
-								globals = { "vim" },
+								globals = { "vim", "fetch", "console", "import", "krsnvim", "cli", "terminal", "fs" },
 							},
 
 							workspace = {
@@ -468,7 +468,7 @@ return {
 						if is_krs then
 							client.config.settings.Lua = client.config.settings.Lua or {}
 							client.config.settings.Lua.diagnostics = client.config.settings.Lua.diagnostics or {}
-							client.config.settings.Lua.diagnostics.globals = { "vim", "fetch", "console", "import", "krsnvim" }
+							client.config.settings.Lua.diagnostics.globals = { "vim", "fetch", "console", "import", "krsnvim", "cli", "terminal", "fs" }
 							pcall(client.notify, "workspace/didChangeConfiguration", { settings = client.config.settings })
 						end
 					end

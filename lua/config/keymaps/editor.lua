@@ -339,7 +339,7 @@ local function toggle_neotree()
 		if vim.api.nvim_get_mode().mode == "t" then
 			pcall(vim.cmd, "stopinsert")
 		end
-		vim.cmd("Neotree toggle")
+		vim.cmd("silent! Neotree toggle")
 		pcall(function()
 			require("krs.core.dock").enforce_neotree_layout()
 		end)

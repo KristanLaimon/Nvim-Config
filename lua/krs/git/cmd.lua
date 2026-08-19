@@ -35,11 +35,29 @@ M.lock_file = "index.lock"
 -- ---------------------------------------------------------------------------
 
 --- Builds the argv for a git invocation rooted at `cwd`.
+--- Handles WSL UNC paths (e.g. `//wsl.localhost/Ubuntu/...`) on Windows by invoking `wsl.exe`.
+--- Enforces `safe.directory=*` to prevent ownership errors on shared mounts or WSL paths.
+---
 --- @param args string|string[] Arguments after `git`. A string is split on spaces.
 --- @param cwd string|nil Repository directory. Defaults to the working directory.
 --- @return string[] argv
 function M.build(args, cwd)
-	local argv = { M.executable, "-C", cwd or vim.fn.getcwd() }
+	cwd = cwd or vim.fn.getcwd()
+	local argv
+
+	if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+		local ok_wsl, wsl = pcall(require, "plugins.krs.wsl")
+		if ok_wsl and wsl and wsl.parse_wsl_path then
+			local distro, linux_path = wsl.parse_wsl_path(cwd)
+			if distro and linux_path then
+				argv = { "wsl.exe", "-d", distro, "--cd", linux_path, M.executable, "-c", "safe.directory=*" }
+			end
+		end
+	end
+
+	if not argv then
+		argv = { M.executable, "-c", "safe.directory=*", "-C", cwd }
+	end
 
 	if type(args) == "string" then
 		for word in args:gmatch("%S+") do
@@ -114,20 +132,29 @@ end
 --- @param cwd string Repository directory.
 --- @return string git_dir
 function M.git_dir(cwd)
+	cwd = cwd or vim.fn.getcwd()
 	local candidate = cwd .. "/.git"
 	if vim.fn.isdirectory(candidate) == 1 then
 		return candidate
 	end
 
-	local result = vim.system({ M.executable, "-C", cwd, "rev-parse", "--git-dir" }, { text = true }):wait()
+	local result = M.spawn({ "rev-parse", "--git-dir" }, cwd):wait()
 	if result.code ~= 0 or not result.stdout then
 		return candidate
 	end
 
 	local git_dir = vim.trim(result.stdout)
 	-- `rev-parse` may answer relatively (".git"); make it absolute.
-	if not git_dir:match("^/") and not git_dir:match("^%a:") then
+	if not git_dir:match("^/") and not git_dir:match("^%a:") and not git_dir:match("^//") then
 		git_dir = cwd .. "/" .. git_dir
+	elseif (vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1) and git_dir:match("^/") then
+		local ok_wsl, wsl = pcall(require, "plugins.krs.wsl")
+		if ok_wsl and wsl and wsl.parse_wsl_path then
+			local distro, _ = wsl.parse_wsl_path(cwd)
+			if distro then
+				git_dir = "//wsl.localhost/" .. distro .. git_dir
+			end
+		end
 	end
 	return git_dir
 end

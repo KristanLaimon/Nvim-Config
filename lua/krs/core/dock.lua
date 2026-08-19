@@ -142,7 +142,7 @@ function M.enforce_neotree_layout()
 				local pos = vim.api.nvim_win_get_position(win)
 				if pos[2] > 0 then
 					vim.api.nvim_set_current_win(win)
-					vim.cmd("wincmd H")
+					vim.cmd("silent! wincmd H")
 				end
 
 				local ok, store = pcall(require, "krs.core.store")

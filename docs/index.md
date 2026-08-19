@@ -17,8 +17,8 @@ If you have just installed or launched KrsVim for the first time, follow these s
 1. **Start Neovim**: Run `nvim` in your terminal. On first startup, `lazy.nvim` automatically downloads and installs all editor plugins.
 2. **Open the Dashboard & Wiki**: If you land on the dashboard screen, press `w` to open this Wiki inside Neovim (or run `:KrsWiki` / `:NvimWiki` from anywhere, or `<C-S-d>`).
 3. **Sync External Dependencies**: KrsVim relies on a few external CLI utilities (like `ripgrep`, `fd`, `gcc`, `chafa`, `node`, `bun`, `go`, `dotnet`). Run the automated setup script for your platform:
-   - **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
-   - **Linux / WSL / Git Bash**: `./setup.sh`
+   - **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1`
+   - **Linux / WSL / Git Bash**: `./scripts/setup.sh`
    *(These scripts are idempotent—safe to run at any time! If you haven't run them yet, KrsVim will still run with [graceful fallbacks](installation.md#⚡-what-if-you-havent-run-setupps1-or-setupsh).)*
 4. **Discover Shortcuts**: Press `<C-S-p>` to launch the **Command Palette**, or press `?` / `<F1>` in any window to get instant, context-aware keyboard help.
 5. **Want to change something?** Every feature here is meant to be edited by you, not just read about — [How-To & Customization Guide § Quick Answer](how-to-customize-editor.md#⚡-quick-answer-how-do-i-change-x) is the fastest path from "I don't like this" to "fixed it myself."

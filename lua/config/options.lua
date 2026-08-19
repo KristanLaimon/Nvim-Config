@@ -34,7 +34,7 @@ local settings = {
 		relativenumber = true,
 		cursorline = true,
 		showmode = false, -- The statusline already shows the mode.
-		cmdheight = 0, -- No dead row at the bottom when idle.
+		cmdheight = 1, -- Reserve 1 row at bottom for messages to prevent hit-enter prompts.
 		laststatus = 3, -- One global statusline.
 
 		-- Indentation: spaces, two columns wide (standard for Astro, JS/TS, Tailwind, Biome, HTML, JSON).
@@ -67,7 +67,7 @@ local settings = {
 		swapfile = false,
 		writebackup = false,
 		undofile = true, -- Persistent undo instead.
-		shortmess = "sWICcfotT", -- Suppress unnecessary startup and hit-enter prompts.
+		shortmess = "sWICcFsotT", -- Suppress unnecessary startup, file info, and hit-enter prompts.
 	},
 
 	--- Options set through pcall because a build may not support them.

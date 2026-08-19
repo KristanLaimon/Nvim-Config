@@ -74,7 +74,7 @@ M.settings = {
 
 	keys = {
 		--- Toggle the Git Center from anywhere.
-		toggle = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>" },
+		toggle = { "<C-S-g>", "<C-S-G>", "<C-g>", "<C-G>", "<leader>gc", "<leader>gC" },
 		--- Stage everything from anywhere. Many aliases because terminals and GUIs
 		--- disagree about how Alt/Meta combinations arrive.
 		stage_all = {
@@ -92,6 +92,7 @@ M.settings = {
 			"<A-S>",
 			"<M-s>",
 			"<M-S>",
+			"<leader>gs",
 		},
 		--- Switch submodule tabs (left / right).
 		tab_prev = { "<A-h>", "<A-H>", "<M-h>", "<M-H>", "<A-Left>", "<M-Left>" },
@@ -520,8 +521,8 @@ function M.stage_all_with_modal(cwd)
 				)
 			end
 
-			if M.is_open() then
-				pcall(M.open_git_center)
+			if M.is_open() and M.refresh then
+				M.refresh()
 			end
 		end, cwd)
 	end
@@ -2792,7 +2793,7 @@ function M.setup()
 			local is_term = vim.bo[cur_buf].buftype == "terminal" or vim.b[cur_buf].krs_is_multi_term
 			local mode = vim.fn.mode()
 
-			if mode ~= "n" then
+			if mode == "i" or mode == "ic" or mode == "ix" or mode == "t" then
 				pcall(vim.cmd, "stopinsert")
 			end
 
@@ -2844,10 +2845,13 @@ return setmetatable({
 	cmd = { "GitCenter", "GitCenterStage", "GitCenterCommit", "GitCenterPush", "GitCenterDiff" },
 	keys = {
 		{ "<C-S-g>", mode = { "n", "i", "v", "t" }, desc = "Open Git Control Center" },
+		{ "<leader>gc", mode = { "n", "v" }, desc = "Open Git Control Center" },
+		{ "<leader>gC", mode = { "n", "v" }, desc = "Open Git Control Center" },
 		{ "<C-S-x>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
 		{ "<C-S-X>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
 		{ "<A-s>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
 		{ "<M-s>", mode = { "n", "i", "v", "t" }, desc = "Stage All Git Changes" },
+		{ "<leader>gs", mode = { "n", "v" }, desc = "Stage All Git Changes" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",

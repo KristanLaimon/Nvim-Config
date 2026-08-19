@@ -45,6 +45,7 @@ local settings = {
 		["d"] = "delete",
 		["D"] = "delete_visual",
 		["r"] = "rename_with_modal",
+		["R"] = "refresh_neotree",
 		["m"] = "move_with_picker",
 		["a"] = "add_file_with_modal",
 		["A"] = "add_folder_with_modal",
@@ -112,7 +113,7 @@ local function toggle_neotree()
 	if vim.api.nvim_get_mode().mode == "t" then
 		pcall(vim.cmd, "stopinsert")
 	end
-	vim.cmd("Neotree toggle")
+	vim.cmd("silent! Neotree toggle")
 	vim.schedule(function()
 		pcall(function()
 			require("krs.core.dock").enforce_neotree_layout()
@@ -150,7 +151,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
 	callback = function(data)
 		local file = data.file
 		if file ~= "" and vim.fn.isdirectory(file) == 1 then
-			vim.cmd("Neotree show dir=" .. vim.fn.fnameescape(file))
+			vim.cmd("silent! Neotree show dir=" .. vim.fn.fnameescape(file))
 		end
 	end,
 })
@@ -199,7 +200,17 @@ local function refresh_tree()
 	pcall(function()
 		require("neo-tree.sources.manager").refresh("filesystem")
 	end)
+	pcall(function()
+		require("neo-tree.sources.filesystem").reset()
+	end)
 end
+
+local function refresh_neotree_with_notify()
+	refresh_tree()
+	vim.notify("🔄 Rescanned & refreshed Neo-tree files!", vim.log.levels.INFO, { title = "Neo-tree" })
+end
+
+_G.Neotree_Refresh = refresh_neotree_with_notify
 
 --- Deletes a file or directory on disk, handling Windows reserved names like NUL.
 --- @param path string Absolute path to file or directory.
@@ -371,6 +382,8 @@ return {
 			"NeotreeAddFile",
 			"NeotreeCreateFolder",
 			"NeotreeAddFolder",
+			"NeotreeRefresh",
+			"NeotreeRescan",
 		},
 		keys = (function()
 			local k = {}
@@ -400,6 +413,8 @@ return {
 				NeotreeAddFile = { function() add_file_prompt() end, "Create new file in Neo-tree target directory" },
 				NeotreeCreateFolder = { function() add_folder_prompt() end, "Create new folder in Neo-tree target directory" },
 				NeotreeAddFolder = { function() add_folder_prompt() end, "Create new folder in Neo-tree target directory" },
+				NeotreeRefresh = { function() refresh_neotree_with_notify() end, "Rescan and refresh Neo-tree files" },
+				NeotreeRescan = { function() refresh_neotree_with_notify() end, "Rescan and refresh Neo-tree files" },
 			}
 			for name, spec in pairs(user_cmds) do
 				if vim.fn.exists(":" .. name) == 0 then
@@ -417,6 +432,9 @@ return {
 					mappings = settings.mappings,
 				},
 				commands = {
+					refresh_neotree = function()
+						refresh_neotree_with_notify()
+					end,
 					open_with_system_app = with_node(function(node)
 						require("plugins.krs.image_viewer").open_with_system_app(node.path)
 					end, true),

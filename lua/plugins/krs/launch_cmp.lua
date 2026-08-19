@@ -37,6 +37,7 @@ M.settings = {
 		go = "Go toolchain (go run)",
 		php = "PHP CLI binary",
 		dotnet = ".NET CLI (dotnet run)",
+		lua = "Built-in Neovim LuaJIT runtime (nvim --headless -l)",
 		krsnvimscript = "krsnvimscript automation script",
 		krsnvimtranspiler = "Transpile a .krsnvim script to .sh / .ps1",
 		custom = "Custom command string",

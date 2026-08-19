@@ -1,1 +1,0 @@
-dofile("./tests/syntax_check.lua")

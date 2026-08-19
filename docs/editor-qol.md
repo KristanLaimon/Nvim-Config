@@ -60,7 +60,7 @@ See [Color Palette](color-palette.md) for the palette itself.
 
 ## 🔤 Font Sizing (`font_size.lua`)
 
-`<C-+>` / `<C-=>` increases font size, `<C-->` decreases, `<C-0>` resets, and the chosen size is saved to `font_config.json` so it survives restarts.
+`<C-+>` / `<C-=>` increases font size, `<C-->` decreases, `<C-0>` resets, and the chosen size is saved to `font_config.json` in `nvim-data` (`stdpath("data")`) so it survives restarts.
 
 Defaults to JetBrainsMono Nerd Font at 14pt, clamped to 6–40. It sets `guifont` and, under Neovide, the scale factor — so it does nothing useful in a plain terminal, where font size belongs to the terminal emulator. `<C-MouseWheel>` also works.
 

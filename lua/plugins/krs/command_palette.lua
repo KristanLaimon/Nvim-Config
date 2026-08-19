@@ -74,6 +74,7 @@ M.commands = {
 	-- 🌲 File Explorer & Git
 	-- --------------------------------------------------------------------------
 	{ name = "🌳 Toggle File Explorer (Neo-tree)", cmd = "Neotree toggle", category = "Explorer" },
+	{ name = "🔄 Rescan & Refresh File Explorer (Neo-tree)", cmd = "NeotreeRefresh", category = "Explorer" },
 	{ name = "➕ Create New File in Neo-tree (a / <C-n>)", cmd = "NeotreeCreateFile", category = "Explorer" },
 	{ name = "📁 Create New Folder in Neo-tree (A / <C-S-n>)", cmd = "NeotreeCreateFolder", category = "Explorer" },
 	{ name = "🐙 Toggle Git Center (Ctrl+Shift+G)", cmd = "GitCenterToggle", category = "Git" },

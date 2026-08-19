@@ -44,6 +44,7 @@ M.order = {
 	"go",
 	"php",
 	"dotnet",
+	"lua",
 	"krsnvimscript",
 	"krsnvimtranspiler",
 	"custom",
@@ -231,6 +232,19 @@ M.registry = {
 				request = "launch",
 				name = profile.name,
 				program = dll,
+				cwd = root,
+			}
+		end,
+	},
+
+	lua = {
+		command = 'nvim --headless -c "lua package.path = vim.fn.stdpath(\'config\') .. \'/lua/?.lua;\' .. vim.fn.stdpath(\'config\') .. \'/lua/?/init.lua;\' .. package.path; require(\'krsnvim\')" -l',
+		dap = function(profile, root, ctx)
+			return {
+				type = "krsnvimscript",
+				request = "launch",
+				name = profile.name,
+				program = ctx.full_entry,
 				cwd = root,
 			}
 		end,

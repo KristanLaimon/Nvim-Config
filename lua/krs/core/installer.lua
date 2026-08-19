@@ -681,11 +681,11 @@ function M.run_setup_script(sudo_pass)
 	M.open_ui()
 	add_log("Starting system dependency setup via setup script...")
 
-	local script_path = vim.fn.stdpath("config") .. "/setup.sh"
+	local script_path = vim.fn.stdpath("config") .. "/scripts/setup.sh"
 	local cmd = {}
 
 	if vim.fn.has("win32") == 1 then
-		script_path = vim.fn.stdpath("config") .. "/setup.ps1"
+		script_path = vim.fn.stdpath("config") .. "/scripts/setup.ps1"
 		cmd = { "powershell.exe", "-ExecutionPolicy", "Bypass", "-File", script_path }
 	else
 		if sudo_pass and sudo_pass ~= "" then

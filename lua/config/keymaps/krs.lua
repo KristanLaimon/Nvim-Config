@@ -39,12 +39,13 @@ M.settings = {
 	keys = {
 		--- Stage every unstaged and untracked change. Many aliases because Alt and
 		--- Meta combinations arrive differently per terminal and GUI.
-		git_center = { "<C-S-g>", "<C-S-G>", "<C-G>", "<C-g>" },
+		git_center = { "<C-S-g>", "<C-S-G>", "<C-G>", "<C-g>", "<leader>gc", "<leader>gC" },
 		git_stage_all = {
 			"<C-S-x>", "<C-S-X>", "<C-X>",
 			"<C-A-s>", "<C-A-S>", "<C-M-s>", "<C-M-S>",
 			"<A-C-s>", "<A-C-S>", "<M-C-s>", "<M-C-S>",
 			"<A-s>", "<A-S>", "<M-s>", "<M-S>",
+			"<leader>gs",
 		},
 		smart_launch = is_mobile and { "<C-S-s>", "<C-S-S>", "<C-S>", "<C-s>" } or { "<C-S-s>", "<C-S-S>" },
 		launch_profiles = { "<C-S-q>", "<C-S-Q>", "<C-Q>" },
@@ -84,7 +85,7 @@ local function from_any_mode(fn)
 		local is_term = vim.bo[cur_buf].buftype == "terminal" or vim.b[cur_buf].krs_is_multi_term
 		local mode = vim.fn.mode()
 
-		if mode ~= "n" then
+		if mode == "i" or mode == "ic" or mode == "ix" or mode == "t" then
 			pcall(vim.cmd, "stopinsert")
 		end
 
@@ -189,7 +190,7 @@ map_all_modes(M.settings.keys.run_script, function()
 
 	-- Outside a script, the same key opens the launch profiles instead, so it
 	-- always means "run this project".
-	if not (buf_name:match("%.krsnvim$") or vim.bo.filetype == "krsnvim") then
+	if not (buf_name:match("%.krsnvim$") or buf_name:match("%.lua$") or vim.bo.filetype == "krsnvim" or vim.bo.filetype == "lua") then
 		require("plugins.krs.launch_profiles").open_management_menu()
 		return
 	end

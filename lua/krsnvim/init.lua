@@ -43,8 +43,12 @@ M.clearTimeout = M.async.clearTimeout
 M.setInterval = M.async.setInterval
 M.clearInterval = M.async.clearInterval
 
---- Setup global functions (setTimeout, clearTimeout, setInterval, clearInterval, console, fetch, describe, test, expect, import).
+--- Setup global functions (setTimeout, clearTimeout, setInterval, clearInterval, console, fetch, describe, test, expect, import, krsnvim, cli, terminal, fs).
 function M.setup_globals()
+	_G.krsnvim = M
+	_G.cli = M.cli
+	_G.terminal = M.terminal
+	_G.fs = M.fs
 	_G.setTimeout = M.setTimeout
 	_G.clearTimeout = M.clearTimeout
 	_G.setInterval = M.setInterval

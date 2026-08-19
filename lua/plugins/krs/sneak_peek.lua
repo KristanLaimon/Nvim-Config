@@ -269,7 +269,8 @@ function M.setup()
 	-- Keybindings
 	local function from_any_mode(fn)
 		return function()
-			if vim.fn.mode() ~= "n" then
+			local mode = vim.fn.mode()
+			if mode == "i" or mode == "ic" or mode == "ix" or mode == "t" then
 				pcall(vim.cmd, "stopinsert")
 			end
 			fn()

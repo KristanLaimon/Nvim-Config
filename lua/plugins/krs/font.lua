@@ -42,7 +42,7 @@ M.settings = {
 	step = 1,
 
 	--- Where the chosen size is remembered.
-	config_file = vim.fn.stdpath("config") .. "/font_config.json",
+	config_file = vim.fn.stdpath("data") .. "/font_config.json",
 
 	--- Neovide's scale factor is a ratio; this size maps to 1.0.
 	neovide_base_size = 14.0,

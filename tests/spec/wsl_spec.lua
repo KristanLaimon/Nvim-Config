@@ -134,3 +134,19 @@ describe("wsl recent projects", function()
 		expect(wsl.get_recent_projects(false)).toEqual({})
 	end)
 end)
+
+describe("git.cmd.build with WSL paths", function()
+	local git = require("krs.git.cmd")
+
+	it("constructs wsl.exe command for WSL UNC path on Windows", function()
+		local argv = git.build({ "status", "--porcelain=v1" }, [[\\wsl.localhost\Ubuntu\home\me\repo]])
+		if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+			expect(argv[1]).toBe("wsl.exe")
+			expect(argv[2]).toBe("-d")
+			expect(argv[3]).toBe("Ubuntu")
+			expect(argv[4]).toBe("--cd")
+			expect(argv[5]).toBe("/home/me/repo")
+			expect(argv[6]).toBe("git")
+		end
+	end)
+end)

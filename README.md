@@ -46,8 +46,8 @@ Return to the dashboard from anywhere with `<C-S-m>`; closing the last open buff
 
 After cloning into `%LOCALAPPDATA%\nvim` (Windows) or `~/.config/nvim` (Linux/macOS):
 
-- **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`
-- **Linux / WSL / Git Bash**: `./setup.sh`
+- **Windows (PowerShell)**: `powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1`
+- **Linux / WSL / Git Bash**: `./scripts/setup.sh`
 
 These idempotent scripts automatically install missing external dependencies (`ripgrep`, `fd`, `gcc`, `chafa`, Node.js, Bun, Go, .NET SDK). If you don't run them right away, KrsVim will still run with [graceful fallbacks](docs/installation.md#⚡-what-if-you-havent-run-setupps1-or-setupsh).
 
@@ -82,3 +82,21 @@ nvim --headless -S tests/integration/run.lua   # with the real editor loaded
 ```
 
 Inside the editor: `:KrsTest` (optionally `:KrsTest git` to filter by spec name).
+
+---
+
+## 🦊 Master CLI Runner (`run_me.lua`)
+
+You can run project scripts (test suite, syntax checks, setup dependencies, etc.) using the master Lua CLI:
+
+```sh
+# Launch interactive CLI menu
+nvim --headless -l run_me.lua
+
+# Run options directly via flags
+nvim --headless -l run_me.lua -- --syntax
+nvim --headless -l run_me.lua -- --tests
+nvim --headless -l run_me.lua -- --setup
+nvim --headless -l run_me.lua -- --help
+```
+

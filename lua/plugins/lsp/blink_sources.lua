@@ -34,7 +34,9 @@ local sources = {
 		module = "plugins.krs.krsnvim_cmp",
 		score_offset = 100,
 		enabled = function()
-			return vim.fn.expand("%:t"):match("%.krsnvim$") ~= nil or vim.bo.filetype == "krsnvim"
+			local ft = vim.bo.filetype
+			local name = vim.fn.expand("%:t")
+			return ft == "lua" or ft == "krsnvim" or name:match("%.krsnvim$") ~= nil or name:match("%.lua$") ~= nil
 		end,
 	},
 }

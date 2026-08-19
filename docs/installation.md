@@ -14,7 +14,7 @@ KrsVim includes idempotent setup scripts for both Windows and Unix-like environm
 Open PowerShell in your `%LOCALAPPDATA%\nvim` directory and run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
 ```
 
 *If Scoop is not installed, `setup.ps1` automatically installs Scoop for your user account, adds the `main` and `extras` buckets, and installs all required CLI tools.*
@@ -25,8 +25,8 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 Open a terminal in `~/.config/nvim` (or your Windows config directory in Git Bash) and run:
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 ```
 
 *`setup.sh` detects your operating system and package manager (`apt`, `dnf`, `pacman`, `brew`, or `scoop` via Git Bash) and installs the required packages automatically.*
@@ -110,5 +110,5 @@ KrsVim writes per-project configuration files under `.krsnvim/` at the root of y
 
 KrsVim defaults to **JetBrainsMono Nerd Font** (14pt).
 - Adjust font size dynamically in GUI builds (Neovide / Windows GUI) using `<C-+>`, `<C-->`, and `<C-0>`.
-- Font size preferences are saved automatically to `font_config.json` at the root of your config.
+- Font size preferences are saved automatically to `font_config.json` in your global `nvim-data` directory (`stdpath("data")`).
 - A **Nerd Font** (v3.0+) is strongly recommended for icons in the statusline, file explorer, dashboard, and DAP signs.

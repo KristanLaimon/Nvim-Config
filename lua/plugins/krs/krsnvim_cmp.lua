@@ -129,10 +129,59 @@ M.settings = {
 			},
 		},
 		{
+			pattern = "cli%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "parse_args", detail = "cli.parse_args(args, schema) - Parse flags and arguments", insertText = "parse_args(${1:arg}, ${2:schema})", insertTextFormat = SNIPPET },
+				{ label = "menu", detail = "cli.menu(title, options, callback) - Render interactive menu", insertText = "menu(\"${1:title}\", ${2:options}, function(choice, idx)\n\t${3}\nend)", insertTextFormat = SNIPPET },
+				{ label = "help", detail = "cli.help(schema) - Generate formatted CLI help screen", insertText = "help(${1:schema})", insertTextFormat = SNIPPET },
+				{ label = "colorize", detail = "cli.colorize(text, color) - Colorize text with ANSI colors", insertText = "colorize(${1:text}, ${2:cli.colors.cyan})", insertTextFormat = SNIPPET },
+				{ label = "colors", detail = "cli.colors - Table of ANSI color codes", insertText = "colors.${1:cyan}" },
+				{ label = "ascii_title", detail = "cli.ascii_title(text, opts) - Generate ASCII art title banner", insertText = "ascii_title(\"${1:title}\")", insertTextFormat = SNIPPET },
+				{ label = "table", detail = "cli.table(headers, rows) - Render formatted ASCII data table", insertText = "table(${1:headers}, ${2:rows})", insertTextFormat = SNIPPET },
+				{ label = "box", detail = "cli.box(content, title) - Render text box container", insertText = "box(${1:content}, \"${2:title}\")", insertTextFormat = SNIPPET },
+				{ label = "spinner", detail = "cli.spinner(message, work_fn) - Render animated terminal spinner", insertText = "spinner(\"${1:message}\", function()\n\t${2}\nend)", insertTextFormat = SNIPPET },
+			},
+		},
+		{
+			pattern = "terminal%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "run", detail = "terminal.run(cmd, opts) - Execute command in terminal", insertText = "run(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "exec", detail = "terminal.exec(cmd, opts) - Synchronously execute command", insertText = "exec(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "sh", detail = "terminal.sh(cmd) - Run shell command returning stdout/stderr", insertText = "sh(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "spawn", detail = "terminal.spawn(cmd, args, opts) - Spawn process", insertText = "spawn(\"${1:cmd}\", { ${2:args} })", insertTextFormat = SNIPPET },
+			},
+		},
+		{
+			pattern = "term%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "run", detail = "term.run(cmd, opts) - Execute command in terminal", insertText = "run(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "exec", detail = "term.exec(cmd, opts) - Synchronously execute command", insertText = "exec(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "sh", detail = "term.sh(cmd) - Run shell command returning stdout/stderr", insertText = "sh(\"${1:command}\")", insertTextFormat = SNIPPET },
+			},
+		},
+		{
+			pattern = "fs%.%a*$",
+			kind = KIND.method,
+			items = {
+				{ label = "exists", detail = "fs.exists(path) - Check if path exists", insertText = "exists(\"${1:path}\")", insertTextFormat = SNIPPET },
+				{ label = "read", detail = "fs.read(path) - Read file content", insertText = "read(\"${1:path}\")", insertTextFormat = SNIPPET },
+				{ label = "write", detail = "fs.write(path, content) - Write string content to file", insertText = "write(\"${1:path}\", ${2:content})", insertTextFormat = SNIPPET },
+				{ label = "mkdir", detail = "fs.mkdir(path) - Create directory recursively", insertText = "mkdir(\"${1:path}\")", insertTextFormat = SNIPPET },
+				{ label = "remove", detail = "fs.remove(path) - Remove file or directory", insertText = "remove(\"${1:path}\")", insertTextFormat = SNIPPET },
+				{ label = "list", detail = "fs.list(path) - List files and directories", insertText = "list(\"${1:path}\")", insertTextFormat = SNIPPET },
+			},
+		},
+		{
 			-- Fallback: the globals a script starts with.
 			items = {
 				{ label = "console", kind = KIND.object, detail = "krsnvim.console - Human-readable console logger & JSON printer", insertText = "console.log(${1:data})", insertTextFormat = SNIPPET },
 				{ label = "fetch", kind = KIND.object, detail = "krsnvim.fetch - HTTP/HTTPS Web-standard fetch client", insertText = 'fetch.get("${1:url}")', insertTextFormat = SNIPPET },
+				{ label = "cli", kind = KIND.object, detail = "krsnvim.cli - CLI argument parser & UI menu helper", insertText = "cli.menu(\"${1:title}\", ${2:options}, function(choice, idx)\n\t${3}\nend)", insertTextFormat = SNIPPET },
+				{ label = "terminal", kind = KIND.object, detail = "krsnvim.terminal - Shell command execution suite", insertText = "terminal.run(\"${1:command}\")", insertTextFormat = SNIPPET },
+				{ label = "fs", kind = KIND.object, detail = "krsnvim.fs - File system manipulation suite", insertText = "fs.exists(\"${1:path}\")", insertTextFormat = SNIPPET },
 				{ label = "describe", kind = KIND.object, detail = "krsnvim.test - Test suite block", insertText = 'describe("${1:suite}", function()\n\t${2}\nend)', insertTextFormat = SNIPPET },
 				{ label = "test", kind = KIND.object, detail = "krsnvim.test - Test case block", insertText = 'test("${1:name}", function()\n\t${2}\nend)', insertTextFormat = SNIPPET },
 				{ label = "expect", kind = KIND.object, detail = "krsnvim.test - Assertion builder", insertText = 'expect(${1:actual}).toBe(${2:expected})', insertTextFormat = SNIPPET },
@@ -162,9 +211,8 @@ function M:get_completions(context, callback)
 		callback({ items = items or {}, is_incomplete_forward = false, is_incomplete_backward = false })
 	end
 
-	local buf = context.bufnr or vim.api.nvim_get_current_buf()
-	local name = vim.api.nvim_buf_get_name(buf)
-	if not (name:match(M.settings.file_pattern) or vim.bo[buf].filetype == M.settings.filetype) then
+	local ft = vim.bo[buf].filetype
+	if not (ft == "lua" or ft == "krsnvim" or name:match(M.settings.file_pattern) or name:match("%.lua$") ~= nil) then
 		return respond({})
 	end
 
