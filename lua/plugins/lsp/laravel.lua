@@ -6,6 +6,7 @@
 -- 3. krs_php_tools  Registers `:PHPCheckTools`, which reports whether PHP and
 --                   Composer are actually installed (on Windows or in WSL) and
 --                   how to install what is missing.
+-- 4. PATH vendor/bin  Prepends project `./vendor/bin` to `PATH` for local Composer binaries.
 --
 -- The heavy lifting -- intelephense, pint formatting, the blade filetype pattern
 -- -- lives in lsp.lua and formatting.lua.
@@ -58,7 +59,7 @@ return {
 		ft = { "php", "blade" },
 		cmd = "PHPCheckTools",
 		config = function()
-			local modal = require("plugins.krs.php_tools_modal")
+			local modal = php.modal
 
 			vim.api.nvim_create_user_command("PHPCheckTools", function()
 				modal.check_tools(false)

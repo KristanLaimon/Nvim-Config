@@ -15,6 +15,7 @@ KrsVim provides a complete development environment for **PHP** and **Laravel** a
 | **Treesitter Parsers** | `php`, `phpdoc`, `blade` | Syntax trees for highlighting, indentation, and structure |
 | **Autocompletion** | `blink.cmp` + `blade-nav.nvim` | Intelephense LSP + Laravel routes, views, components, livewire, config, env, & translations |
 | **Debug Adapter (DAP)** | `php-debug-adapter` (Xdebug) | Listening on port `9003` for web server & CLI debugging |
+| **Local Vendor Scripts** | `vendor/bin` | Automatically prepended to `PATH` on launch & directory change for local Composer scripts |
 
 ---
 

@@ -268,3 +268,6 @@ local function setup_path_env()
 end
 
 setup_path_env()
+
+-- Initialize per-language internal configurations (e.g. PHP Composer vendor bin)
+require("krs.langs").setup()
