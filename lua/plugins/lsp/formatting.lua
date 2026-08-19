@@ -51,7 +51,12 @@ local function has_php_tool(executable, filename)
 		return true
 	end
 	return vim.fs.find(
-		{ "vendor/bin/" .. executable, "vendor/bin/" .. executable .. ".bat" },
+		{
+			"vendor/bin/" .. executable,
+			"vendor/bin/" .. executable .. ".bat",
+			"vendor/bin/" .. executable .. ".cmd",
+			"vendor/bin/" .. executable .. ".exe",
+		},
 		{ path = filename, upward = true }
 	)[1] ~= nil
 end
@@ -132,6 +137,17 @@ return {
 				end,
 			},
 		},
+		config = function(_, opts)
+			require("conform").setup(opts)
+
+			vim.api.nvim_create_user_command("FormatDocument", function()
+				require("conform").format({ async = true, lsp_fallback = true })
+			end, { desc = "Format current buffer using Pint / PHP-CS-Fixer / blade-formatter / project formatter" })
+
+			vim.api.nvim_create_user_command("ConformFormat", function()
+				require("conform").format({ async = true, lsp_fallback = true })
+			end, { desc = "Format current buffer using Pint / PHP-CS-Fixer / blade-formatter / project formatter" })
+		end,
 	},
 	{
 		"zapling/mason-conform.nvim",

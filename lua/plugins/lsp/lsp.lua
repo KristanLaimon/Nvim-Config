@@ -64,6 +64,7 @@ return {
 			servers = {
 				buf_ls = { enabled = false },
 				intelephense = {
+					filetypes = { "php", "blade" },
 					settings = {
 						intelephense = {
 							files = {

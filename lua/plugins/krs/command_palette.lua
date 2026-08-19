@@ -100,6 +100,24 @@ M.commands = {
 	},
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
+
+	-- --------------------------------------------------------------------------
+	-- 🐘 PHP & Laravel
+	-- --------------------------------------------------------------------------
+	{ name = "🐘 Check PHP & Laravel Environment Status", cmd = "PHPCheckTools", category = "PHP / Laravel" },
+	{ name = "🧹 Clear Blade & Laravel Caches (blade-nav)", cmd = "BladeNavClearCache", category = "PHP / Laravel" },
+	{ name = "👁️ Toggle Blade Inline Value Annotations", cmd = "BladeNavToggleShowValues", category = "PHP / Laravel" },
+	{ name = "📦 Install BladeNav Artisan Command", cmd = "BladeNavInstallArtisanCommand", category = "PHP / Laravel" },
+
+	-- --------------------------------------------------------------------------
+	-- 🎨 Formatting & Linting
+	-- --------------------------------------------------------------------------
+	{ name = "🎨 Format Document / File (Pint / PHP-CS-Fixer / Blade / Prettier)", cmd = "FormatDocument", category = "Format" },
+	{ name = "ℹ️ Check Formatter Info (Conform)", cmd = "ConformInfo", category = "Format" },
+
+	-- --------------------------------------------------------------------------
+	-- ⚙️ Setup & Dependencies
+	-- --------------------------------------------------------------------------
 	{ name = "🌐 Language Tooling Manager (Install / Uninstall Per Language)", cmd = "LanguageManager", category = "Setup" },
 	{ name = "🛠️ Create New .NET Project (dotnet new template picker)", cmd = "DotnetNew", category = "C#" },
 	{ name = "📦 Open NuGet Package Manager (.csproj references)", cmd = "NugetManager", category = "C#" },

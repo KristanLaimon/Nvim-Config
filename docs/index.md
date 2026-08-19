@@ -27,6 +27,19 @@ If you have just installed or launched KrsVim for the first time, follow these s
 
 ## 📌 Table of Contents
 
+### 🌐 Supported Languages & Toolchain Guides
+| Language / Tech | Wiki Page | Description |
+| :--- | :--- | :--- |
+| 🐘 **PHP & Laravel** | [**PHP & Laravel Guide**](languages/php.md) | Intelephense, Pint, PHP-CS-Fixer, blade-formatter, blade-nav.nvim, Xdebug |
+| 🟨 **TypeScript / JS** | [**TypeScript / JS Guide**](languages/typescript.md) | vtsls, eslint, biome, prettier/prettierd, js-debug-adapter, type-injector |
+| 🎯 **C# / .NET / Blazor** | [**C# & Blazor Guide**](languages/csharp.md) | OmniSharp, csharp-ls, csharpier, netcoredbg, lemminx XML |
+| 🟦 **Go** | [**Go Guide**](languages/go.md) | gopls, delve DAP, gofumpt, goimports |
+| 🐍 **Python** | [**Python Guide**](languages/python.md) | pyright, debugpy DAP, black, isort, ruff |
+| 🌙 **Lua & Scripts** | [**Lua & Scripts Guide**](languages/lua.md) | lua_ls, stylua, type_injector, krsnvimtranspiler |
+| 🌐 **Web Frontend** | [**Web Frontend Guide**](languages/web.md) | HTML, CSS, Svelte, Astro, Tailwind CSS, Emmet |
+| 🐳 **Docker & Proto** | [**Docker & Proto Guide**](languages/docker-proto.md) | dockerls, dockerfmt, protolint |
+| 🐚 **Shell / Bash** | [**Shell & Bash Guide**](languages/bash.md) | bashls, bash-debug-adapter, beautysh, shellcheck |
+
 ### 🏁 Getting Started & Setup
 | Page | Contents |
 | :--- | :--- |

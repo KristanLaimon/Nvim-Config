@@ -1091,13 +1091,20 @@ end
 -------------------------------------------------------------------------------
 
 --- Language Toolchain Bundles for Language Tooling Manager.
+--- Language Toolchain Bundles for Language Tooling Manager.
 M.language_bundles = {
 	{
-		name = "🎯 C# / .NET",
-		lang = "C#",
-		mason_pkgs = { "omnisharp", "csharp_ls", "netcoredbg", "csharpier" },
-		treesitter = { "c_sharp" },
-		dotnet_tools = { "csharp-ls" },
+		name = "🌙 Minimal Core (Lua & Neovim Editing)",
+		lang = "Lua",
+		is_minimal = true,
+		mason_pkgs = { "lua-language-server", "stylua" },
+		treesitter = { "lua", "vim", "vimdoc", "markdown", "markdown_inline" },
+	},
+	{
+		name = "🐘 PHP & Laravel",
+		lang = "PHP",
+		mason_pkgs = { "intelephense", "php-debug-adapter", "blade-formatter", "php-cs-fixer" },
+		treesitter = { "php", "phpdoc", "blade" },
 	},
 	{
 		name = "🟨 TypeScript / JavaScript",
@@ -1118,16 +1125,11 @@ M.language_bundles = {
 		treesitter = { "python" },
 	},
 	{
-		name = "🐘 PHP & Laravel",
-		lang = "PHP",
-		mason_pkgs = { "intelephense", "php-debug-adapter", "blade-formatter", "php-cs-fixer" },
-		treesitter = { "php", "phpdoc", "blade" },
-	},
-	{
-		name = "🌙 Lua",
-		lang = "Lua",
-		mason_pkgs = { "lua-language-server", "stylua" },
-		treesitter = { "lua" },
+		name = "🎯 C# / .NET",
+		lang = "C#",
+		mason_pkgs = { "omnisharp", "csharp_ls", "netcoredbg", "csharpier" },
+		treesitter = { "c_sharp" },
+		dotnet_tools = { "csharp-ls" },
 	},
 	{
 		name = "🌐 Web Frontend (HTML, CSS, Svelte, Astro)",
@@ -1294,7 +1296,7 @@ function M.render_language_manager_buffer()
 	table.insert(lines, "  ==========================================================================")
 	table.insert(lines, "   🌐 KRS LANGUAGE TOOLING MANAGER -- PER-LANGUAGE SETUP & TEARDOWN")
 	table.insert(lines, "  ==========================================================================")
-	table.insert(lines, "  [i] Install row toolchain  |  [u] Uninstall row toolchain  |  [Space] Toggle")
+	table.insert(lines, "   Fresh setup defaults to Minimal Core (Lua only). Select optional languages below.")
 	table.insert(lines, "")
 
 	local selected_count = 0
@@ -1308,16 +1310,18 @@ function M.render_language_manager_buffer()
 			selected_count = selected_count + 1
 		end
 
-		local line_str = string.format("   %s  %-40s %s", checkbox, item.bundle.name, status.badge)
+		local tag = item.bundle.is_minimal and " (Core)" or ""
+		local line_str = string.format("   %s  %-42s %s%s", checkbox, item.bundle.name, status.badge, tag)
 		table.insert(lines, line_str)
 		lang_line_map[#lines] = item
 	end
 
 	table.insert(lines, "")
 	table.insert(lines, "  " .. string.rep("─", width - 4))
-	table.insert(lines, "  [i] Install current row / selected   |  [u] Uninstall current row / selected")
-	table.insert(lines, "  [Space/Enter] Toggle checkbox        |  [d] Show component details")
-	table.insert(lines, string.format("  [a] Select All  |  [n] Deselect All  |  [q/Esc] Close Manager  (%d selected)", selected_count))
+	table.insert(lines, string.format("  👉 [ PRESS 'i' OR ENTER TO INSTALL SELECTED BUNDLES (%d SELECTED) ]", selected_count))
+	table.insert(lines, "  [Space/Enter] Toggle Row Checkbox    |  [d] Show Component Details")
+	table.insert(lines, "  [a] Select All Optional Languages   |  [n] Select None (Minimal Lua Only)")
+	table.insert(lines, "  [i] Install Selected Bundles        |  [u] Uninstall Selected  |  [q/Esc] Close")
 
 	pcall(function()
 		vim.bo[lang_buf].modifiable = true
@@ -1340,7 +1344,7 @@ function M.open_language_manager()
 		local status = M.get_bundle_status(bundle)
 		table.insert(lang_items, {
 			bundle = bundle,
-			selected = false,
+			selected = bundle.is_minimal or (status.installed_count > 0),
 			status = status,
 		})
 	end
@@ -1474,7 +1478,7 @@ function M.open_language_manager()
 
 	vim.keymap.set("n", "n", function()
 		for _, item in ipairs(lang_items) do
-			item.selected = false
+			item.selected = (item.bundle.is_minimal == true)
 		end
 		M.render_language_manager_buffer()
 	end, opts)

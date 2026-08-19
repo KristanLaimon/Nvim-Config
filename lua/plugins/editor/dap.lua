@@ -118,7 +118,7 @@ return {
 				firefox = web_filetypes,
 				coreclr = { "cs" },
 				python = { "python" },
-				php = { "php" },
+				php = { "php", "blade" },
 				go = { "go" },
 				bashdb = { "sh", "bash", "zsh", "csh", "ksh" },
 				bash = { "sh", "bash", "zsh", "csh", "ksh" },

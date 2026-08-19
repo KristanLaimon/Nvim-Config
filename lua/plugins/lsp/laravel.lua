@@ -30,6 +30,27 @@ return {
 		},
 	},
 
+	-- Register blade-nav autocompletion provider in blink.cmp
+	{
+		"saghen/blink.cmp",
+		opts = function(_, opts)
+			opts.sources = opts.sources or {}
+			opts.sources.providers = opts.sources.providers or {}
+			opts.sources.providers["blade-nav"] = {
+				name = "blade-nav",
+				module = "blade-nav.integrations.blink",
+				score_offset = 100,
+				enabled = function()
+					local ft = vim.bo.filetype
+					return ft == "blade" or ft == "php"
+				end,
+			}
+			if opts.sources.default and not vim.tbl_contains(opts.sources.default, "blade-nav") then
+				table.insert(opts.sources.default, "blade-nav")
+			end
+		end,
+	},
+
 	-- PHP & Laravel Environment Check Modal Hook
 	{
 		name = "krs_php_tools",

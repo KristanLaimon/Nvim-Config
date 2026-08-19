@@ -12,39 +12,13 @@
 --   matches every filetype and lets pcall skip the ones with no parser.
 -- ============================================================================
 
-local parsers = {
-	-- Core / Editor
+-- Minimal Core Parsers (Fresh Neovim default)
+local core_parsers = {
 	"lua",
 	"vim",
 	"vimdoc",
 	"markdown",
 	"markdown_inline",
-
-	-- Frontend
-	"typescript",
-	"javascript",
-	"tsx",
-	"jsx",
-	"svelte",
-	"astro",
-	"html",
-	"css",
-
-	-- Backend / Data
-	"bash",
-	"go",
-	"gomod",
-	"gowork",
-	"gosum",
-	"json",
-	"yaml",
-	"toml",
-	"editorconfig",
-	"php",
-	"phpdoc",
-	"blade",
-	"proto",
-	"c_sharp",
 }
 
 return {
@@ -65,7 +39,7 @@ return {
 		local ts = require("nvim-treesitter")
 		ts.setup({})
 		if not is_mobile then
-			pcall(ts.install, parsers)
+			pcall(ts.install, core_parsers)
 		end
 
 		-- main branch dropped the old highlight.enable config; highlighting
