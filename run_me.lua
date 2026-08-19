@@ -64,19 +64,17 @@ local function run_example()
 end
 
 local function show_menu()
-	print(cli.colorize(cli.ascii_title("KRSNVIM", { subtitle = "Master CLI Script Runner" }), cli.colors.cyan))
-
 	local options = {
-		"1. 🧪 Run Test Suite (run_tests.krsnvim)",
-		"2. 🔍 Run Syntax Check (run_sintaxcheck.krsnvim)",
-		"3. ⚡ Run Setup Dependencies (setup.ps1 / setup.sh)",
-		"4. ⚙️  Setup Windows Terminal Keymaps (setup-powershell.ps1)",
-		"5. 🧹 Unsetup Windows Terminal Keymaps (unsetup-powershell.ps1)",
-		"6. 🦊 Run Example Script (example.krsnvim)",
-		"7. ❌ Exit",
+		"Run Test Suite (tests/run.lua)",
+		"Run Syntax Check (tests/syntax_check.lua)",
+		"Run Setup Dependencies (setup.ps1 / setup.sh)",
+		"Setup Windows Terminal Keymaps (setup-powershell.ps1)",
+		"Unsetup Windows Terminal Keymaps (unsetup-powershell.ps1)",
+		"Run Example Script (scripts/example.krsnvim)",
+		"Exit",
 	}
 
-	cli.menu("Select a script to execute:", options, function(choice, idx)
+	cli.menu({ title = "KRSNVIM", subtitle = "Master CLI Script Runner", items = options }, function(choice, idx)
 		if idx == 1 then
 			run_tests()
 		elseif idx == 2 then

@@ -61,7 +61,7 @@ M.settings = {
 		explorer = { "<C-S-f>", "<C-S-F>", "<C-F>" },
 		wsl_explorer = nil,
 		sneak_peek = is_mobile and { "<C-S-y>", "<C-S-Y>", "<C-Y>", "<C-y>" } or { "<C-S-y>", "<C-S-Y>" },
-		--- Run the current .krsnvim script.
+		--- Run the current .lua or .krsnvim script.
 		run_script = { "<C-,>", "<C-comma>" },
 		--- Open the krsnvimscript wiki.
 		wiki = { "<C-S-,>", "<C-S-comma>", "<C-S-d>", "<C-S-D>" },
@@ -188,10 +188,7 @@ end, "Sneak-Peek Project Modal (90% Window)")
 map_all_modes(M.settings.keys.run_script, function()
 	local buf_name = vim.api.nvim_buf_get_name(0)
 
-	-- Outside a script, the same key opens the launch profiles instead, so it
-	-- always means "run this project".
 	if not (buf_name:match("%.krsnvim$") or buf_name:match("%.lua$") or vim.bo.filetype == "krsnvim" or vim.bo.filetype == "lua") then
-		require("plugins.krs.launch_profiles").open_management_menu()
 		return
 	end
 
@@ -199,7 +196,7 @@ map_all_modes(M.settings.keys.run_script, function()
 	local relative = vim.fn.fnamemodify(buf_name, ":.")
 	local cmd = 'nvim --headless -c "lua package.path = vim.fn.stdpath(\'config\') .. \'/lua/?.lua;\' .. vim.fn.stdpath(\'config\') .. \'/lua/?/init.lua;\' .. package.path; require(\'krsnvim\')" -l ' .. vim.fn.shellescape(relative)
 	require("plugins.krs.tasks").run_custom_command(cmd, nil, nil, vim.fn.fnamemodify(buf_name, ":t"))
-end, "Run current .krsnvim file with krsnvimscript")
+end, "Run current .lua / .krsnvim file with Neovim runner")
 
 map_all_modes(M.settings.keys.wiki, function()
 	require("krsnvim").wiki.open()

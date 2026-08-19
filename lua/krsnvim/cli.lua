@@ -43,21 +43,46 @@ M.colors = {
 	bg_white = "\27[47m",
 }
 
---- Wraps a text string with ANSI color styling codes.
+--- Checks whether stdout (fd 1) is an interactive terminal TTY.
+--- @return boolean
+local function is_stdout_tty()
+	local uv = vim and (vim.uv or vim.loop)
+	if uv and uv.guess_handle_type then
+		local handle_type = uv.guess_handle_type(1)
+		return handle_type == "tty"
+	end
+	return false
+end
+
+--- Wraps a text string with ANSI color styling codes (only when stdout is a TTY).
 ---
 --- @param text string Text string to format.
 --- @param color_code string ANSI color code from `cli.colors` (e.g. `cli.colors.cyan`).
---- @return string formatted_text Colorized string with reset suffix.
+--- @return string formatted_text Colorized string with reset suffix (or plain text if non-TTY).
 ---
 --- @see [krsnvim-testing.lua](file:///c:/Users/Kristan/AppData/Local/nvim/docs/krsnvim-testing.lua)
 ---
 --- @example
 --- print(cli.colorize("Success!", cli.colors.green))
 function M.colorize(text, color_code)
-	if not color_code then
-		return text
+	if not color_code or not is_stdout_tty() then
+		return tostring(text or "")
 	end
 	return color_code .. tostring(text) .. M.colors.reset
+end
+
+--- Strips all ANSI color and formatting escape sequences from a text string.
+---
+--- @param text string Text string containing ANSI escape sequences.
+--- @return string plain_text Text without ANSI escape codes.
+function M.strip_ansi(text)
+	if not text then
+		return ""
+	end
+	local str = tostring(text)
+	str = str:gsub("\27%[[%d;]*[a-zA-Z]", "")
+	str = str:gsub("\27%]%d+;.-%a", "")
+	return str
 end
 
 -- ============================================================================
@@ -139,12 +164,13 @@ function M.ascii_title(text, opts)
 	end
 
 	local banner = table.concat(rows, "\n")
-	if opts.color then
+	if opts.color and opts.color ~= "" then
 		banner = M.colorize(banner, opts.color)
 	end
 
 	if opts.subtitle and opts.subtitle ~= "" then
-		banner = banner .. "\n  " .. M.colorize("▸ " .. opts.subtitle, M.colors.yellow)
+		local sub_text = "▸ " .. opts.subtitle
+		banner = banner .. "\n  " .. (opts.color and M.colorize(sub_text, M.colors.yellow) or sub_text)
 	end
 
 	if opts.border then
@@ -383,19 +409,22 @@ function M.menu(title, options, callback)
 	opts.items = options or {}
 
 	-- If running in interactive Neovim UI, launch floating modal with Vim, Arrow, and Mouse controls
-	if vim and vim.api and vim.api.nvim_open_win then
+	local has_ui = vim and vim.api and vim.api.nvim_list_uis and #vim.api.nvim_list_uis() > 0
+	if has_ui and vim.api.nvim_open_win then
 		local selected_idx = 1
 		local items = opts.items
 
 		local ascii_lines = {}
 		local raw_banner = M.ascii_title(opts.title, { subtitle = opts.subtitle })
 		for l in raw_banner:gmatch("([^\n]+)") do
-			table.insert(ascii_lines, l)
+			table.insert(ascii_lines, M.strip_ansi(l))
 		end
 
 		local buf = vim.api.nvim_create_buf(false, true)
 		vim.bo[buf].filetype = "krsmenu"
 		vim.bo[buf].bufhidden = "wipe"
+
+		local ns_id = vim.api.nvim_create_namespace("krs_cli_menu")
 
 		local function render_menu()
 			local content = {}
@@ -408,10 +437,12 @@ function M.menu(title, options, callback)
 			)
 			table.insert(content, " Choose an option:")
 
+			local selected_line_idx = #ascii_lines + 2
 			for i, item in ipairs(items) do
 				local label = type(item) == "table" and (item.label or item[1]) or tostring(item)
 				if i == selected_idx then
 					table.insert(content, string.format(" ▸ [%d] %s  ◄", i, label))
+					selected_line_idx = #content - 1
 				else
 					table.insert(content, string.format("   [%d] %s", i, label))
 				end
@@ -427,6 +458,21 @@ function M.menu(title, options, callback)
 			)
 
 			vim.api.nvim_buf_set_lines(buf, 0, -1, false, content)
+			vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
+
+			for l_idx = 0, #ascii_lines - 1 do
+				pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "DiagnosticInfo", l_idx, 0, -1)
+			end
+
+			pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "Comment", #ascii_lines, 0, -1)
+			pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "Title", #ascii_lines + 1, 0, -1)
+
+			if selected_line_idx >= 0 and selected_line_idx < #content then
+				pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "DiagnosticWarn", selected_line_idx, 0, -1)
+			end
+
+			pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "Comment", #content - 2, 0, -1)
+			pcall(vim.api.nvim_buf_add_highlight, buf, ns_id, "Comment", #content - 1, 0, -1)
 		end
 
 		render_menu()
@@ -522,16 +568,17 @@ function M.menu(title, options, callback)
 		return
 	else
 		-- Standalone CLI fallback
-		print("\n" .. M.ascii_title(opts.title, { subtitle = opts.subtitle }))
-		print("------------------------------------------")
+		print("\n" .. M.ascii_title(opts.title, { subtitle = opts.subtitle, color = M.colors.cyan }))
+		print(M.colorize("------------------------------------------", M.colors.cyan))
 		for i, item in ipairs(opts.items) do
 			local label = type(item) == "table" and (item.label or item[1]) or tostring(item)
-			print(string.format("  [%d] %s", i, label))
+			print(string.format("  " .. M.colorize("[%d]", M.colors.yellow) .. " %s", i, label))
 		end
-		print("------------------------------------------")
-		io.write("Select option (1-" .. #opts.items .. "): ")
+		print(M.colorize("------------------------------------------", M.colors.cyan))
+		io.write(M.colorize("Select option (1-" .. #opts.items .. "): ", M.colors.cyan))
 		local input = io.read()
-		local choice_num = tonumber(input)
+		local num_str = input and input:match("%d+")
+		local choice_num = num_str and tonumber(num_str)
 		if choice_num and opts.items[choice_num] then
 			local item = opts.items[choice_num]
 			if callback then
@@ -569,7 +616,8 @@ function M.multi_select(title, options, callback)
 	opts.title = opts.title or "MULTI SELECT"
 	opts.items = options or {}
 
-	if vim and vim.api and vim.api.nvim_open_win then
+	local has_ui = vim and vim.api and vim.api.nvim_list_uis and #vim.api.nvim_list_uis() > 0
+	if has_ui and vim.api.nvim_open_win then
 		local cursor_idx = 1
 		local selected_state = {}
 		local items = opts.items
@@ -577,7 +625,7 @@ function M.multi_select(title, options, callback)
 		local ascii_lines = {}
 		local raw_banner = M.ascii_title(opts.title, { subtitle = opts.subtitle })
 		for l in raw_banner:gmatch("([^\n]+)") do
-			table.insert(ascii_lines, l)
+			table.insert(ascii_lines, M.strip_ansi(l))
 		end
 
 		local buf = vim.api.nvim_create_buf(false, true)
