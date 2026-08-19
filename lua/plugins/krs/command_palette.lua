@@ -61,6 +61,7 @@ M.commands = {
 	{ name = "🔍 Find Files (respecting .gitignore)", cmd = "TelescopeFindFilesGitignore", category = "Files" },
 	{ name = "🔍 Find Files (ignoring .gitignore)", cmd = "TelescopeFindFilesNoIgnore", category = "Files" },
 	{ name = "📂 Open Project Root in File Explorer", cmd = "OpenRootInExplorer", category = "Files" },
+	{ name = "📁 Select Recent Project (Ctrl+Shift+R)", cmd = "RecentProjects", category = "Files" },
 	{ name = "🐧 Browse WSL Files", cmd = "TelescopeFileBrowserWSL", category = "Files" },
 
 	-- --------------------------------------------------------------------------

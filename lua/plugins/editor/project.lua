@@ -79,14 +79,17 @@ local settings = {
 	invalid_paths = { "c:", "c:/" },
 
 	--- Open the picker.
-	key = "<C-r>",
+	keys = { "<C-S-r>", "<C-S-R>", "<C-r>", "<C-R>", "<leader>fp" },
 }
 
 return {
 	"ahmedkhalf/project.nvim",
-	cmd = { "Telescope projects", "ProjectRoot" },
+	cmd = { "Telescope projects", "ProjectRoot", "RecentProjects" },
 	keys = {
-		{ settings.key, "<cmd>Telescope projects<CR>", desc = "Telescope recent projects" },
+		{ "<C-S-r>", "<cmd>Telescope projects<CR>", desc = "Open Recent Projects UI" },
+		{ "<C-S-R>", "<cmd>Telescope projects<CR>", desc = "Open Recent Projects UI" },
+		{ "<C-r>", "<cmd>Telescope projects<CR>", desc = "Open Recent Projects UI" },
+		{ "<leader>fp", "<cmd>Telescope projects<CR>", desc = "Open Recent Projects UI" },
 	},
 	dependencies = {
 		"nvim-telescope/telescope.nvim",
@@ -542,10 +545,26 @@ return {
 
 		_G.OpenRecentProjects = open_projects_picker
 
-		if settings.key then
-			vim.keymap.set("n", settings.key, function()
-				open_projects_picker()
-			end, { desc = "Telescope recent projects" })
+		vim.api.nvim_create_user_command("RecentProjects", function()
+			open_projects_picker()
+		end, { desc = "Open Recent Projects UI" })
+
+		local function from_any_mode(fn)
+			return function()
+				local mode = vim.fn.mode()
+				if mode == "i" or mode == "ic" or mode == "ix" or mode == "t" then
+					pcall(vim.cmd, "stopinsert")
+				end
+				fn()
+			end
+		end
+
+		for _, k in ipairs(settings.keys) do
+			vim.keymap.set({ "n", "i", "v", "t" }, k, from_any_mode(open_projects_picker), {
+				noremap = true,
+				silent = true,
+				desc = "Open Recent Projects UI",
+			})
 		end
 	end,
 }
