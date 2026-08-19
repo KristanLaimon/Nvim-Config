@@ -14,6 +14,32 @@ describe("plugins.krs.statusline_picker", function()
 		expect(statusline.format_mode("COMMAND")).toBe("󰘳 COMMAND")
 	end)
 
+	it("formats current buffer line ending into LF / CRLF / CR labels", function()
+		local buf = vim.api.nvim_get_current_buf()
+		local saved = vim.bo[buf].fileformat
+
+		vim.bo[buf].fileformat = "unix"
+		expect(statusline.fileformat_status()).toBe("⏎ LF")
+
+		vim.bo[buf].fileformat = "dos"
+		expect(statusline.fileformat_status()).toBe("⏎ CRLF")
+
+		vim.bo[buf].fileformat = "mac"
+		expect(statusline.fileformat_status()).toBe("⏎ CR")
+
+		vim.bo[buf].fileformat = saved
+	end)
+
+	it("is placed first in the left statusbar section for every theme", function()
+		local themes = { "nvchad_pills", "nvchad_blocks", "nvchad_round", "nagatoro_classic", "vscode", "minimal" }
+		for _, name in ipairs(themes) do
+			local cfg = statusline.get_lualine_config(name)
+			local secs = cfg.sections
+			local left = name == "nagatoro_classic" and secs.lualine_a or secs.lualine_b
+			expect(left[1]).toBe(statusline.fileformat_status)
+		end
+	end)
+
 	it("returns formatted LSP status string", function()
 		expect(statusline.lsp_status()).toBeDefined()
 		expect(type(statusline.lsp_status())).toBe("string")

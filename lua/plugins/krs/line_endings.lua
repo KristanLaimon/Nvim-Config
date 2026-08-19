@@ -278,6 +278,6 @@ end
 return setmetatable({
 	name = "krs_line_endings",
 	dir = require("krs.core.lazyspec").for_module(),
-	lazy = false,
+	cmd = { "ChangeLineEndings", "ChangeRepoLineEndings" },
 	config = M.setup,
 }, { __index = M })

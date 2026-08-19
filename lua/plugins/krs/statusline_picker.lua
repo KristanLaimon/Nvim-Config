@@ -152,6 +152,14 @@ function M.format_filename(str)
 	return str
 end
 
+--- Formats current buffer line ending into a statusline label (LF / CRLF / CR).
+--- @return string formatted
+function M.fileformat_status()
+	local fmt = vim.bo[vim.api.nvim_get_current_buf()].fileformat
+	local map = { unix = "LF", dos = "CRLF", mac = "CR" }
+	return "⏎ " .. (map[fmt] or fmt:upper())
+end
+
 --- Retrieves current statusline theme selection.
 --- @return string theme_name
 function M.get_current_theme()
@@ -193,12 +201,12 @@ function M.get_lualine_config(theme_name)
 				section_separators = { left = "", right = "" },
 			},
 			sections = {
-				lualine_a = { { "mode", fmt = M.format_mode } },
-				lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
-				lualine_c = { common_filename },
-				lualine_x = { M.lsp_status, "filetype" },
-				lualine_y = { "encoding", "fileformat" },
-				lualine_z = { { "location", icon = "" }, "progress" },
+lualine_a = { { "mode", fmt = M.format_mode } },
+			lualine_b = { M.fileformat_status, { "branch", icon = "" }, common_diff, common_diagnostics },
+			lualine_c = { common_filename },
+			lualine_x = { M.lsp_status, "filetype" },
+			lualine_y = { "encoding", "fileformat" },
+			lualine_z = { { "location", icon = "" }, "progress" },
 			},
 		}
 	elseif theme_name == "nvchad_round" then
@@ -211,7 +219,7 @@ function M.get_lualine_config(theme_name)
 			},
 			sections = {
 				lualine_a = { { "mode", fmt = M.format_mode } },
-				lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
+				lualine_b = { M.fileformat_status, { "branch", icon = "" }, common_diff, common_diagnostics },
 				lualine_c = { common_filename },
 				lualine_x = { M.lsp_status, "filetype" },
 				lualine_y = { "encoding" },
@@ -228,7 +236,7 @@ function M.get_lualine_config(theme_name)
 			},
 			sections = {
 				lualine_a = { "mode" },
-				lualine_b = { { "branch", icon = "" }, common_diagnostics },
+				lualine_b = { M.fileformat_status, { "branch", icon = "" }, common_diagnostics },
 				lualine_c = { common_filename },
 				lualine_x = { M.lsp_status, "filetype" },
 				lualine_y = { "progress" },
@@ -245,7 +253,7 @@ function M.get_lualine_config(theme_name)
 			},
 			sections = {
 				lualine_a = { "mode" },
-				lualine_b = { common_filename },
+				lualine_b = { M.fileformat_status, common_filename },
 				lualine_c = {},
 				lualine_x = { { "branch", icon = "" }, M.lsp_status },
 				lualine_y = { "filetype" },
@@ -259,7 +267,7 @@ function M.get_lualine_config(theme_name)
 				globalstatus = true,
 			},
 			sections = {
-				lualine_a = { { "branch", icon = "🌿" }, common_diff, common_diagnostics },
+				lualine_a = { M.fileformat_status, { "branch", icon = "🌿" }, common_diff, common_diagnostics },
 				lualine_b = { common_filename },
 				lualine_c = {},
 				lualine_x = {
@@ -289,7 +297,7 @@ function M.get_lualine_config(theme_name)
 		},
 		sections = {
 			lualine_a = { { "mode", fmt = M.format_mode } },
-			lualine_b = { { "branch", icon = "" }, common_diff, common_diagnostics },
+			lualine_b = { M.fileformat_status, { "branch", icon = "" }, common_diff, common_diagnostics },
 			lualine_c = { common_filename },
 			lualine_x = { M.lsp_status, "filetype" },
 			lualine_y = { "encoding" },
