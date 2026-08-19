@@ -65,7 +65,7 @@ end
 --- @example
 --- print(cli.colorize("Success!", cli.colors.green))
 function M.colorize(text, color_code)
-	if not color_code or not is_stdout_tty() then
+	if not color_code or vim.env.NO_COLOR then
 		return tostring(text or "")
 	end
 	return color_code .. tostring(text) .. M.colors.reset
