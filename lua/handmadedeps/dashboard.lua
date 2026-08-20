@@ -127,12 +127,20 @@ local function step_row(direction)
 	goto_row(rows[target])
 end
 
+--- Runs a button's command string, e.g. ":Telescope projects<CR>" -- these are
+--- written feedkeys-style (leading `:`, trailing `<CR>`) rather than as bare
+--- ex command text, so strip both before handing them to `vim.cmd`.
+local function run_button_cmd(cmd)
+	local stripped = cmd:gsub("^:", ""):gsub("<[Cc][Rr]>$", "")
+	vim.cmd(stripped)
+end
+
 --- Activates the button on the current row, if any.
 local function activate_current()
 	local cur = vim.api.nvim_win_get_cursor(0)[1]
 	local entry = state.button_rows and state.button_rows[cur]
 	if entry then
-		vim.cmd(entry.btn.cmd)
+		run_button_cmd(entry.btn.cmd)
 	end
 end
 
@@ -162,7 +170,7 @@ function M.redraw()
 	for _, entry in pairs(button_rows) do
 		local btn = entry.btn
 		vim.keymap.set("n", btn.key, function()
-			vim.cmd(btn.cmd)
+			run_button_cmd(btn.cmd)
 		end, { buffer = state.buf, silent = true, nowait = true })
 		table.insert(state.bound_keys, btn.key)
 	end
