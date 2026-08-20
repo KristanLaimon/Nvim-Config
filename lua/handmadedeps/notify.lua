@@ -9,6 +9,12 @@
 
 local uv = vim.uv or vim.loop
 
+-- Neovide runs its own window opacity/blur compositor (neovide_opacity,
+-- neovide_window_blurred); layering animated winblend on top of that has
+-- been observed to break Neovide's blur into flat transparency instead.
+-- Terminal Neovim has no such conflict, so it keeps the winblend fade.
+local SKIP_WINBLEND = vim.g.neovide ~= nil
+
 local M = {}
 
 M.active_wins = {}
@@ -221,7 +227,9 @@ function M.notify(msg, level, opts)
 
 	pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
 	pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
-	pcall(vim.api.nvim_win_set_option, win, "winblend", static and 15 or 80)
+	if not SKIP_WINBLEND then
+		pcall(vim.api.nvim_win_set_option, win, "winblend", static and 15 or 80)
+	end
 	for i, line in ipairs(lines) do
 		local _ = line
 		if i == 1 and title ~= "" then
@@ -258,7 +266,9 @@ function M.notify(msg, level, opts)
 					focusable = false,
 					noautocmd = true,
 				})
-				pcall(vim.api.nvim_win_set_option, win, "winblend", math.max(0, blend))
+				if not SKIP_WINBLEND then
+					pcall(vim.api.nvim_win_set_option, win, "winblend", math.max(0, blend))
+				end
 			end
 			if anim_step >= anim_steps then
 				safe_close_timer(anim_timer)
@@ -314,7 +324,9 @@ function M.notify(msg, level, opts)
 					focusable = false,
 					noautocmd = true,
 				})
-				pcall(vim.api.nvim_win_set_option, win, "winblend", math.min(100, blend))
+				if not SKIP_WINBLEND then
+					pcall(vim.api.nvim_win_set_option, win, "winblend", math.min(100, blend))
+				end
 			end
 
 			if exit_step >= exit_steps then
@@ -337,10 +349,57 @@ function M.notify(msg, level, opts)
 	end, timeout)
 end
 
+--- Copies a notification window's visible text to the system clipboard.
+--- @param win integer
+local function copy_win_text(win)
+	if not vim.api.nvim_win_is_valid(win) then
+		return
+	end
+	local buf = vim.api.nvim_win_get_buf(win)
+	if not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	local text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+	vim.fn.setreg("+", text)
+	vim.fn.setreg("*", text)
+	vim.api.nvim_echo({ { "📋 Notification copied to clipboard!", "DiagnosticInfo" } }, false, {})
+end
+
+local LEFTMOUSE = vim.api.nvim_replace_termcodes("<LeftMouse>", true, true, true)
+
+--- Registers a single global click watcher, once. A `focusable = false`
+--- floating window never receives focus, so its own buffer-local
+--- `<LeftMouse>` mapping never fires -- the click just lands wherever focus
+--- already was. `getmousepos()` does a real hit-test by screen position
+--- instead, so this catches the click regardless of focus and copies
+--- instantly, no window switch required.
+local function install_click_watcher()
+	if M._click_watcher_installed then
+		return
+	end
+	M._click_watcher_installed = true
+	vim.on_key(function(key)
+		if key ~= LEFTMOUSE then
+			return
+		end
+		local pos = vim.fn.getmousepos()
+		if not pos or not pos.winid or pos.winid == 0 then
+			return
+		end
+		for _, item in ipairs(M.active_wins) do
+			if item.win == pos.winid then
+				copy_win_text(item.win)
+				return
+			end
+		end
+	end, vim.api.nvim_create_namespace("handmadedeps_notify_click"))
+end
+
 --- Configures the engine. Mirrors nvim-notify's `setup(opts)`.
 --- @param opts table|nil
 function M.setup(opts)
 	M._opts = opts or {}
+	install_click_watcher()
 end
 
 setmetatable(M, {
