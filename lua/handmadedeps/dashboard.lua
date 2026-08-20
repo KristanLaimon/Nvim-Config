@@ -39,9 +39,13 @@ local function center(text, width)
 end
 
 --- Renders the current theme state into `lines` and per-line highlight groups.
+--- Centers against the dashboard's own window, not the whole editor, so it
+--- stays centered when a sidebar or split shrinks that window.
 local function build()
 	local dash = M.themes.dashboard
-	local width = vim.o.columns
+	local has_win = state.win and vim.api.nvim_win_is_valid(state.win)
+	local width = has_win and vim.api.nvim_win_get_width(state.win) or vim.o.columns
+	local win_height = has_win and vim.api.nvim_win_get_height(state.win) or (vim.o.lines - vim.o.cmdheight - 2)
 	local lines, hls = {}, {}
 
 	local header_hl = dash.section.header.opts and dash.section.header.opts.hl
@@ -66,8 +70,7 @@ local function build()
 	table.insert(lines, center(dash.section.footer.val, width))
 	table.insert(hls, "Comment")
 
-	local height = vim.o.lines - vim.o.cmdheight - 2
-	local pad_top = math.max(0, math.floor((height - #lines) / 2))
+	local pad_top = math.max(0, math.floor((win_height - #lines) / 2))
 	local padded, padded_hls = {}, {}
 	for _ = 1, pad_top do
 		table.insert(padded, "")
@@ -287,6 +290,17 @@ function M.setup(_)
 	vim.api.nvim_create_user_command("Alpha", function()
 		M.start(true)
 	end, { desc = "Open the KRS dashboard" })
+
+	-- Re-centers when the dashboard's own window changes size, e.g. a sidebar
+	-- toggling, not just a full terminal resize (that's VimResized, handled
+	-- by the spec's own header-recompute callback which also calls redraw()).
+	vim.api.nvim_create_autocmd("WinResized", {
+		callback = function()
+			if state.buf and vim.bo[state.buf] and vim.bo[state.buf].filetype == "alpha" then
+				M.redraw()
+			end
+		end,
+	})
 
 	vim.api.nvim_create_autocmd("VimEnter", {
 		callback = function()
