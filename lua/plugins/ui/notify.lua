@@ -11,7 +11,8 @@
 
 return {
 	{
-		"rcarriga/nvim-notify",
+		name = "handmadedeps-notify",
+		dir = require("krs.core.lazyspec").for_module(),
 		lazy = false,
 		priority = 1000,
 		opts = function()
@@ -54,7 +55,7 @@ return {
 						local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 						local full_text = table.concat(lines, "\n")
 						local copy_fn = function()
-							local ok_hist, history = pcall(function() return require("notify").history() end)
+							local ok_hist, history = pcall(function() return require("handmadedeps.notify").history() end)
 							local text_to_copy = full_text
 							if ok_hist and type(history) == "table" and #history > 0 then
 								local last = history[#history]
@@ -74,7 +75,7 @@ return {
 			}
 		end,
 		config = function(_, opts)
-			local ok, notify = pcall(require, "notify")
+			local ok, notify = pcall(require, "handmadedeps.notify")
 			if ok then
 				local final_opts = type(opts) == "function" and opts() or opts
 				notify.setup(final_opts)
@@ -89,7 +90,7 @@ return {
 							local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 							local full_text = table.concat(lines, "\n")
 							local copy_fn = function()
-								local ok_hist, history = pcall(function() return require("notify").history() end)
+								local ok_hist, history = pcall(function() return require("handmadedeps.notify").history() end)
 								local text_to_copy = full_text
 								if ok_hist and type(history) == "table" and #history > 0 then
 									local last = history[#history]
@@ -128,7 +129,7 @@ return {
 				})
 
 				local copy_last_notification = function()
-					local ok_hist, history = pcall(function() return require("notify").history() end)
+					local ok_hist, history = pcall(function() return require("handmadedeps.notify").history() end)
 					local text_to_copy = nil
 					if ok_hist and type(history) == "table" and #history > 0 then
 						local last = history[#history]

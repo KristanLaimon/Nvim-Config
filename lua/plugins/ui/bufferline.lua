@@ -27,9 +27,8 @@ local function close_buffer(bufnr)
 end
 
 return {
-	"akinsho/bufferline.nvim",
-	version = "*",
-	dependencies = { "nvim-tree/nvim-web-devicons" },
+	name = "handmadedeps-bufferline",
+	dir = require("krs.core.lazyspec").for_module(),
 	config = function()
 		local function apply_tab_highlights()
 			local white_selected = { fg = "#ffffff", bold = true }
@@ -49,7 +48,7 @@ return {
 			vim.api.nvim_set_hl(0, "BufferLineIndicatorVisible", white_icon)
 		end
 
-		require("bufferline").setup({
+		require("handmadedeps.bufferline").setup({
 			options = {
 				mode = "buffers",
 				separator_style = "slant",
@@ -58,7 +57,7 @@ return {
 				show_close_icon = false,
 				groups = {
 					items = {
-						require("bufferline.groups").builtin.pinned,
+						require("handmadedeps.bufferline").groups.builtin.pinned,
 					},
 				},
 				close_command = close_buffer,

@@ -28,11 +28,11 @@ local settings = {
 }
 
 return {
-	"goolord/alpha-nvim",
-	dependencies = { "nvim-tree/nvim-web-devicons" },
+	name = "handmadedeps-dashboard",
+	dir = require("krs.core.lazyspec").for_module(),
 	config = function()
-		local alpha = require("alpha")
-		local dashboard = require("alpha.themes.dashboard")
+		local alpha = require("handmadedeps.dashboard")
+		local dashboard = alpha.themes.dashboard
 		local env = env_lib.detect()
 
 		--- Returns an ASCII banner adapted to the current terminal width & environment.

@@ -133,17 +133,13 @@ function M.toggle_pin()
 
 	-- Toggle in bufferline
 	pcall(function()
-		local groups = require("bufferline.groups")
-		if groups then
-			if is_now_pinned then
-				groups.add_element("pinned", { id = bufnr })
-			else
-				groups.remove_element("pinned", { id = bufnr })
-			end
-			pcall(function()
-				require("bufferline.ui").refresh()
-			end)
+		local bufferline = require("handmadedeps.bufferline")
+		if is_now_pinned then
+			bufferline.groups.add_element("pinned", { id = bufnr })
+		else
+			bufferline.groups.remove_element("pinned", { id = bufnr })
 		end
+		bufferline.ui.refresh()
 	end)
 
 	local fname = vim.fn.fnamemodify(abs_path, ":t")
@@ -229,22 +225,18 @@ function M.restore_pins(opts)
 
 	-- Apply pin state in bufferline for open buffers
 	pcall(function()
-		local groups = require("bufferline.groups")
-		if groups then
-			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(bufnr) and M.is_code_buffer(bufnr) then
-					local bpath = path.normalize(vim.api.nvim_buf_get_name(bufnr))
-					if pin_map[bpath] then
-						groups.add_element("pinned", { id = bufnr })
-					else
-						groups.remove_element("pinned", { id = bufnr })
-					end
+		local bufferline = require("handmadedeps.bufferline")
+		for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_valid(bufnr) and M.is_code_buffer(bufnr) then
+				local bpath = path.normalize(vim.api.nvim_buf_get_name(bufnr))
+				if pin_map[bpath] then
+					bufferline.groups.add_element("pinned", { id = bufnr })
+				else
+					bufferline.groups.remove_element("pinned", { id = bufnr })
 				end
 			end
-			pcall(function()
-				require("bufferline.ui").refresh()
-			end)
 		end
+		bufferline.ui.refresh()
 	end)
 
 	-- Focus the first pinned tab (leftmost) if applicable

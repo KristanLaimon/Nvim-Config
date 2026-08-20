@@ -18,26 +18,27 @@ return {
 		end,
 	},
 	{
-		"nvim-lualine/lualine.nvim",
-		dependencies = {
-			"nvim-tree/nvim-web-devicons",
-		},
-		opts = function()
+		name = "handmadedeps-statusline",
+		dir = require("krs.core.lazyspec").for_module(),
+		config = function()
 			local has_picker, picker = pcall(require, "plugins.krs.statusline_picker")
+			local config
 			if has_picker then
-				return picker.get_lualine_config()
+				config = picker.get_lualine_config()
+			else
+				config = {
+					options = { theme = "auto", globalstatus = true },
+					sections = {
+						lualine_a = { "mode" },
+						lualine_b = { "branch", "diff", "diagnostics" },
+						lualine_c = { "filename" },
+						lualine_x = { "filetype" },
+						lualine_y = { "progress" },
+						lualine_z = { "location" },
+					},
+				}
 			end
-			return {
-				options = { theme = "auto", globalstatus = true },
-				sections = {
-					lualine_a = { "mode" },
-					lualine_b = { "branch", "diff", "diagnostics" },
-					lualine_c = { "filename" },
-					lualine_x = { "filetype" },
-					lualine_y = { "progress" },
-					lualine_z = { "location" },
-				},
-			}
+			require("handmadedeps.statusline").setup(config)
 		end,
 	},
 }

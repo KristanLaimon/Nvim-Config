@@ -1,7 +1,7 @@
 # 📑 Implementation Plan: Local Handmade Dependencies (`handmadedeps`) Refactor
 
 ## 🎯 Goal & Architecture Overview
-This refactor eliminates ~25 non-essential external plugins and replaces them with a zero-dependency, pure Lua framework located under `lua/handmadedeps/`. 
+This refactor eliminates ~25 non-essential external plugins and replaces them with a zero-dependency, pure Lua framework located under `lua/handmadedeps/`.
 
 All work will be executed exclusively on a new git branch named `dependency-refactor`.
 
@@ -99,7 +99,7 @@ These external plugins will be **removed from `lazy.nvim`** and replaced with pu
 
 > [!IMPORTANT]
 > **Git Branch Isolation**:
-> All commits will be made strictly on the `dependency-refactor` branch. The `main` branch will remain untouched.
+> All commits will be made strictly on the `dependency-refactor-v2` branch. The `main` branch will remain untouched.
 
 > [!NOTE]
 > **Zero Visual or Behavioral Regression**:

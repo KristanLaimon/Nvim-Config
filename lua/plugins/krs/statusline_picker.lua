@@ -315,9 +315,9 @@ function M.set_theme(theme_name)
 	end
 
 	store.save(M.settings.store_file, { theme = theme_name })
-	local has_lualine, lualine = pcall(require, "lualine")
-	if has_lualine then
-		lualine.setup(M.get_lualine_config(theme_name))
+	local has_statusline, statusline = pcall(require, "handmadedeps.statusline")
+	if has_statusline then
+		statusline.setup(M.get_lualine_config(theme_name))
 	end
 	vim.notify("Statusline theme set to: " .. M.available_themes[theme_name], vim.log.levels.INFO)
 end
