@@ -301,13 +301,18 @@ function M.setup(spec)
 
 	-- Flipping 'showtabline'/'tabline' forces an immediate layout recalc.
 	-- Doing that synchronously mid-startup (before the first frame settles)
-	-- has been observed to race Neovide's blur-behind compositor call and
-	-- leave it stuck flat-transparent instead of blurred. Deferring one
-	-- tick puts it safely after that window.
-	vim.schedule(function()
-		vim.o.showtabline = M.opts.always_show_bufferline ~= false and 2 or 1
-		vim.o.tabline = "%!v:lua.require'handmadedeps.bufferline'.render()"
-	end)
+	-- races Neovide's blur-behind compositor call and can leave it stuck
+	-- flat-transparent instead of blurred. A same-tick vim.schedule() cut
+	-- the failure rate but didn't eliminate it; waiting for the GUI to
+	-- actually attach (UIEnter, same pattern config/options.lua uses for
+	-- this exact race) plus a short real delay gives it real margin.
+	local function apply()
+		vim.defer_fn(function()
+			vim.o.showtabline = M.opts.always_show_bufferline ~= false and 2 or 1
+			vim.o.tabline = "%!v:lua.require'handmadedeps.bufferline'.render()"
+		end, 30)
+	end
+	vim.api.nvim_create_autocmd({ "VimEnter", "UIEnter" }, { once = true, callback = apply })
 
 	vim.api.nvim_create_user_command("BufferLineCycleNext", function()
 		M.cycle(1)
