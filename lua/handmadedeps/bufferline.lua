@@ -241,7 +241,10 @@ function M.render()
 		end
 	end
 
-	parts[#parts + 1] = "%#BufferLineFill#" .. string.rep(" ", vim.o.columns)
+	-- No manual padding: a trailing highlight with no text already extends to
+	-- fill unclaimed width, and padding here would push the real tab content
+	-- past 'columns', triggering Vim's default (start-of-string) truncation.
+	parts[#parts + 1] = "%#BufferLineFill#"
 	return table.concat(parts)
 end
 
