@@ -13,7 +13,12 @@ local uv = vim.uv or vim.loop
 -- neovide_window_blurred); layering animated winblend on top of that has
 -- been observed to break Neovide's blur into flat transparency instead.
 -- Terminal Neovim has no such conflict, so it keeps the winblend fade.
-local SKIP_WINBLEND = vim.g.neovide ~= nil
+-- Checked live (not cached at require time): vim.g.neovide is set by the
+-- GUI client announcing itself and isn't guaranteed to exist yet when this
+-- module first loads, so caching it once could freeze in a false "false".
+local function skip_winblend()
+	return vim.g.neovide ~= nil
+end
 
 local M = {}
 
@@ -227,7 +232,7 @@ function M.notify(msg, level, opts)
 
 	pcall(vim.api.nvim_set_option_value, "wrap", true, { win = win })
 	pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = win })
-	if not SKIP_WINBLEND then
+	if not skip_winblend() then
 		pcall(vim.api.nvim_win_set_option, win, "winblend", static and 15 or 80)
 	end
 	for i, line in ipairs(lines) do
@@ -266,7 +271,7 @@ function M.notify(msg, level, opts)
 					focusable = false,
 					noautocmd = true,
 				})
-				if not SKIP_WINBLEND then
+				if not skip_winblend() then
 					pcall(vim.api.nvim_win_set_option, win, "winblend", math.max(0, blend))
 				end
 			end
@@ -324,7 +329,7 @@ function M.notify(msg, level, opts)
 					focusable = false,
 					noautocmd = true,
 				})
-				if not SKIP_WINBLEND then
+				if not skip_winblend() then
 					pcall(vim.api.nvim_win_set_option, win, "winblend", math.min(100, blend))
 				end
 			end
