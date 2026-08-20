@@ -30,9 +30,12 @@ function M.themes.dashboard.button(key, label, cmd)
 	return { key = key, label = label, cmd = cmd }
 end
 
+local function center_pad(text, width)
+	return math.max(0, math.floor((width - vim.fn.strdisplaywidth(text)) / 2))
+end
+
 local function center(text, width)
-	local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(text)) / 2))
-	return string.rep(" ", pad) .. text
+	return string.rep(" ", center_pad(text, width)) .. text
 end
 
 --- Renders the current theme state into `lines` and per-line highlight groups.
@@ -52,9 +55,10 @@ local function build()
 
 	local button_rows = {}
 	for _, btn in ipairs(dash.section.buttons.val) do
-		table.insert(lines, center(btn.label, width))
+		local text = string.format("[%s]  %s", btn.key, btn.label)
+		table.insert(lines, center(text, width))
 		table.insert(hls, nil)
-		button_rows[#lines] = btn
+		button_rows[#lines] = { btn = btn, col = center_pad(text, width) }
 		table.insert(lines, "")
 		table.insert(hls, nil)
 	end
@@ -81,12 +85,64 @@ local function build()
 	return padded, padded_hls, shifted_rows
 end
 
+--- Moves the cursor onto the given button row, at the button's text column.
+local function goto_row(row)
+	local entry = state.button_rows and state.button_rows[row]
+	if not entry or not (state.win and vim.api.nvim_win_is_valid(state.win)) then
+		return
+	end
+	pcall(vim.api.nvim_win_set_cursor, state.win, { row, entry.col })
+end
+
+--- Returns the sorted list of button row numbers.
+local function button_row_numbers()
+	local rows = {}
+	for row in pairs(state.button_rows or {}) do
+		table.insert(rows, row)
+	end
+	table.sort(rows)
+	return rows
+end
+
+--- Moves the cursor to the next/previous button row, wrapping around.
+local function step_row(direction)
+	local rows = button_row_numbers()
+	if #rows == 0 then
+		return
+	end
+	local cur = vim.api.nvim_win_get_cursor(0)[1]
+	local idx = 1
+	for i, r in ipairs(rows) do
+		if r == cur then
+			idx = i
+			break
+		end
+		if r > cur then
+			idx = direction > 0 and i or math.max(1, i - 1)
+			break
+		end
+		idx = i
+	end
+	local target = ((idx - 1 + direction) % #rows) + 1
+	goto_row(rows[target])
+end
+
+--- Activates the button on the current row, if any.
+local function activate_current()
+	local cur = vim.api.nvim_win_get_cursor(0)[1]
+	local entry = state.button_rows and state.button_rows[cur]
+	if entry then
+		vim.cmd(entry.btn.cmd)
+	end
+end
+
 --- Redraws dashboard content into the existing buffer, if still open.
 function M.redraw()
 	if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
 		return
 	end
 	local lines, hls, button_rows = build()
+	state.button_rows = button_rows
 
 	vim.bo[state.buf].modifiable = true
 	vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
@@ -99,13 +155,21 @@ function M.redraw()
 		end
 	end
 
-	for _, key in ipairs({ "f", "p", "s", "w", "e", "m", "q", "l" }) do
+	for _, key in ipairs(state.bound_keys or {}) do
 		pcall(vim.keymap.del, "n", key, { buffer = state.buf })
 	end
-	for _, btn in pairs(button_rows) do
+	state.bound_keys = {}
+	for _, entry in pairs(button_rows) do
+		local btn = entry.btn
 		vim.keymap.set("n", btn.key, function()
 			vim.cmd(btn.cmd)
 		end, { buffer = state.buf, silent = true, nowait = true })
+		table.insert(state.bound_keys, btn.key)
+	end
+
+	local rows = button_row_numbers()
+	if rows[1] then
+		goto_row(rows[1])
 	end
 end
 
@@ -131,17 +195,74 @@ function M.start(force)
 	vim.api.nvim_set_current_buf(buf)
 	state.buf = buf
 	state.win = vim.api.nvim_get_current_win()
+	-- A fresh buffer has no keymaps yet; forget the previous buffer's bound
+	-- button keys so redraw() doesn't try to delete them here.
+	state.bound_keys = nil
 
 	for opt, val in pairs({
 		number = false,
 		relativenumber = false,
-		cursorline = false,
+		cursorline = true,
 		signcolumn = "no",
 		wrap = false,
 		spell = false,
 		list = false,
 	}) do
 		pcall(vim.api.nvim_set_option_value, opt, val, { win = state.win })
+	end
+
+	-- Confines the cursor to button rows/columns: any stray movement snaps back.
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		buffer = buf,
+		callback = function()
+			if not (state.win and vim.api.nvim_win_is_valid(state.win)) then
+				return
+			end
+			local pos = vim.api.nvim_win_get_cursor(state.win)
+			local entry = state.button_rows and state.button_rows[pos[1]]
+			if not entry then
+				local rows = button_row_numbers()
+				local nearest = rows[1]
+				for _, r in ipairs(rows) do
+					if math.abs(r - pos[1]) < math.abs(nearest - pos[1]) then
+						nearest = r
+					end
+				end
+				if nearest then
+					goto_row(nearest)
+				end
+				return
+			end
+			if pos[2] ~= entry.col then
+				goto_row(pos[1])
+			end
+		end,
+	})
+
+	-- vim.keymap.set consumes (mutates) its opts table, so each call needs its own.
+	local function buf_opts()
+		return { buffer = buf, silent = true, nowait = true }
+	end
+
+	for _, key in ipairs({ "j", "<Down>" }) do
+		vim.keymap.set("n", key, function()
+			step_row(1)
+		end, buf_opts())
+	end
+	for _, key in ipairs({ "k", "<Up>" }) do
+		vim.keymap.set("n", key, function()
+			step_row(-1)
+		end, buf_opts())
+	end
+	vim.keymap.set("n", "<Tab>", function()
+		step_row(1)
+	end, buf_opts())
+	vim.keymap.set("n", "<S-Tab>", function()
+		step_row(-1)
+	end, buf_opts())
+	vim.keymap.set("n", "<CR>", activate_current, buf_opts())
+	for _, key in ipairs({ "h", "l", "<Left>", "<Right>", "w", "b", "e", "0", "$", "^", "gg", "G" }) do
+		pcall(vim.keymap.set, "n", key, "<Nop>", buf_opts())
 	end
 
 	M.redraw()
