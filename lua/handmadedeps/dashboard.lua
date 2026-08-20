@@ -272,8 +272,19 @@ function M.start(force)
 		step_row(-1)
 	end, buf_opts())
 	vim.keymap.set("n", "<CR>", activate_current, buf_opts())
+
+	-- A button's own letter (redraw() binds it below) always wins, so skip
+	-- disabling motion on any key a real button already claims -- setting
+	-- both here and in redraw() on the same key/buffer is a genuine keymap
+	-- collision even though the button-bound one ends up shadowing this one.
+	local button_keys = {}
+	for _, btn in ipairs(M.themes.dashboard.section.buttons.val) do
+		button_keys[btn.key] = true
+	end
 	for _, key in ipairs({ "h", "l", "<Left>", "<Right>", "w", "b", "e", "0", "$", "^", "gg", "G" }) do
-		pcall(vim.keymap.set, "n", key, "<Nop>", buf_opts())
+		if not button_keys[key] then
+			pcall(vim.keymap.set, "n", key, "<Nop>", buf_opts())
+		end
 	end
 
 	M.redraw()
