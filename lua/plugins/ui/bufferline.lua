@@ -30,24 +30,6 @@ return {
 	name = "handmadedeps-bufferline",
 	dir = require("krs.core.lazyspec").for_module(),
 	config = function()
-		local function apply_tab_highlights()
-			local white_selected = { fg = "#ffffff", bold = true }
-			local white_icon = { fg = "#ffffff" }
-
-			vim.api.nvim_set_hl(0, "BufferLineBufferSelected", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineBufferVisible", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineNumbersSelected", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineNumbersVisible", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineCloseButtonSelected", white_icon)
-			vim.api.nvim_set_hl(0, "BufferLineCloseButtonVisible", white_icon)
-			vim.api.nvim_set_hl(0, "BufferLineDuplicateSelected", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineDuplicateVisible", white_selected)
-			vim.api.nvim_set_hl(0, "BufferLineModifiedSelected", white_icon)
-			vim.api.nvim_set_hl(0, "BufferLineModifiedVisible", white_icon)
-			vim.api.nvim_set_hl(0, "BufferLineIndicatorSelected", white_icon)
-			vim.api.nvim_set_hl(0, "BufferLineIndicatorVisible", white_icon)
-		end
-
 		require("handmadedeps.bufferline").setup({
 			options = {
 				mode = "buffers",
@@ -88,26 +70,6 @@ return {
 					return not name:match("[/\\]node_modules[/\\]")
 				end,
 			},
-			highlights = {
-				buffer_selected = { fg = "#ffffff", bold = true },
-				buffer_visible = { fg = "#ffffff", bold = true },
-				numbers_selected = { fg = "#ffffff", bold = true },
-				numbers_visible = { fg = "#ffffff", bold = true },
-				close_button_selected = { fg = "#ffffff" },
-				close_button_visible = { fg = "#ffffff" },
-				duplicate_selected = { fg = "#ffffff", bold = true },
-				duplicate_visible = { fg = "#ffffff", bold = true },
-				modified_selected = { fg = "#ffffff" },
-				modified_visible = { fg = "#ffffff" },
-				indicator_selected = { fg = "#ffffff" },
-				indicator_visible = { fg = "#ffffff" },
-			},
-		})
-
-		apply_tab_highlights()
-		vim.api.nvim_create_autocmd("ColorScheme", {
-			group = vim.api.nvim_create_augroup("KrsBufferlineKeepWhiteCurrentTab", { clear = true }),
-			callback = apply_tab_highlights,
 		})
 
 		vim.keymap.set(

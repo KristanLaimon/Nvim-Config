@@ -15,6 +15,42 @@ M.order = {}
 
 local SLANT_RIGHT = "\u{e0b8}"
 
+local function get_hl(name)
+	local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+	if ok and hl and next(hl) then
+		return hl
+	end
+	return nil
+end
+
+local function hex(n)
+	return n and string.format("#%06x", n) or nil
+end
+
+--- (Re)derives the tab highlight groups from the active colorscheme: a bright
+--- background for the selected tab, a dim one for inactive tabs, matching
+--- backgrounds for their close icons, and a fill for unclaimed tabline space.
+--- These are separate from `BufferLineBufferSelected/Visible` (which the
+--- spec's `apply_tab_highlights()` forces to plain white text) so the tabs
+--- keep visible contrast even with that override in place.
+local function ensure_highlights()
+	local normal = get_hl("Normal")
+	local statusline = get_hl("StatusLine") or get_hl("TabLineFill") or {}
+	local sel_bg = hex(normal and normal.bg) or "#282c34"
+	local sel_fg = hex(normal and normal.fg) or "#ffffff"
+	local dim_bg = hex(statusline.bg) or "#21252b"
+	local dim_fg = hex((get_hl("Comment") or {}).fg) or "#5c6370"
+	local accent = hex((get_hl("Function") or get_hl("Directory") or {}).fg) or "#61afef"
+
+	vim.api.nvim_set_hl(0, "HmBufferLineSelected", { fg = accent, bg = sel_bg, bold = true })
+	vim.api.nvim_set_hl(0, "HmBufferLineVisible", { fg = dim_fg, bg = dim_bg })
+	vim.api.nvim_set_hl(0, "HmBufferLineCloseSelected", { fg = sel_fg, bg = sel_bg })
+	vim.api.nvim_set_hl(0, "HmBufferLineCloseVisible", { fg = dim_fg, bg = dim_bg })
+	vim.api.nvim_set_hl(0, "BufferLineFill", { bg = dim_bg })
+	vim.api.nvim_set_hl(0, "HmBufferLineSlantSelected", { fg = sel_bg, bg = dim_bg })
+	vim.api.nvim_set_hl(0, "HmBufferLineSlantVisible", { fg = dim_bg, bg = dim_bg })
+end
+
 M.groups = {
 	builtin = { pinned = { id = "pinned" } },
 }
@@ -164,12 +200,19 @@ function M.handle_close_click(minwid)
 	end
 end
 
---- Finds the width/text of a configured offset (e.g. the neo-tree sidebar).
+--- Finds the width/text of a configured offset (e.g. the neo-tree sidebar),
+--- padded to the sidebar's exact width so tabs start flush with the code
+--- window instead of overlapping the tree.
 local function active_offset()
 	for _, offset in ipairs(M.opts.offsets or {}) do
 		for _, win in ipairs(vim.api.nvim_list_wins()) do
 			if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == offset.filetype then
-				return vim.api.nvim_win_get_width(win) + 1, offset.text, offset.highlight
+				local width = vim.api.nvim_win_get_width(win) + 1
+				local text = offset.text or ""
+				local pad = math.max(0, width - vim.fn.strdisplaywidth(text))
+				local left_pad = offset.text_align == "center" and math.floor(pad / 2) or 0
+				text = string.rep(" ", left_pad) .. text .. string.rep(" ", pad - left_pad)
+				return width, text, offset.highlight
 			end
 		end
 	end
@@ -178,15 +221,16 @@ end
 
 --- Builds the full `tabline` string for the current redraw.
 function M.render()
+	ensure_highlights()
 	local list = ordered_buffers()
 	local current = vim.api.nvim_get_current_buf()
 	local has_devicons, devicons = pcall(require, "nvim-web-devicons")
 
 	local parts = {}
 
-	local offset_w, offset_text, offset_hl = active_offset()
+	local offset_w, offset_text = active_offset()
 	if offset_w > 0 and offset_text then
-		parts[#parts + 1] = string.format("%%#%s#%s%%#BufferLineFill#", offset_hl or "Directory", offset_text)
+		parts[#parts + 1] = string.format("%%#BufferLineFill#%s", offset_text)
 	end
 
 	for i, bufnr in ipairs(list) do
@@ -206,20 +250,21 @@ function M.render()
 			end
 		end
 
-		local icon = ""
+		local icon, icon_hl = "", nil
 		if has_devicons then
-			local ic = devicons.get_icon(short, vim.fn.fnamemodify(short, ":e"), { default = true })
+			local ic, hl = devicons.get_icon(short, vim.fn.fnamemodify(short, ":e"), { default = true })
 			if ic then
-				icon = ic .. " "
+				icon, icon_hl = ic, hl
 			end
 		end
 
 		local pin_icon = M.pinned[bufnr] and "📌 " or ""
 		local modified_icon = vim.bo[bufnr].modified and " " or " "
-		local hl_buf = is_selected and "BufferLineBufferSelected" or "BufferLineBufferVisible"
-		local hl_close = is_selected and "BufferLineCloseButtonSelected" or "BufferLineCloseButtonVisible"
+		local hl_buf = is_selected and "HmBufferLineSelected" or "HmBufferLineVisible"
+		local hl_close = is_selected and "HmBufferLineCloseSelected" or "HmBufferLineCloseVisible"
 
-		local label = string.format(" %s%s%s%s", pin_icon, icon, display, modified_icon)
+		local icon_span = icon ~= "" and string.format("%%#%s# %s%%#%s#", icon_hl or hl_buf, icon, hl_buf) or " "
+		local label = string.format("%s%s %s%s", pin_icon, icon_span, display, modified_icon)
 
 		parts[#parts + 1] = string.format(
 			"%%#%s#%%%d@v:lua.require'handmadedeps.bufferline'.handle_tab_click@%s%%X",
@@ -236,8 +281,9 @@ function M.render()
 			)
 		end
 
+		local slant_hl = is_selected and "HmBufferLineSlantSelected" or "HmBufferLineSlantVisible"
 		if i < #list then
-			parts[#parts + 1] = string.format("%%#BufferLineFill#%s", SLANT_RIGHT)
+			parts[#parts + 1] = string.format("%%#%s#%s", slant_hl, SLANT_RIGHT)
 		end
 	end
 
