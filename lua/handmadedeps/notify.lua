@@ -15,6 +15,17 @@ M.active_wins = {}
 M.history_list = {}
 M._opts = {}
 
+--- Stops and closes a libuv timer exactly once. A repeating timer's callback
+--- is deferred via vim.schedule_wrap, so several ticks can already be queued
+--- by the time the first one calls stop()+close() -- without this guard the
+--- next queued tick closes an already-closing handle and errors on repeat.
+local function safe_close_timer(timer)
+	if not timer:is_closing() then
+		timer:stop()
+		timer:close()
+	end
+end
+
 local function ease_in_out(t)
 	if t < 0.5 then
 		return 2 * t * t
@@ -63,6 +74,9 @@ function M.reposition_wins()
 				local step = 0
 				local timer = uv.new_timer()
 				timer:start(0, 25, vim.schedule_wrap(function()
+					if timer:is_closing() then
+						return
+					end
 					step = step + 1
 					local t = math.min(1.0, step / steps)
 					local factor = ease_in_out(t)
@@ -78,8 +92,7 @@ function M.reposition_wins()
 						})
 					end
 					if step >= steps then
-						timer:stop()
-						timer:close()
+						safe_close_timer(timer)
 					end
 				end))
 			else
@@ -228,6 +241,9 @@ function M.notify(msg, level, opts)
 		local anim_step = 0
 		local anim_timer = uv.new_timer()
 		anim_timer:start(0, 20, vim.schedule_wrap(function()
+			if anim_timer:is_closing() then
+				return
+			end
 			anim_step = anim_step + 1
 			local t = math.min(1.0, anim_step / anim_steps)
 			local factor = ease_in_out(t)
@@ -245,8 +261,7 @@ function M.notify(msg, level, opts)
 				pcall(vim.api.nvim_win_set_option, win, "winblend", math.max(0, blend))
 			end
 			if anim_step >= anim_steps then
-				anim_timer:stop()
-				anim_timer:close()
+				safe_close_timer(anim_timer)
 			end
 		end))
 	end
@@ -282,6 +297,9 @@ function M.notify(msg, level, opts)
 		local exit_end_col = vim.o.columns
 
 		exit_timer:start(0, 20, vim.schedule_wrap(function()
+			if exit_timer:is_closing() then
+				return
+			end
 			exit_step = exit_step + 1
 			local t = math.min(1.0, exit_step / exit_steps)
 			local factor = ease_in_out(t)
@@ -300,8 +318,7 @@ function M.notify(msg, level, opts)
 			end
 
 			if exit_step >= exit_steps then
-				exit_timer:stop()
-				exit_timer:close()
+				safe_close_timer(exit_timer)
 				if vim.api.nvim_win_is_valid(win) then
 					pcall(vim.api.nvim_win_close, win, true)
 				end
