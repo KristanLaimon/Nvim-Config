@@ -296,7 +296,7 @@ function M.setup(_)
 	-- by the spec's own header-recompute callback which also calls redraw()).
 	vim.api.nvim_create_autocmd("WinResized", {
 		callback = function()
-			if state.buf and vim.bo[state.buf] and vim.bo[state.buf].filetype == "alpha" then
+			if state.buf and vim.api.nvim_buf_is_valid(state.buf) and vim.bo[state.buf].filetype == "alpha" then
 				M.redraw()
 			end
 		end,
