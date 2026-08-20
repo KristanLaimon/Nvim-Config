@@ -219,6 +219,81 @@ local function active_offset()
 	return 0, nil, nil
 end
 
+--- Resolves a buffer's display name, honouring the deleted-file marker and
+--- the caller's `name_formatter`. Pure aside from the two read-only lookups.
+--- @param bufnr integer
+--- @return string short_name, string display_name
+local function resolve_display_name(bufnr)
+	local name = vim.api.nvim_buf_get_name(bufnr)
+	local short = name ~= "" and vim.fn.fnamemodify(name, ":t") or "[No Name]"
+
+	local display = short
+	if _G.Is_File_Deleted and _G.Is_File_Deleted(bufnr) then
+		display = "[D] " .. short
+	end
+	if M.opts.name_formatter then
+		local ok, res = pcall(M.opts.name_formatter, { bufnr = bufnr, name = short })
+		if ok and res then
+			display = res
+		end
+	end
+	return short, display
+end
+
+--- Builds one tab's full markup: the clickable label span, its close-icon
+--- span (if enabled), and the trailing separator glyph before the next tab.
+--- @param bufnr integer
+--- @param is_selected boolean
+--- @param is_last boolean
+--- @param devicons table|nil The `nvim-web-devicons` module, if available.
+--- @return string
+local function render_tab(bufnr, is_selected, is_last, devicons)
+	local short, display = resolve_display_name(bufnr)
+
+	local icon, icon_hl = "", nil
+	if devicons then
+		local ic, hl = devicons.get_icon(short, vim.fn.fnamemodify(short, ":e"), { default = true })
+		if ic then
+			icon, icon_hl = ic, hl
+		end
+	end
+
+	local hl_buf = is_selected and "HmBufferLineSelected" or "HmBufferLineVisible"
+	local hl_close = is_selected and "HmBufferLineCloseSelected" or "HmBufferLineCloseVisible"
+	local slant_hl = is_selected and "HmBufferLineSlantSelected" or "HmBufferLineSlantVisible"
+
+	local pin_icon = M.pinned[bufnr] and "📌 " or ""
+	local modified_icon = vim.bo[bufnr].modified and " " or " "
+	local icon_span = icon ~= "" and string.format("%%#%s# %s%%#%s#", icon_hl or hl_buf, icon, hl_buf) or " "
+	local label = string.format("%s%s %s%s", pin_icon, icon_span, display, modified_icon)
+
+	local parts = {
+		string.format(
+			"%%#%s#%%%d@v:lua.require'handmadedeps.bufferline'.handle_tab_click@%s%%X",
+			hl_buf,
+			bufnr,
+			label
+		),
+	}
+
+	if M.opts.show_buffer_close_icons ~= false then
+		table.insert(
+			parts,
+			string.format(
+				"%%#%s#%%%d@v:lua.require'handmadedeps.bufferline'.handle_close_click@✗ %%X",
+				hl_close,
+				bufnr
+			)
+		)
+	end
+
+	if not is_last then
+		table.insert(parts, string.format("%%#%s#%s", slant_hl, SLANT_RIGHT))
+	end
+
+	return table.concat(parts)
+end
+
 --- Builds the full `tabline` string for the current redraw.
 function M.render()
 	ensure_highlights()
@@ -234,57 +309,7 @@ function M.render()
 	end
 
 	for i, bufnr in ipairs(list) do
-		local name = vim.api.nvim_buf_get_name(bufnr)
-		local short = name ~= "" and vim.fn.fnamemodify(name, ":t") or "[No Name]"
-		local is_selected = bufnr == current
-		local is_deleted = _G.Is_File_Deleted and _G.Is_File_Deleted(bufnr)
-
-		local display = short
-		if is_deleted then
-			display = "[D] " .. short
-		end
-		if M.opts.name_formatter then
-			local ok, res = pcall(M.opts.name_formatter, { bufnr = bufnr, name = short })
-			if ok and res then
-				display = res
-			end
-		end
-
-		local icon, icon_hl = "", nil
-		if has_devicons then
-			local ic, hl = devicons.get_icon(short, vim.fn.fnamemodify(short, ":e"), { default = true })
-			if ic then
-				icon, icon_hl = ic, hl
-			end
-		end
-
-		local pin_icon = M.pinned[bufnr] and "📌 " or ""
-		local modified_icon = vim.bo[bufnr].modified and " " or " "
-		local hl_buf = is_selected and "HmBufferLineSelected" or "HmBufferLineVisible"
-		local hl_close = is_selected and "HmBufferLineCloseSelected" or "HmBufferLineCloseVisible"
-
-		local icon_span = icon ~= "" and string.format("%%#%s# %s%%#%s#", icon_hl or hl_buf, icon, hl_buf) or " "
-		local label = string.format("%s%s %s%s", pin_icon, icon_span, display, modified_icon)
-
-		parts[#parts + 1] = string.format(
-			"%%#%s#%%%d@v:lua.require'handmadedeps.bufferline'.handle_tab_click@%s%%X",
-			hl_buf,
-			bufnr,
-			label
-		)
-
-		if M.opts.show_buffer_close_icons ~= false then
-			parts[#parts + 1] = string.format(
-				"%%#%s#%%%d@v:lua.require'handmadedeps.bufferline'.handle_close_click@✗ %%X",
-				hl_close,
-				bufnr
-			)
-		end
-
-		local slant_hl = is_selected and "HmBufferLineSlantSelected" or "HmBufferLineSlantVisible"
-		if i < #list then
-			parts[#parts + 1] = string.format("%%#%s#%s", slant_hl, SLANT_RIGHT)
-		end
+		parts[#parts + 1] = render_tab(bufnr, bufnr == current, i == #list, has_devicons and devicons or nil)
 	end
 
 	-- No manual padding: a trailing highlight with no text already extends to
