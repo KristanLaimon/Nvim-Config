@@ -30,6 +30,40 @@ function M.themes.dashboard.button(key, label, cmd)
 	return { key = key, label = label, cmd = cmd }
 end
 
+local hover_ns = vim.api.nvim_create_namespace("handmadedeps_dashboard_hover")
+local hover_extmark = nil
+
+--- Derives the hover-row highlight from the colorscheme's own CursorLine,
+--- as an extmark instead of the real 'cursorline' window option -- a
+--- full-width option that Neovim/Neovide has to redraw specially turned out
+--- to collide with Neovide's blur compositor (see git log for this file).
+local function ensure_hover_highlight()
+	local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "CursorLine", link = false })
+	if ok and hl and next(hl) then
+		vim.api.nvim_set_hl(0, "HmDashboardHover", hl)
+	else
+		vim.api.nvim_set_hl(0, "HmDashboardHover", { bg = "#3a3f4b" })
+	end
+end
+
+--- Moves the single-row hover highlight to `row` (1-indexed buffer line).
+local function set_hover_row(row)
+	if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
+		return
+	end
+	ensure_hover_highlight()
+	if hover_extmark then
+		pcall(vim.api.nvim_buf_del_extmark, state.buf, hover_ns, hover_extmark)
+	end
+	local ok, id = pcall(vim.api.nvim_buf_set_extmark, state.buf, hover_ns, row - 1, 0, {
+		end_row = row,
+		hl_group = "HmDashboardHover",
+		hl_eol = true,
+		priority = 1,
+	})
+	hover_extmark = ok and id or nil
+end
+
 local function center_pad(text, width)
 	return math.max(0, math.floor((width - vim.fn.strdisplaywidth(text)) / 2))
 end
@@ -89,9 +123,17 @@ local function build()
 end
 
 --- Moves the cursor onto the given button row, at the button's text column.
+--- Skips the actual cursor-set call when already there: repeatedly writing
+--- the same position still fires CursorMoved and forces a redraw, which is
+--- wasted work and was implicated in the Neovide blur-compositor collision.
 local function goto_row(row)
 	local entry = state.button_rows and state.button_rows[row]
 	if not entry or not (state.win and vim.api.nvim_win_is_valid(state.win)) then
+		return
+	end
+	set_hover_row(row)
+	local current = vim.api.nvim_win_get_cursor(state.win)
+	if current[1] == row and current[2] == entry.col then
 		return
 	end
 	pcall(vim.api.nvim_win_set_cursor, state.win, { row, entry.col })
@@ -209,11 +251,12 @@ function M.start(force)
 	-- A fresh buffer has no keymaps yet; forget the previous buffer's bound
 	-- button keys so redraw() doesn't try to delete them here.
 	state.bound_keys = nil
+	hover_extmark = nil
 
 	for opt, val in pairs({
 		number = false,
 		relativenumber = false,
-		cursorline = true,
+		cursorline = false,
 		signcolumn = "no",
 		wrap = false,
 		spell = false,
