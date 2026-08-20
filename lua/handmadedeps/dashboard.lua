@@ -30,13 +30,17 @@ function M.themes.dashboard.button(key, label, cmd)
 	return { key = key, label = label, cmd = cmd }
 end
 
+-- ============================================================================
+-- Hover highlight
+-- ============================================================================
+-- An extmark-based single-row highlight, not the 'cursorline' window option:
+-- that full-width option is redrawn specially by Neovim/Neovide and turned
+-- out to collide with Neovide's blur compositor.
+
 local hover_ns = vim.api.nvim_create_namespace("handmadedeps_dashboard_hover")
 local hover_extmark = nil
 
---- Derives the hover-row highlight from the colorscheme's own CursorLine,
---- as an extmark instead of the real 'cursorline' window option -- a
---- full-width option that Neovim/Neovide has to redraw specially turned out
---- to collide with Neovide's blur compositor (see git log for this file).
+--- Derives the hover-row highlight from the colorscheme's own CursorLine.
 local function ensure_hover_highlight()
 	local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "CursorLine", link = false })
 	if ok and hl and next(hl) then
@@ -64,6 +68,14 @@ local function set_hover_row(row)
 	hover_extmark = ok and id or nil
 end
 
+-- ============================================================================
+-- Content layout
+-- ============================================================================
+-- Split in two: render_content() turns the theme state into lines/highlights
+-- at the dashboard's natural (unpadded) size, and pad_vertically() centers
+-- that block in the window. Kept separate so "what the dashboard says" and
+-- "where it sits in the window" can each be reasoned about on their own.
+
 local function center_pad(text, width)
 	return math.max(0, math.floor((width - vim.fn.strdisplaywidth(text)) / 2))
 end
@@ -72,14 +84,11 @@ local function center(text, width)
 	return string.rep(" ", center_pad(text, width)) .. text
 end
 
---- Renders the current theme state into `lines` and per-line highlight groups.
---- Centers against the dashboard's own window, not the whole editor, so it
---- stays centered when a sidebar or split shrinks that window.
-local function build()
+--- Renders header/buttons/footer into left-to-right-centered lines.
+--- @param width integer
+--- @return string[] lines, (string|nil)[] hls, table<integer, table> button_rows
+local function render_content(width)
 	local dash = M.themes.dashboard
-	local has_win = state.win and vim.api.nvim_win_is_valid(state.win)
-	local width = has_win and vim.api.nvim_win_get_width(state.win) or vim.o.columns
-	local win_height = has_win and vim.api.nvim_win_get_height(state.win) or (vim.o.lines - vim.o.cmdheight - 2)
 	local lines, hls = {}, {}
 
 	local header_hl = dash.section.header.opts and dash.section.header.opts.hl
@@ -104,13 +113,24 @@ local function build()
 	table.insert(lines, center(dash.section.footer.val, width))
 	table.insert(hls, "Comment")
 
+	return lines, hls, button_rows
+end
+
+--- Prepends blank lines so `lines` sits vertically centered in `win_height`,
+--- shifting `button_rows`' row numbers to match.
+--- @param lines string[]
+--- @param hls (string|nil)[]
+--- @param button_rows table<integer, table>
+--- @param win_height integer
+--- @return string[] lines, (string|nil)[] hls, table<integer, table> button_rows
+local function pad_vertically(lines, hls, button_rows, win_height)
 	local pad_top = math.max(0, math.floor((win_height - #lines) / 2))
-	local padded, padded_hls = {}, {}
+
+	local padded, padded_hls, shifted_rows = {}, {}, {}
 	for _ = 1, pad_top do
 		table.insert(padded, "")
 		table.insert(padded_hls, nil)
 	end
-	local shifted_rows = {}
 	for i, l in ipairs(lines) do
 		table.insert(padded, l)
 		table.insert(padded_hls, hls[i])
@@ -121,6 +141,23 @@ local function build()
 
 	return padded, padded_hls, shifted_rows
 end
+
+--- Renders the current theme state, centered against the dashboard's own
+--- window (not the whole editor) so it stays centered when a sidebar or
+--- split shrinks that window.
+--- @return string[] lines, (string|nil)[] hls, table<integer, table> button_rows
+local function build()
+	local has_win = state.win and vim.api.nvim_win_is_valid(state.win)
+	local width = has_win and vim.api.nvim_win_get_width(state.win) or vim.o.columns
+	local win_height = has_win and vim.api.nvim_win_get_height(state.win) or (vim.o.lines - vim.o.cmdheight - 2)
+
+	local lines, hls, button_rows = render_content(width)
+	return pad_vertically(lines, hls, button_rows, win_height)
+end
+
+-- ============================================================================
+-- Cursor / navigation
+-- ============================================================================
 
 --- Moves the cursor onto the given button row, at the button's text column.
 --- Skips the actual cursor-set call when already there: repeatedly writing
@@ -189,14 +226,27 @@ local function activate_current()
 	end
 end
 
---- Redraws dashboard content into the existing buffer, if still open.
-function M.redraw()
-	if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
-		return
+--- Snaps a stray cursor position back onto the nearest button row. Used by
+--- the CursorMoved confinement handler when the cursor lands off any button.
+local function snap_to_nearest_row(row)
+	local rows = button_row_numbers()
+	local nearest = rows[1]
+	for _, r in ipairs(rows) do
+		if math.abs(r - row) < math.abs(nearest - row) then
+			nearest = r
+		end
 	end
-	local lines, hls, button_rows = build()
-	state.button_rows = button_rows
+	if nearest then
+		goto_row(nearest)
+	end
+end
 
+-- ============================================================================
+-- Redraw
+-- ============================================================================
+
+--- Writes `lines`/`hls` into the dashboard buffer, replacing its content.
+local function apply_buffer_content(lines, hls)
 	vim.bo[state.buf].modifiable = true
 	vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
 	vim.bo[state.buf].modifiable = false
@@ -207,7 +257,11 @@ function M.redraw()
 			pcall(vim.api.nvim_buf_add_highlight, state.buf, ns, hl, row - 1, 0, -1)
 		end
 	end
+end
 
+--- Rebinds each button's letter to its command, replacing whatever this
+--- buffer had bound to those letters last redraw.
+local function bind_button_keymaps(button_rows)
 	for _, key in ipairs(state.bound_keys or {}) do
 		pcall(vim.keymap.del, "n", key, { buffer = state.buf })
 	end
@@ -219,6 +273,18 @@ function M.redraw()
 		end, { buffer = state.buf, silent = true, nowait = true })
 		table.insert(state.bound_keys, btn.key)
 	end
+end
+
+--- Redraws dashboard content into the existing buffer, if still open.
+function M.redraw()
+	if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
+		return
+	end
+	local lines, hls, button_rows = build()
+	state.button_rows = button_rows
+
+	apply_buffer_content(lines, hls)
+	bind_button_keymaps(button_rows)
 
 	local rows = button_row_numbers()
 	if rows[1] then
@@ -226,19 +292,13 @@ function M.redraw()
 	end
 end
 
---- Opens (or refreshes) the dashboard in the current window.
---- @param force boolean|nil Open even if the current buffer holds real content.
-function M.start(force)
-	local cur = vim.api.nvim_get_current_buf()
-	if not force then
-		if vim.bo[cur].filetype == "alpha" then
-			return
-		end
-		if vim.api.nvim_buf_get_name(cur) ~= "" or vim.bo[cur].modified or vim.bo[cur].buftype ~= "" then
-			return
-		end
-	end
+-- ============================================================================
+-- Buffer / window setup
+-- ============================================================================
 
+--- Creates the scratch buffer the dashboard renders into and makes it current.
+--- @return integer buf
+local function create_dashboard_buffer()
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.bo[buf].buftype = "nofile"
 	vim.bo[buf].bufhidden = "wipe"
@@ -249,10 +309,16 @@ function M.start(force)
 	state.buf = buf
 	state.win = vim.api.nvim_get_current_win()
 	-- A fresh buffer has no keymaps yet; forget the previous buffer's bound
-	-- button keys so redraw() doesn't try to delete them here.
+	-- button keys so redraw() doesn't try to delete them here, and forget
+	-- its (now stale) hover extmark id.
 	state.bound_keys = nil
 	hover_extmark = nil
 
+	return buf
+end
+
+--- Applies the window-local display options the dashboard wants.
+local function apply_window_options(win)
 	for opt, val in pairs({
 		number = false,
 		relativenumber = false,
@@ -262,10 +328,12 @@ function M.start(force)
 		spell = false,
 		list = false,
 	}) do
-		pcall(vim.api.nvim_set_option_value, opt, val, { win = state.win })
+		pcall(vim.api.nvim_set_option_value, opt, val, { win = win })
 	end
+end
 
-	-- Confines the cursor to button rows/columns: any stray movement snaps back.
+--- Confines the cursor to button rows/columns: any stray movement snaps back.
+local function register_cursor_confinement(buf)
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		buffer = buf,
 		callback = function()
@@ -275,16 +343,7 @@ function M.start(force)
 			local pos = vim.api.nvim_win_get_cursor(state.win)
 			local entry = state.button_rows and state.button_rows[pos[1]]
 			if not entry then
-				local rows = button_row_numbers()
-				local nearest = rows[1]
-				for _, r in ipairs(rows) do
-					if math.abs(r - pos[1]) < math.abs(nearest - pos[1]) then
-						nearest = r
-					end
-				end
-				if nearest then
-					goto_row(nearest)
-				end
+				snap_to_nearest_row(pos[1])
 				return
 			end
 			if pos[2] ~= entry.col then
@@ -292,7 +351,13 @@ function M.start(force)
 			end
 		end,
 	})
+end
 
+--- Binds j/k/Tab/S-Tab/Enter navigation, and locks plain motion keys to
+--- <Nop> -- except any letter a real button already claims (redraw() binds
+--- that below; setting both here and there on the same key/buffer would be
+--- a genuine keymap collision even though the button-bound one always wins).
+local function register_navigation_keymaps(buf)
 	-- vim.keymap.set consumes (mutates) its opts table, so each call needs its own.
 	local function buf_opts()
 		return { buffer = buf, silent = true, nowait = true }
@@ -316,10 +381,6 @@ function M.start(force)
 	end, buf_opts())
 	vim.keymap.set("n", "<CR>", activate_current, buf_opts())
 
-	-- A button's own letter (redraw() binds it below) always wins, so skip
-	-- disabling motion on any key a real button already claims -- setting
-	-- both here and in redraw() on the same key/buffer is a genuine keymap
-	-- collision even though the button-bound one ends up shadowing this one.
 	local button_keys = {}
 	for _, btn in ipairs(M.themes.dashboard.section.buttons.val) do
 		button_keys[btn.key] = true
@@ -329,6 +390,25 @@ function M.start(force)
 			pcall(vim.keymap.set, "n", key, "<Nop>", buf_opts())
 		end
 	end
+end
+
+--- Opens (or refreshes) the dashboard in the current window.
+--- @param force boolean|nil Open even if the current buffer holds real content.
+function M.start(force)
+	local cur = vim.api.nvim_get_current_buf()
+	if not force then
+		if vim.bo[cur].filetype == "alpha" then
+			return
+		end
+		if vim.api.nvim_buf_get_name(cur) ~= "" or vim.bo[cur].modified or vim.bo[cur].buftype ~= "" then
+			return
+		end
+	end
+
+	local buf = create_dashboard_buffer()
+	apply_window_options(state.win)
+	register_cursor_confinement(buf)
+	register_navigation_keymaps(buf)
 
 	M.redraw()
 end
@@ -337,6 +417,10 @@ end
 function M.draw()
 	M.start(false)
 end
+
+-- ============================================================================
+-- Setup
+-- ============================================================================
 
 --- Registers the `:Alpha` command and the startup autocmd. `opts` is accepted
 --- for API compatibility but the theme state already lives on `M.themes`.
