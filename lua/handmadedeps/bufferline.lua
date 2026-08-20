@@ -298,8 +298,16 @@ end
 --- @param spec table `{ options = {...}, highlights = {...} }`
 function M.setup(spec)
 	M.opts = (spec and spec.options) or {}
-	vim.o.showtabline = M.opts.always_show_bufferline ~= false and 2 or 1
-	vim.o.tabline = "%!v:lua.require'handmadedeps.bufferline'.render()"
+
+	-- Flipping 'showtabline'/'tabline' forces an immediate layout recalc.
+	-- Doing that synchronously mid-startup (before the first frame settles)
+	-- has been observed to race Neovide's blur-behind compositor call and
+	-- leave it stuck flat-transparent instead of blurred. Deferring one
+	-- tick puts it safely after that window.
+	vim.schedule(function()
+		vim.o.showtabline = M.opts.always_show_bufferline ~= false and 2 or 1
+		vim.o.tabline = "%!v:lua.require'handmadedeps.bufferline'.render()"
+	end)
 
 	vim.api.nvim_create_user_command("BufferLineCycleNext", function()
 		M.cycle(1)

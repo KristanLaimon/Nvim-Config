@@ -293,8 +293,16 @@ end
 --- @param config table `{ options = {...}, sections = {...} }`
 function M.setup(config)
 	M.config = config or { options = {}, sections = {} }
-	vim.o.laststatus = M.config.options.globalstatus ~= false and 3 or 2
-	vim.o.statusline = "%!v:lua.require'handmadedeps.statusline'.render()"
+
+	-- Flipping 'laststatus'/'statusline' forces an immediate layout recalc.
+	-- Doing that synchronously mid-startup (before the first frame settles)
+	-- has been observed to race Neovide's blur-behind compositor call and
+	-- leave it stuck flat-transparent instead of blurred. Deferring one
+	-- tick puts it safely after that window.
+	vim.schedule(function()
+		vim.o.laststatus = M.config.options.globalstatus ~= false and 3 or 2
+		vim.o.statusline = "%!v:lua.require'handmadedeps.statusline'.render()"
+	end)
 
 	local group = vim.api.nvim_create_augroup("HandmadedepsStatusline", { clear = true })
 	vim.api.nvim_create_autocmd({ "ModeChanged", "ColorScheme" }, {
