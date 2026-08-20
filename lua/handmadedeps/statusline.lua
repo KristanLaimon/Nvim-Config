@@ -268,23 +268,32 @@ local function render_section(list, sep)
 	return table.concat(rendered, sep or " ")
 end
 
+--- Renders one lualine_* section under its highlight group, as
+--- `%#group# text %` tabline/statusline markup.
+--- @param hl_group string
+--- @param components table|nil
+--- @return string
+local function format_section(hl_group, components)
+	return string.format("%%#%s# %s ", hl_group, render_section(components, " "))
+end
+
+local SECTIONS_LEFT = { { "HmStatuslineA", "lualine_a" }, { "HmStatuslineB", "lualine_b" }, { "HmStatuslineC", "lualine_c" } }
+local SECTIONS_RIGHT = { { "HmStatuslineX", "lualine_x" }, { "HmStatuslineY", "lualine_y" }, { "HmStatuslineZ", "lualine_z" } }
+
 --- Builds the full `statusline` string for the current redraw.
 function M.render()
 	ensure_highlights()
 	local sections = M.config.sections or {}
-	local sep = " "
 
-	local left = {
-		string.format("%%#HmStatuslineA# %s ", render_section(sections.lualine_a, sep)),
-		string.format("%%#HmStatuslineB# %s ", render_section(sections.lualine_b, sep)),
-		string.format("%%#HmStatuslineC# %s ", render_section(sections.lualine_c, sep)),
-	}
+	local left = {}
+	for _, entry in ipairs(SECTIONS_LEFT) do
+		table.insert(left, format_section(entry[1], sections[entry[2]]))
+	end
 
-	local right = {
-		string.format("%%#HmStatuslineX# %s ", render_section(sections.lualine_x, sep)),
-		string.format("%%#HmStatuslineY# %s ", render_section(sections.lualine_y, sep)),
-		string.format("%%#HmStatuslineZ# %s ", render_section(sections.lualine_z, sep)),
-	}
+	local right = {}
+	for _, entry in ipairs(SECTIONS_RIGHT) do
+		table.insert(right, format_section(entry[1], sections[entry[2]]))
+	end
 
 	return table.concat(left) .. "%#StatusLine#%=" .. table.concat(right)
 end
