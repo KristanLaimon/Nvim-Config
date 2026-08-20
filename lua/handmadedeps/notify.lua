@@ -26,25 +26,6 @@ M.active_wins = {}
 M.history_list = {}
 M._opts = {}
 
---- Stops and closes a libuv timer exactly once. A repeating timer's callback
---- is deferred via vim.schedule_wrap, so several ticks can already be queued
---- by the time the first one calls stop()+close() -- without this guard the
---- next queued tick closes an already-closing handle and errors on repeat.
-local function safe_close_timer(timer)
-	if not timer:is_closing() then
-		timer:stop()
-		timer:close()
-	end
-end
-
-local function ease_in_out(t)
-	if t < 0.5 then
-		return 2 * t * t
-	else
-		return 1 - math.pow(-2 * t + 2, 2) / 2
-	end
-end
-
 local LEVEL_NAMES = { [0] = "TRACE", [1] = "DEBUG", [2] = "INFO", [3] = "WARN", [4] = "ERROR" }
 local ICONS = {
 	ERROR = "",
@@ -61,12 +42,113 @@ local HIGHLIGHTS = {
 	TRACE = "DiagnosticHint",
 }
 
+-- ============================================================================
+-- Small pure helpers
+-- ============================================================================
+
+local function ease_in_out(t)
+	if t < 0.5 then
+		return 2 * t * t
+	else
+		return 1 - math.pow(-2 * t + 2, 2) / 2
+	end
+end
+
 local function resolve(val, ...)
 	if type(val) == "function" then
 		return val(...)
 	end
 	return val
 end
+
+-- ============================================================================
+-- Animation engine
+-- ============================================================================
+-- Every visual transition in this module (toast slide-up on reflow, the
+-- entry slide-in, the exit slide-out) is the same shape: N eased ticks on a
+-- repeating timer, then a teardown. `animate` owns that shape once so each
+-- call site only supplies what actually differs -- the per-tick math.
+
+--- Stops and closes a libuv timer exactly once. A repeating timer's callback
+--- is deferred via vim.schedule_wrap, so several ticks can already be queued
+--- by the time the first one calls stop()+close() -- without this guard the
+--- next queued tick closes an already-closing handle and errors on repeat.
+local function safe_close_timer(timer)
+	if not timer:is_closing() then
+		timer:stop()
+		timer:close()
+	end
+end
+
+--- Runs an eased animation on a repeating timer.
+--- @param steps integer Number of ticks.
+--- @param interval_ms integer Timer interval, in milliseconds.
+--- @param on_tick fun(factor: number) Called each tick with the eased 0..1 progress.
+--- @param on_done fun()|nil Called once, after the final tick closes the timer.
+local function animate(steps, interval_ms, on_tick, on_done)
+	local step = 0
+	local timer = uv.new_timer()
+	timer:start(0, interval_ms, vim.schedule_wrap(function()
+		if timer:is_closing() then
+			return
+		end
+		step = step + 1
+		on_tick(ease_in_out(math.min(1.0, step / steps)))
+		if step >= steps then
+			safe_close_timer(timer)
+			if on_done then
+				on_done()
+			end
+		end
+	end))
+end
+
+--- Repositions and re-blends one floating window in a single call, silently
+--- no-op'ing once the window is gone (it may close mid-animation).
+--- @param win integer
+--- @param row integer
+--- @param col integer
+--- @param blend integer|nil Omitted (nil) under Neovide -- see skip_winblend().
+local function set_win_pos(win, row, col, blend)
+	if not vim.api.nvim_win_is_valid(win) then
+		return
+	end
+	pcall(vim.api.nvim_win_set_config, win, {
+		relative = "editor",
+		row = math.max(0, row),
+		col = math.max(0, col),
+		focusable = false,
+		noautocmd = true,
+	})
+	if blend and not skip_winblend() then
+		pcall(vim.api.nvim_win_set_option, win, "winblend", blend)
+	end
+end
+
+--- Closes a toast's window+buffer, drops it from active_wins, and reflows
+--- the remaining stack. Shared by the "static" (no animation) timeout path
+--- and the exit-animation's final tick.
+--- @param win integer
+--- @param buf integer
+local function remove_win(win, buf)
+	if vim.api.nvim_win_is_valid(win) then
+		pcall(vim.api.nvim_win_close, win, true)
+	end
+	if vim.api.nvim_buf_is_valid(buf) then
+		pcall(vim.api.nvim_buf_delete, buf, { force = true })
+	end
+	for idx, item in ipairs(M.active_wins) do
+		if item.win == win then
+			table.remove(M.active_wins, idx)
+			break
+		end
+	end
+	M.reposition_wins()
+end
+
+-- ============================================================================
+-- Stacking
+-- ============================================================================
 
 --- Recomputes stacked positions for all active toasts (slide-up on close).
 function M.reposition_wins()
@@ -81,31 +163,11 @@ function M.reposition_wins()
 
 			local start_row = item.current_row or target_row
 			if start_row ~= target_row and M._opts.stages ~= "static" then
-				local steps = 5
-				local step = 0
-				local timer = uv.new_timer()
-				timer:start(0, 25, vim.schedule_wrap(function()
-					if timer:is_closing() then
-						return
-					end
-					step = step + 1
-					local t = math.min(1.0, step / steps)
-					local factor = ease_in_out(t)
+				animate(5, 25, function(factor)
 					local animated_row = math.floor(start_row + (target_row - start_row) * factor + 0.5)
 					item.current_row = animated_row
-					if item.win and vim.api.nvim_win_is_valid(item.win) then
-						pcall(vim.api.nvim_win_set_config, item.win, {
-							relative = "editor",
-							row = math.max(0, animated_row),
-							col = math.max(0, item.current_col or 0),
-							focusable = false,
-							noautocmd = true,
-						})
-					end
-					if step >= steps then
-						safe_close_timer(timer)
-					end
-				end))
+					set_win_pos(item.win, animated_row, item.current_col or 0)
+				end)
 			else
 				item.current_row = target_row
 			end
@@ -136,6 +198,113 @@ function M.history()
 	return M.history_list
 end
 
+-- ============================================================================
+-- Building one notification
+-- ============================================================================
+
+--- Formats a notification's display lines and the highlight group for its
+--- title line. Pure: no window/buffer state.
+--- @param msg_str string
+--- @param level_name string
+--- @param title string
+--- @param compact boolean
+--- @return string[] lines, string hl
+local function build_lines(msg_str, level_name, title, compact)
+	local icon = ICONS[level_name] or ICONS.INFO
+	local hl = HIGHLIGHTS[level_name] or HIGHLIGHTS.INFO
+
+	local lines = {}
+	if title ~= "" then
+		table.insert(lines, string.format("%s %s", icon, title))
+		if not compact then
+			table.insert(lines, string.rep("─", math.max(20, #title + 4)))
+		end
+	end
+	for line in msg_str:gmatch("[^\r\n]+") do
+		table.insert(lines, (title == "" and (icon .. " ") or " ") .. line)
+	end
+	return lines, hl
+end
+
+--- Computes the floating window's pixel geometry from its rendered lines.
+--- Pure: no window/buffer state.
+--- @param lines string[]
+--- @param max_w integer
+--- @param max_h integer
+--- @return integer width, integer height
+local function measure_geometry(lines, max_w, max_h)
+	local max_line_len = 0
+	local total_visual_lines = 0
+	for _, l in ipairs(lines) do
+		local display_w = vim.fn.strdisplaywidth(l)
+		max_line_len = math.max(max_line_len, display_w + 2)
+		total_visual_lines = total_visual_lines + math.max(1, math.ceil((display_w + 1) / math.max(1, max_w - 2)))
+	end
+	local width = math.max(10, math.min(max_line_len, max_w))
+	local height = math.max(1, math.min(total_visual_lines, max_h))
+	return width, height
+end
+
+--- Computes the target/start row and column for a new toast, accounting for
+--- toasts already stacked above/below it.
+--- @param height integer
+--- @param width integer
+--- @param static boolean
+--- @return integer target_row, integer target_col, integer start_col
+local function place_window(height, width, static)
+	local top_down = M._opts.top_down ~= false
+	local target_row = top_down and 1 or (vim.o.lines - 2)
+	for _, item in ipairs(M.active_wins) do
+		target_row = top_down and (target_row + item.height + 1) or (target_row - item.height - 1)
+	end
+	if not top_down then
+		target_row = target_row - height
+	end
+
+	local target_col = math.max(0, vim.o.columns - width - 2)
+	local start_col = static and target_col or vim.o.columns
+	return target_row, target_col, start_col
+end
+
+--- Runs the entry slide-in animation for a freshly opened toast window.
+local function animate_entry(win, win_item, start_col, target_col)
+	animate(6, 20, function(factor)
+		local animated_col = math.floor(start_col - (start_col - target_col) * factor + 0.5)
+		win_item.current_col = animated_col
+		set_win_pos(win, win_item.current_row, animated_col, math.floor(80 - (80 - 15) * factor + 0.5))
+	end)
+end
+
+--- Runs the exit slide-out animation, then tears the toast down.
+local function animate_exit(win, buf, win_item, target_col)
+	local exit_start_col = win_item.current_col or target_col
+	local exit_end_col = vim.o.columns
+	animate(5, 20, function(factor)
+		local animated_col = math.floor(exit_start_col + (exit_end_col - exit_start_col) * factor + 0.5)
+		set_win_pos(win, win_item.current_row, animated_col, math.floor(15 + (90 - 15) * factor + 0.5))
+	end, function()
+		remove_win(win, buf)
+	end)
+end
+
+--- Schedules a toast's auto-dismiss (static: instant close; animated: slide
+--- out first) after `timeout` milliseconds. No-op if `timeout` is `false`.
+local function schedule_dismiss(win, buf, win_item, target_col, static, timeout)
+	if timeout == false then
+		return
+	end
+	vim.defer_fn(function()
+		if not vim.api.nvim_win_is_valid(win) then
+			return
+		end
+		if static then
+			remove_win(win, buf)
+			return
+		end
+		animate_exit(win, buf, win_item, target_col)
+	end, timeout)
+end
+
 --- Core notify implementation. Called as `require("notify")(msg, level, opts)`.
 --- @param msg string|table
 --- @param level number|string|nil
@@ -152,7 +321,6 @@ function M.notify(msg, level, opts)
 	else
 		level_name = LEVEL_NAMES[level or vim.log.levels.INFO] or "INFO"
 	end
-
 	local msg_str = type(msg) == "table" and table.concat(msg, "\n") or tostring(msg)
 
 	table.insert(M.history_list, { message = msg, level = level_name, title = opts.title, time = uv.now() })
@@ -160,21 +328,8 @@ function M.notify(msg, level, opts)
 		table.remove(M.history_list, 1)
 	end
 
-	local icon = ICONS[level_name] or ICONS.INFO
-	local hl = HIGHLIGHTS[level_name] or HIGHLIGHTS.INFO
 	local title = opts.title or ""
-	local compact = M._opts.render == "compact"
-
-	local lines = {}
-	if title ~= "" then
-		table.insert(lines, string.format("%s %s", icon, title))
-		if not compact then
-			table.insert(lines, string.rep("─", math.max(20, #title + 4)))
-		end
-	end
-	for line in msg_str:gmatch("[^\r\n]+") do
-		table.insert(lines, (title == "" and (icon .. " ") or " ") .. line)
-	end
+	local lines, hl = build_lines(msg_str, level_name, title, M._opts.render == "compact")
 
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.bo[buf].buftype = "nofile"
@@ -184,34 +339,11 @@ function M.notify(msg, level, opts)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 	vim.bo[buf].modifiable = false
 
-	local max_w = resolve(M._opts.max_width) or 60
-	local max_h = resolve(M._opts.max_height) or 12
-
-	local max_line_len = 0
-	local total_visual_lines = 0
-	for _, l in ipairs(lines) do
-		max_line_len = math.max(max_line_len, vim.fn.strdisplaywidth(l) + 2)
-		local visual_l = math.max(1, math.ceil((vim.fn.strdisplaywidth(l) + 1) / math.max(1, max_w - 2)))
-		total_visual_lines = total_visual_lines + visual_l
-	end
-
-	local width = math.max(10, math.min(max_line_len, max_w))
-	local height = math.max(1, math.min(total_visual_lines, max_h))
-
-	local top_down = M._opts.top_down ~= false
-	local target_row = top_down and 1 or (vim.o.lines - 2)
-	for _, item in ipairs(M.active_wins) do
-		target_row = top_down and (target_row + item.height + 1) or (target_row - item.height - 1)
-	end
-	if not top_down then
-		target_row = target_row - height
-	end
-
-	local target_col = math.max(0, vim.o.columns - width - 2)
+	local width, height = measure_geometry(lines, resolve(M._opts.max_width) or 60, resolve(M._opts.max_height) or 12)
 	local static = M._opts.stages == "static"
-	local start_col = static and target_col or vim.o.columns
+	local target_row, target_col, start_col = place_window(height, width, static)
 
-	local win_opts = {
+	local ok_win, win = pcall(vim.api.nvim_open_win, buf, false, {
 		relative = "editor",
 		width = width,
 		height = height,
@@ -222,9 +354,7 @@ function M.notify(msg, level, opts)
 		focusable = false,
 		noautocmd = true,
 		zindex = 45,
-	}
-
-	local ok_win, win = pcall(vim.api.nvim_open_win, buf, false, win_opts)
+	})
 	if not ok_win or not win or not vim.api.nvim_win_is_valid(win) then
 		vim.api.nvim_echo({ { string.format("[%s] %s", title, msg_str), hl } }, true, {})
 		return
@@ -235,11 +365,8 @@ function M.notify(msg, level, opts)
 	if not skip_winblend() then
 		pcall(vim.api.nvim_win_set_option, win, "winblend", static and 15 or 80)
 	end
-	for i, line in ipairs(lines) do
-		local _ = line
-		if i == 1 and title ~= "" then
-			pcall(vim.api.nvim_buf_add_highlight, buf, -1, hl, 0, 0, -1)
-		end
+	if title ~= "" then
+		pcall(vim.api.nvim_buf_add_highlight, buf, -1, hl, 0, 0, -1)
 	end
 
 	local win_item = { win = win, buf = buf, width = width, height = height, current_row = target_row, current_col = start_col }
@@ -250,109 +377,15 @@ function M.notify(msg, level, opts)
 	end
 
 	if not static then
-		local anim_steps = 6
-		local anim_step = 0
-		local anim_timer = uv.new_timer()
-		anim_timer:start(0, 20, vim.schedule_wrap(function()
-			if anim_timer:is_closing() then
-				return
-			end
-			anim_step = anim_step + 1
-			local t = math.min(1.0, anim_step / anim_steps)
-			local factor = ease_in_out(t)
-			local animated_col = math.floor(start_col - (start_col - target_col) * factor + 0.5)
-			local blend = math.floor(80 - (80 - 15) * factor + 0.5)
-			win_item.current_col = animated_col
-			if vim.api.nvim_win_is_valid(win) then
-				pcall(vim.api.nvim_win_set_config, win, {
-					relative = "editor",
-					row = math.max(0, win_item.current_row),
-					col = math.max(0, animated_col),
-					focusable = false,
-					noautocmd = true,
-				})
-				if not skip_winblend() then
-					pcall(vim.api.nvim_win_set_option, win, "winblend", math.max(0, blend))
-				end
-			end
-			if anim_step >= anim_steps then
-				safe_close_timer(anim_timer)
-			end
-		end))
+		animate_entry(win, win_item, start_col, target_col)
 	end
 
-	local timeout = opts.timeout or M._opts.timeout or 3000
-	if timeout == false then
-		return
-	end
-
-	vim.defer_fn(function()
-		if not (win and vim.api.nvim_win_is_valid(win)) then
-			return
-		end
-		if static then
-			pcall(vim.api.nvim_win_close, win, true)
-			if vim.api.nvim_buf_is_valid(buf) then
-				pcall(vim.api.nvim_buf_delete, buf, { force = true })
-			end
-			for idx, item in ipairs(M.active_wins) do
-				if item.win == win then
-					table.remove(M.active_wins, idx)
-					break
-				end
-			end
-			M.reposition_wins()
-			return
-		end
-
-		local exit_steps = 5
-		local exit_step = 0
-		local exit_timer = uv.new_timer()
-		local exit_start_col = win_item.current_col or target_col
-		local exit_end_col = vim.o.columns
-
-		exit_timer:start(0, 20, vim.schedule_wrap(function()
-			if exit_timer:is_closing() then
-				return
-			end
-			exit_step = exit_step + 1
-			local t = math.min(1.0, exit_step / exit_steps)
-			local factor = ease_in_out(t)
-			local animated_col = math.floor(exit_start_col + (exit_end_col - exit_start_col) * factor + 0.5)
-			local blend = math.floor(15 + (90 - 15) * factor + 0.5)
-
-			if vim.api.nvim_win_is_valid(win) then
-				pcall(vim.api.nvim_win_set_config, win, {
-					relative = "editor",
-					row = math.max(0, win_item.current_row),
-					col = animated_col,
-					focusable = false,
-					noautocmd = true,
-				})
-				if not skip_winblend() then
-					pcall(vim.api.nvim_win_set_option, win, "winblend", math.min(100, blend))
-				end
-			end
-
-			if exit_step >= exit_steps then
-				safe_close_timer(exit_timer)
-				if vim.api.nvim_win_is_valid(win) then
-					pcall(vim.api.nvim_win_close, win, true)
-				end
-				if vim.api.nvim_buf_is_valid(buf) then
-					pcall(vim.api.nvim_buf_delete, buf, { force = true })
-				end
-				for idx, item in ipairs(M.active_wins) do
-					if item.win == win then
-						table.remove(M.active_wins, idx)
-						break
-					end
-				end
-				M.reposition_wins()
-			end
-		end))
-	end, timeout)
+	schedule_dismiss(win, buf, win_item, target_col, static, opts.timeout or M._opts.timeout or 3000)
 end
+
+-- ============================================================================
+-- Click-to-copy
+-- ============================================================================
 
 --- Copies a notification window's visible text to the system clipboard.
 --- @param win integer
