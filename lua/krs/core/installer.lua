@@ -1091,42 +1091,60 @@ end
 -------------------------------------------------------------------------------
 
 --- Language Toolchain Bundles for Language Tooling Manager.
---- Language Toolchain Bundles for Language Tooling Manager.
+--- Each bundle may declare `requires`: system runtimes that must be in PATH
+--- before any Mason package from this bundle can be installed.
 M.language_bundles = {
 	{
 		name = "🌙 Minimal Core (Lua & Neovim Editing)",
 		lang = "Lua",
 		is_minimal = true,
+		requires = {}, -- lua-language-server ships as a self-contained binary via Mason
 		mason_pkgs = { "lua-language-server", "stylua" },
 		treesitter = { "lua", "vim", "vimdoc", "markdown", "markdown_inline" },
 	},
 	{
 		name = "🐘 PHP & Laravel",
 		lang = "PHP",
+		requires = {
+			{ cmd = "php", name = "PHP" },
+			{ cmd = "composer", name = "Composer" },
+		},
 		mason_pkgs = { "intelephense", "php-debug-adapter", "blade-formatter", "php-cs-fixer" },
 		treesitter = { "php", "phpdoc", "blade" },
 	},
 	{
 		name = "🟨 TypeScript / JavaScript",
 		lang = "TypeScript",
+		requires = {
+			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+		},
 		mason_pkgs = { "vtsls", "eslint-lsp", "biome", "js-debug-adapter", "prettier", "prettierd" },
 		treesitter = { "typescript", "javascript", "tsx", "jsx" },
 	},
 	{
 		name = "🟦 Go",
 		lang = "Go",
+		requires = {
+			{ cmd = "go", name = "Go runtime", hint = "https://go.dev/dl" },
+		},
 		mason_pkgs = { "gopls", "delve", "gofumpt", "goimports", "golangci-lint" },
 		treesitter = { "go", "gomod", "gowork", "gosum" },
 	},
 	{
 		name = "🐍 Python",
 		lang = "Python",
+		requires = {
+			{ cmd = "python3", name = "Python 3", alt = "python", hint = "https://python.org" },
+		},
 		mason_pkgs = { "pyright", "debugpy", "black", "isort", "ruff" },
 		treesitter = { "python" },
 	},
 	{
 		name = "🎯 C# / .NET",
 		lang = "C#",
+		requires = {
+			{ cmd = "dotnet", name = ".NET SDK", hint = "https://dot.net" },
+		},
 		mason_pkgs = { "omnisharp", "csharp_ls", "netcoredbg", "csharpier" },
 		treesitter = { "c_sharp" },
 		dotnet_tools = { "csharp-ls" },
@@ -1134,30 +1152,59 @@ M.language_bundles = {
 	{
 		name = "🌐 Web Frontend (HTML, CSS, Svelte, Astro)",
 		lang = "Web",
+		requires = {
+			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+		},
 		mason_pkgs = { "html-lsp", "css-lsp", "tailwindcss-language-server", "svelte-language-server", "astro-language-server", "emmet-ls" },
 		treesitter = { "html", "css", "svelte", "astro" },
 	},
 	{
 		name = "🐳 Docker & Proto",
 		lang = "Docker/Proto",
+		requires = {}, -- dockerfile-language-server & protolint are standalone Mason binaries
 		mason_pkgs = { "dockerfile-language-server", "dockerfmt", "protolint" },
 		treesitter = { "editorconfig", "proto" },
 	},
 	{
 		name = "🐚 Shell / Bash",
 		lang = "Bash",
+		requires = {}, -- bash-language-server is a standalone Mason binary
 		mason_pkgs = { "bash-language-server", "bash-debug-adapter", "beautysh", "shellcheck" },
 		treesitter = { "bash" },
 	},
 }
 
 --- Computes real-time installation status for a given language bundle.
+--- Checks required system runtimes first; if any are missing the bundle is
+--- marked as blocked and no Mason/TS counts are reported.
 --- @param bundle table
---- @return table { installed_count: number, total_count: number, badge: string }
+--- @return table { installed_count: number, total_count: number, badge: string, missing_runtimes: string[], blocked: boolean }
 function M.get_bundle_status(bundle)
+	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
+
+	-- 1. Check required system runtimes
+	local missing_runtimes = {}
+	for _, req in ipairs(bundle.requires or {}) do
+		local ok = vim.fn.executable(req.cmd) == 1
+			or (req.alt and vim.fn.executable(req.alt) == 1)
+		if not ok then
+			table.insert(missing_runtimes, req.name)
+		end
+	end
+
+	if #missing_runtimes > 0 then
+		return {
+			installed_count = 0,
+			total_count = 0,
+			badge = string.format("[ ⚠️  needs: %s ]", table.concat(missing_runtimes, ", ")),
+			missing_runtimes = missing_runtimes,
+			blocked = true,
+		}
+	end
+
+	-- 2. Count Mason packages
 	local installed = 0
 	local total = 0
-	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
 
 	for _, pkg in ipairs(bundle.mason_pkgs or {}) do
 		total = total + 1
@@ -1170,14 +1217,11 @@ function M.get_bundle_status(bundle)
 		end
 	end
 
+	-- 3. Count Treesitter parsers
 	for _, parser in ipairs(bundle.treesitter or {}) do
 		total = total + 1
-		local ts_installed = false
 		local ok, parsers_mod = pcall(require, "nvim-treesitter.parsers")
 		if ok and parsers_mod.has_parser and parsers_mod.has_parser(parser) then
-			ts_installed = true
-		end
-		if ts_installed then
 			installed = installed + 1
 		end
 	end
@@ -1195,12 +1239,42 @@ function M.get_bundle_status(bundle)
 		installed_count = installed,
 		total_count = total,
 		badge = badge,
+		missing_runtimes = {},
+		blocked = false,
 	}
 end
 
 --- Installs all packages and treesitter parsers in a language bundle.
+--- Aborts with a warning if any required system runtimes are missing.
 --- @param bundle table
 function M.install_language_bundle(bundle)
+	-- Guard: check required system runtimes before attempting install
+	local missing = {}
+	for _, req in ipairs(bundle.requires or {}) do
+		local ok = vim.fn.executable(req.cmd) == 1
+			or (req.alt and vim.fn.executable(req.alt) == 1)
+		if not ok then
+			local entry = req.name
+			if req.hint then
+				entry = entry .. " → " .. req.hint
+			end
+			table.insert(missing, entry)
+		end
+	end
+
+	if #missing > 0 then
+		vim.notify(
+			string.format(
+				"⚠️  Cannot install %s\n\nMissing system runtime(s):\n  • %s\n\nInstall the listed runtime(s), restart Neovim, then try again.",
+				bundle.name,
+				table.concat(missing, "\n  • ")
+			),
+			vim.log.levels.WARN,
+			{ title = "Missing Runtime — " .. bundle.name }
+		)
+		return
+	end
+
 	vim.notify("📥 Installing toolchain for " .. bundle.name .. "...", vim.log.levels.INFO, {
 		title = "Language Tooling Manager",
 	})
@@ -1296,17 +1370,33 @@ function M.render_language_manager_buffer()
 	table.insert(lines, "  ==========================================================================")
 	table.insert(lines, "   🌐 KRS LANGUAGE TOOLING MANAGER -- PER-LANGUAGE SETUP & TEARDOWN")
 	table.insert(lines, "  ==========================================================================")
-	table.insert(lines, "   Fresh setup defaults to Minimal Core (Lua only). Select optional languages below.")
+	table.insert(lines, "   Fresh setup defaults to Minimal Core (Lua only). Select optional bundles below.")
 	table.insert(lines, "")
 
 	local selected_count = 0
+	local pending_count = 0
 
 	for _, item in ipairs(lang_items) do
 		local status = M.get_bundle_status(item.bundle)
 		item.status = status
 
-		local checkbox = item.selected and "[x]" or "[ ]"
-		if item.selected then
+		local is_fully_installed = (status.installed_count == status.total_count and status.total_count > 0)
+		local is_pending = not status.blocked and not is_fully_installed and not item.bundle.is_minimal
+
+		if is_pending then
+			pending_count = pending_count + 1
+		end
+
+		-- Blocked bundles get a lock symbol instead of a checkbox
+		local checkbox
+		if status.blocked then
+			checkbox = "[🔒]"
+		elseif item.selected then
+			checkbox = "[x]"
+		else
+			checkbox = "[ ]"
+		end
+		if item.selected and not status.blocked then
 			selected_count = selected_count + 1
 		end
 
@@ -1319,9 +1409,9 @@ function M.render_language_manager_buffer()
 	table.insert(lines, "")
 	table.insert(lines, "  " .. string.rep("─", width - 4))
 	table.insert(lines, string.format("  👉 [ PRESS 'i' OR ENTER TO INSTALL SELECTED BUNDLES (%d SELECTED) ]", selected_count))
-	table.insert(lines, "  [Space/Enter] Toggle Row Checkbox    |  [d] Show Component Details")
-	table.insert(lines, "  [a] Select All Optional Languages   |  [n] Select None (Minimal Lua Only)")
-	table.insert(lines, "  [i] Install Selected Bundles        |  [u] Uninstall Selected  |  [q/Esc] Close")
+	table.insert(lines, "  [Space/Enter] Toggle Row             |  [d] Show Component Details")
+	table.insert(lines, string.format("  [a] Select All    [n] Select None   |  [p] Select All Pending (%d bundles)", pending_count))
+	table.insert(lines, "  [i] Install Selected                |  [u] Uninstall Selected  |  [q/Esc] Close")
 
 	pcall(function()
 		vim.bo[lang_buf].modifiable = true
@@ -1342,9 +1432,13 @@ function M.open_language_manager()
 	lang_items = {}
 	for _, bundle in ipairs(M.language_bundles) do
 		local status = M.get_bundle_status(bundle)
+		-- Only pre-select: minimal core (always on) or fully installed bundles.
+		-- Partial or missing bundles start deselected — user must opt-in.
+		local auto_select = bundle.is_minimal
+			or (status.installed_count == status.total_count and status.total_count > 0)
 		table.insert(lang_items, {
 			bundle = bundle,
-			selected = bundle.is_minimal or (status.installed_count > 0),
+			selected = auto_select,
 			status = status,
 		})
 	end
@@ -1471,7 +1565,10 @@ function M.open_language_manager()
 
 	vim.keymap.set("n", "a", function()
 		for _, item in ipairs(lang_items) do
-			item.selected = true
+			local status = item.status or M.get_bundle_status(item.bundle)
+			if not status.blocked then
+				item.selected = true
+			end
 		end
 		M.render_language_manager_buffer()
 	end, opts)
@@ -1479,6 +1576,20 @@ function M.open_language_manager()
 	vim.keymap.set("n", "n", function()
 		for _, item in ipairs(lang_items) do
 			item.selected = (item.bundle.is_minimal == true)
+		end
+		M.render_language_manager_buffer()
+	end, opts)
+
+	-- [p] Select all pending bundles that are NOT blocked by missing runtimes (opt-in)
+	vim.keymap.set("n", "p", function()
+		for _, item in ipairs(lang_items) do
+			local status = item.status or M.get_bundle_status(item.bundle)
+			if not item.bundle.is_minimal
+				and not status.blocked
+				and status.installed_count < status.total_count
+			then
+				item.selected = true
+			end
 		end
 		M.render_language_manager_buffer()
 	end, opts)

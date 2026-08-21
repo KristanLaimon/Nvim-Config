@@ -386,6 +386,11 @@ return {
 								callSnippet = "Replace",
 							},
 
+							hint = {
+								enable = true,
+								setType = true,
+							},
+
 							telemetry = {
 								enable = false,
 							},
