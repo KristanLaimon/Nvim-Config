@@ -29,12 +29,14 @@ schemas-langs/
 │   ├── love/           -- LÖVE
 │   └── koreader/
 └── typescript_javascript/
-    └── browser/        -- installed @types packages live here
+    ├── browser/        -- hand-written DOM/window stub
+    ├── node/           -- real @types/node, fetched from the npm registry
+    └── bun/            -- real bun-types, self-contained (own node_modules/@types/node copy)
 ```
 
-Each directory is a schema. TS schemas hold a real `node_modules/@types/…` tree, which is where the version shown in the picker comes from.
+Each directory is a schema. A TS schema is either a flat folder of `.d.ts` files, or (when a package needs it — see the by-hand guide) holds a `node_modules/@types/…` tree, which is where the version shown in the picker comes from.
 
-Adding one is just adding a directory — `scan_available_schemas()` reads the filesystem, there is no registry to update.
+Adding one is just adding a directory — `scan_available_schemas()` reads the filesystem, there is no registry to update. See [Managing TypeScript Type Schemas](how-to-manage-typescript-type-schemas.md) for how `node/` and `bun/` were populated without running `npm install`.
 
 ---
 

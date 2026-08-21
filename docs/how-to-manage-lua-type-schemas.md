@@ -2,7 +2,7 @@
 
 [← Back to Wiki Index](index.md)
 
-This is the by-hand companion to [Type Injector](type-injector.md): everything the picker (`:KrsTypes`) does through menus, done directly on the filesystem. Use this when you're adding a new SDK's types (a game engine, an app's plugin API, an embedded Lua host) and don't want to go through the NPM install flow (that only exists for TypeScript/JavaScript).
+This is the by-hand companion to [Type Injector](type-injector.md): everything the picker (`:KrsTypes`) does through menus, done directly on the filesystem. Use this when you're adding a new SDK's types (a game engine, an app's plugin API, an embedded Lua host) and don't want to go through the NPM install flow (that only exists for TypeScript/JavaScript — see [Managing TypeScript Type Schemas](how-to-manage-typescript-type-schemas.md) for that language's by-hand equivalent).
 
 A **schema** is just a directory of `.lua` stub files under `schemas-langs/lua/<name>/`. There is no registry to update — `scan_available_schemas()` reads the filesystem, so a directory that exists *is* an available schema.
 
