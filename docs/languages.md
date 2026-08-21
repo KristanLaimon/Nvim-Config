@@ -2,7 +2,7 @@
 
 [← Back to Wiki Index](index.md)
 
-Mason, `mason-lspconfig`, `mason-conform` and `mason-nvim-dap` install everything below on first start — no manual `:MasonInstall`.
+Nothing below installs automatically on first start: `mason-lspconfig` is configured with `automatic_installation = false, ensure_installed = {}` (`lua/plugins/lsp/lsp.lua`), and Treesitter only auto-installs the fresh-install `core_parsers` (`lua`, `vim`, `vimdoc`, `markdown`, `markdown_inline`). Everything else — LSP/DAP/formatter Mason packages and non-core Treesitter parsers — installs per language via the opt-in **Language Bundle** picker: run `:LanguageManager`.
 
 **Where a language's actual settings live**: `lua/krs/langs/<language>/init.lua` — LSP server settings, Mason package names, formatter assignment, debugger config and launch-profile runtimes are all defined there, one file per language. `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp/formatting.lua` (Conform), `lua/plugins/lsp/treesitter.lua` (parsers), `lua/plugins/editor/dap.lua` (debug adapters), and `lua/krs/core/installer.lua` (Mason install list) only *aggregate* what every language module exports — swapping a tool means editing the one language file, not four.
 
@@ -21,7 +21,7 @@ Mason, `mason-lspconfig`, `mason-conform` and `mason-nvim-dap` install everythin
 | **Go** | `gopls` | `goimports`, `gofumpt` | `go`, `gomod`, `gowork`, `gosum` | `delve` (via `nvim-dap-go`) |
 | **Python** | — (debug only) | — | `python` | `debugpy` |
 | **PHP / Blade** | `intelephense` | `pint` → `php_cs_fixer`; Blade uses `blade-formatter` → `pint` | `php`, `phpdoc`, `blade` | `php-debug-adapter` (Xdebug) |
-| **C# / `.csproj`** | `omnisharp` (`.cs`), `lemminx` (`.csproj`, `.props`, `.targets` as XML) | — | — | `netcoredbg` (`coreclr`) |
+| **C# / `.csproj`** | `omnisharp` (`.cs`), `lemminx` (`.csproj`, `.props`, `.targets` as XML) | `csharpier` | `c_sharp` | `netcoredbg` (`coreclr`) |
 | **Docker** | `dockerls` | `dockerfmt` | — | — |
 | **YAML / TOML** | `yamlls`, `taplo` | — | `yaml`, `toml` | — |
 | **Linting (JS/TS)** | `eslint`, `biome` | — | — | — |
@@ -52,10 +52,10 @@ Mason, `mason-lspconfig`, `mason-conform` and `mason-nvim-dap` install everythin
 
 `nvim-treesitter` is pinned to the `main` branch (the rewrite), which dropped `highlight.enable`. Highlighting is started per-buffer by a `FileType` autocmd calling `vim.treesitter.start()`, wrapped in `pcall` — parser names don't always match filetype names (`tsx` → `typescriptreact`, `vimdoc` → `help`), so the autocmd matches every filetype and lets `pcall` skip the ones with no parser.
 
-1. Add the parser name to the `parsers` list at the top of `lua/plugins/lsp/treesitter.lua`.
-2. `:TSUpdate`, or restart (`ts.install(parsers)` runs on setup).
+- **Editor-internal filetype** (part of the fresh-install default, e.g. Lua/markdown/vimdoc): add it to `core_parsers` at the top of `lua/plugins/lsp/treesitter.lua`, then `:TSUpdate` or restart.
+- **Real language**: add it to that language's bundle's `treesitter = { ... }` list in `lua/krs/core/installer.lua`'s `M.language_bundles`, then install via `:LanguageManager` (parsers are opt-in per bundle, not installed on startup).
 
-No autocmd or pattern edits needed. For a full new language (server + formatter + parser), see [Adding a Language / LSP](adding-language.md).
+No autocmd or pattern edits needed either way. For a full new language (server + formatter + parser), see [Adding a Language / LSP](adding-language.md).
 
 ---
 

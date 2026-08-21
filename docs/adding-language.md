@@ -4,123 +4,76 @@
 
 This guide outlines the exact step-by-step procedure for adding new programming language support, Language Servers (LSPs), Treesitter syntax highlighting, and auto-formatters to this Neovim setup.
 
+> ⚠️ **This config is not the "add each server to one big `servers = {}` table" style.** Every language owns one file, [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/), exporting `M.lsp_config`, `M.mason`/`M.mason_order`, `M.formatters_by_ft`, and (optionally) DAP config. `lua/plugins/lsp/lsp.lua`, `lua/plugins/lsp/formatting.lua`, and `lua/krs/core/installer.lua` only *merge* those per-language tables — they have no hardcoded per-language entries to edit. See [`docs/languages.md`](languages.md) for the full picture.
+
 ---
 
 ## 🛠️ Step-by-Step Guide
 
-### Step 1: Install the LSP in Mason
-Run the Mason package manager command inside Neovim:
-```vim
-:Mason
-```
-Search for and install the required Language Server (e.g., `svelte-language-server`, `astro-language-server`, `typescript-language-server`, `pyright`, `gopls`).
+### Step 1: Create (or extend) `lua/krs/langs/<language>/init.lua`
+Every field is optional — only add what the language needs. See [`lua/krs/langs/csharp/init.lua`](../lua/krs/langs/csharp/init.lua) for the fullest example.
 
-> ℹ️ **Note**: Installing an LSP via Mason downloads the binary to disk (`stdpath("data")/mason/bin/`), but Neovim will **not** automatically enable or attach it to buffers until Step 2 is completed.
+```lua
+local M = {}
+
+-- lspconfig server name(s) this language owns
+M.lsp_server = { "zls" }
+
+-- lspconfig opts, keyed by server name -- merged into lsp.lua's opts.servers
+M.lsp_config = {
+    zls = {},
+}
+
+-- Mason package metadata, keyed by lspconfig/formatter/tool name.
+-- `lang`/`name` + `type` drive the Language Tooling Manager UI and status scan.
+M.mason = {
+    zls = { mason = "zls", lang = "Zig", type = "lsp", cmd = "zls" },
+}
+M.mason_order = { "zls" } -- install/display order for this language's Mason packages
+
+-- conform.nvim formatter list per filetype
+M.formatters_by_ft = {
+    zig = { "zigfmt" },
+}
+
+return M
+```
+
+Then register the module in [`lua/krs/langs/init.lua`](../lua/krs/langs/init.lua)'s `M.langs` table:
+
+```lua
+M.langs = {
+    -- ...existing entries
+    zig = require("krs.langs.zig"),
+}
+```
+
+> ⚠️ **Why is this step required?**
+> `lsp.lua`'s `build_servers()` and `formatting.lua`'s `build_formatters_by_ft()` both loop over `require("krs.langs").langs` and merge each module's `lsp_config` / `formatters_by_ft`. A language missing from `M.langs` contributes nothing — no LSP server enable, no formatter, no Mason package tracked — no matter what's inside its `init.lua`.
 
 ---
 
-### Step 2: Enable the Server in `lua/plugins/lsp/lsp.lua`
-Open [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) and register the `nvim-lspconfig` server name under `opts.servers`:
+### Step 2: Add the language to a bundle in `lua/krs/core/installer.lua`
+This repo has **no automatic Mason install**: `mason-lspconfig` is set up with `automatic_installation = false, ensure_installed = {}` in [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua). It also has **no automatic Treesitter parser install** beyond the fresh-install `core_parsers` list in [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) (`lua`, `vim`, `vimdoc`, `markdown`, `markdown_inline`). Everything else — Mason LSP/DAP/formatter packages *and* Treesitter parsers — installs through an opt-in **Language Bundle** in [`lua/krs/core/installer.lua`](../lua/krs/core/installer.lua)'s `M.language_bundles`:
 
 ```lua
-opts = {
-    servers = {
-        -- Existing servers
-        lua_ls = { ... },
-        jsonls = {},
-
-        -- Add new servers here:
-        ts_ls = {},     -- TypeScript / JavaScript
-        svelte = {},    -- Svelte
-        astro = {},     -- Astro
-        pyright = {},   -- Python
+{
+    name = "⚡ Zig",
+    lang = "Zig",
+    requires = {
+        { cmd = "zig", name = "Zig toolchain", hint = "https://ziglang.org/download" },
     },
-}
+    mason_pkgs = { "zls" },
+    treesitter = { "zig" },
+},
 ```
 
-> ⚠️ **Why is this step required?**  
-> The config iterates over `opts.servers` using `for server, config in pairs(opts.servers) do` and executes `vim.lsp.enable(server)`. If a server is missing from `opts.servers`, Neovim will never attach the LSP to open buffers even if it is installed in Mason.
+The user installs a bundle via `:LanguageManager` (aliases: `:KrsLanguageManager`, `:LanguageTooling`) — an interactive picker, not something that runs automatically on startup. Skip this step only if the language should ship as part of `core_parsers` (the fresh-install default set) instead of an opt-in bundle — reserve that for editor-internal filetypes like Lua/markdown/vimdoc, not real languages.
 
 ---
 
-### Step 3: (Recommended) Add to `ensure_installed` in `mason-lspconfig`
-In the same file ([`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua)), add the LSP server name to `mason-lspconfig` setup:
-
-```lua
-require("mason-lspconfig").setup({
-    ensure_installed = {
-        "lua_ls",
-        "jsonls",
-        "ts_ls",
-        "svelte",
-        "astro",
-        "pyright",
-    },
-})
-```
-
-> 💡 **Benefit**: When syncing or migrating your Neovim config to another machine, Mason will automatically download and install these servers in the background without needing to manually run `:Mason`.
-
----
-
-### Step 4: (Optional) Configure Auto-Formatting in `lua/plugins/lsp/formatting.lua`
-To enable auto-formatting on save or via `<leader>ff`, open [`lua/plugins/lsp/formatting.lua`](../lua/plugins/lsp/formatting.lua) and add the filetype to `formatters_by_ft`:
-
-```lua
-formatters_by_ft = {
-    javascript = { "prettierd", "prettier", stop_after_first = true },
-    typescript = { "prettierd", "prettier", stop_after_first = true },
-    svelte = { "prettierd", "prettier", stop_after_first = true },
-    astro = { "prettierd", "prettier", stop_after_first = true },
-    python = { "isort", "black", stop_after_first = true },
-}
-```
-
-> ⚠️ **Astro is a special case.** `biome` cannot format `.astro` template markup at all (silent no-op), so `astro` is hardcoded to `{ "prettier" }` only — no `biome`/`prettierd`, and no project `.prettierrc` required (the `prettier` formatter's `condition` bypasses the rc-file check just for `ctx.filetype == "astro"`). It also always passes `--plugin prettier-plugin-astro`, which must be installed as a devDependency in every Astro project (`bun add -D prettier prettier-plugin-astro`) — otherwise prettier still fails to parse `.astro` files.
->
-> To customize astro's prettier options (tabWidth, quotes, etc.) without turning `biome`-formatted filetypes (ts/js/css/svelte/...) onto prettier project-wide, don't add a generic `.prettierrc` — add `.prettierrc.astro.json` instead. Only astro's `args` function looks for that filename; every other filetype's `condition` only recognizes the standard `.prettierrc*` names, so they stay on `biome`.
-
----
-
-### Step 4.5: (Optional) Add a Linter
-
-There is **no `nvim-lint`** in this config. Diagnostics come from LSP servers only, so a linter is added exactly like Step 2 + Step 3 — as a server in [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua):
-
-```lua
-opts = {
-    servers = {
-        eslint = {},   -- JS/TS linting
-        biome = {},    -- JS/TS/JSON/CSS lint + format
-        ruff = {},     -- Python linting
-    },
-}
-
-require("mason-lspconfig").setup({
-    ensure_installed = { "eslint", "biome", "ruff" },
-})
-```
-
-Most linters ship a language server (`eslint`, `biome`, `ruff`, `golangci_lint_ls`, `phpstan` via `intelephense`, ...) — install it in `:Mason` and register it, nothing else needed. The linter picks up the project's own config file (`eslint.config.js`, `biome.json`, `ruff.toml`); no per-project setup here.
-
-> ⚠️ Two linters on the same filetype means duplicate diagnostics. `eslint` and `biome` are both registered here — that's fine only because each one no-ops when its config file is absent from the project. Don't add a third JS linter.
-
-If a linter has **no** language server (e.g. `shellcheck` alone, `markdownlint`), it can't be wired up through this config as-is; `mfussenegger/nvim-lint` would have to be added first.
-
----
-
-### Step 5: (Optional) Configure Treesitter Syntax Highlighting in `lua/plugins/lsp/treesitter.lua`
-Open [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) and add the parser name to `ensure_installed`:
-
-```lua
-ensure_installed = {
-    "lua",
-    "typescript",
-    "javascript",
-    "svelte",
-    "astro",
-    "python",
-}
-```
+### Step 3: (Optional) Debug Adapter
+Register the DAP adapter in [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua) and, if the language needs a run/debug launch profile, in [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua). See [`docs/debug-adapters.md`](debug-adapters.md).
 
 ---
 
@@ -128,13 +81,12 @@ ensure_installed = {
 
 | Component | File to Edit | Key Section |
 |---|---|---|
-| **LSP Server Activation** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add to `opts.servers` |
-| **Auto-Installation** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add to `mason-lspconfig` `ensure_installed` |
-| **Linting** | [`lua/plugins/lsp/lsp.lua`](../lua/plugins/lsp/lsp.lua) | Add linter's LSP to `opts.servers` (no `nvim-lint`) |
-| **Formatting** | [`lua/plugins/lsp/formatting.lua`](../lua/plugins/lsp/formatting.lua) | Add to `formatters_by_ft` |
-| **Syntax Highlighting** | [`lua/plugins/lsp/treesitter.lua`](../lua/plugins/lsp/treesitter.lua) | Add to `ensure_installed` |
-| **Language Defaults** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) | Register in `lua/krs/langs/init.lua` |
+| **LSP Server + Formatter + Mason metadata** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) | `M.lsp_config`, `M.formatters_by_ft`, `M.mason`/`M.mason_order` |
+| **Register the module** | [`lua/krs/langs/init.lua`](../lua/krs/langs/init.lua) | Add to `M.langs` |
+| **Install bundle (Mason pkgs + Treesitter parsers)** | [`lua/krs/core/installer.lua`](../lua/krs/core/installer.lua) | Add entry to `M.language_bundles` |
+| **Debug Adapter (optional)** | [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua), [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua) | See [debug-adapters.md](debug-adapters.md) |
 
+`lua/plugins/lsp/lsp.lua`, `lua/plugins/lsp/formatting.lua`, and `lua/plugins/lsp/treesitter.lua` need **no edits** for a new language — they only aggregate what the language module and bundle declare.
 
 ---
 
@@ -145,4 +97,5 @@ ensure_installed = {
   :LspInfo
   ```
   Ensure the expected language server appears under **Active client(s)**.
+- Run `:LanguageManager` and confirm the new bundle shows `[✅ Installed (n/n)]` after installing.
 - For code completion, start typing or press `<C-space>` to open the `blink.cmp` completion menu.

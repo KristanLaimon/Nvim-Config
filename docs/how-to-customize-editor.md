@@ -190,30 +190,13 @@ return setmetatable(plugin_spec, { __index = M })
 
 To add full IDE support for a new programming language (e.g., Elixir, Zig, Scala, Kotlin, Ruby):
 
-1. **Mason LSP Server (`lua/plugins/lsp/lsp.lua`)**:
-   Add the language server to `ensure_installed` and `servers`:
-   ```lua
-   ensure_installed = { "lua_ls", "vtsls", "gopls", "zls" }, -- e.g. Add "zls" for Zig
-   servers = {
-       zls = {}, -- Options for zls
-   }
-   ```
+> ⚠️ There is no `servers = {}` table or `ensure_installed` list to edit in `lsp.lua`/`treesitter.lua` — those files only merge what each language declares. See [Adding a Language / LSP](adding-language.md) for the real, current steps; summary below.
 
-2. **Treesitter Syntax Highlighting (`lua/plugins/lsp/treesitter.lua`)**:
-   Add the language parser to `ensure_installed`:
-   ```lua
-   ensure_installed = { "lua", "typescript", "go", "zig" },
-   ```
+1. **Create `lua/krs/langs/<language>/init.lua`**, exporting `M.lsp_config` (lspconfig opts, keyed by server name), `M.mason`/`M.mason_order` (Mason package metadata), and `M.formatters_by_ft` (conform formatter list per filetype). Register it in `lua/krs/langs/init.lua`'s `M.langs` table — `lsp.lua` and `formatting.lua` auto-merge from there.
 
-3. **Conform Code Formatter (`lua/plugins/lsp/formatting.lua`)**:
-   Add the formatter for the filetype:
-   ```lua
-   formatters_by_ft = {
-       zig = { "zigfmt" },
-   }
-   ```
+2. **Add a Language Bundle in `lua/krs/core/installer.lua`**'s `M.language_bundles`, listing `mason_pkgs` (LSP/DAP/formatter) and `treesitter` (parser names). Nothing installs automatically — the user opts in per language via `:LanguageManager`.
 
-4. **Debug Adapter (DAP) (`lua/plugins/editor/dap.lua` & `lua/krs/launch/runtimes.lua`)**:
+3. **Debug Adapter (DAP) (`lua/plugins/editor/dap.lua` & `lua/krs/launch/runtimes.lua`)**:
    Register DAP adapter configuration in `lua/plugins/editor/dap.lua` and launch command in `runtimes.lua`.
 
 ---
