@@ -11,11 +11,11 @@
 --   (`@types/...`) through the picker.
 --
 -- HOW EACH LANGUAGE IS WIRED
---   lua_ls  `Lua.workspace.library` is rewritten and pushed live through
---           `workspace/didChangeConfiguration`.
---   tsgo    A single generated `.krsnvim/types.d.ts` holds one
---           `/// <reference path>` per active schema, and `tsconfig.json` is
---           patched to include it (tsgo ignores types outside the project).
+--   lua_ls    `Lua.workspace.library` is rewritten and pushed live through
+--             `workspace/didChangeConfiguration`.
+--   TS server A single generated `.krsnvim/types.d.ts` holds one
+--             `/// <reference path>` per active schema, and `tsconfig.json` is
+--             patched to include it (the server ignores types outside the project).
 --
 -- COMMANDS
 --   :TypeInjector / :KrsTypes      Open the picker.
@@ -58,19 +58,35 @@ M.settings = {
 	notify_title = "KRS Type Injector",
 
 	--- Supported languages. ADD A LANGUAGE HERE.
-	---   key        Folder under `schemas-langs/`, and key in types.json.
-	---   filetypes  Buffers that open this language's picker directly.
-	---   lsp        Client whose settings are refreshed after a change.
+	---   key          Folder under `schemas-langs/`, and key in types.json.
+	---   filetypes    Buffers that open this language's picker directly.
+	---   lang_module  Which lua/krs/langs/<name> module's LSP client gets refreshed.
+	--- `lang_module` names the lua/krs/langs/<name> module whose `lsp_server[1]`
+	--- is the client to refresh -- NOT resolved eagerly here (this file loads as
+	--- part of lua_ls's own settings, in lua/krs/langs/lua/init.lua, so requiring
+	--- a langs module at this table's construction time would be circular).
+	--- See `resolved_lsp_name` below.
 	languages = {
-		{ key = "lua", label = "Lua", filetypes = { "lua" }, lsp = "lua_ls" },
+		{ key = "lua", label = "Lua", filetypes = { "lua" }, lang_module = "lua" },
 		{
 			key = "typescript_javascript",
 			label = "TypeScript / JavaScript",
 			filetypes = { "typescript", "javascript", "typescriptreact", "javascriptreact" },
-			lsp = "tsgo",
+			lang_module = "typescript",
 		},
 	},
 }
+
+--- Resolves a `languages` entry's LSP client name, lazily (see the comment above).
+--- @param lang table One entry from `M.settings.languages`.
+--- @return string|nil
+local function resolved_lsp_name(lang)
+	if not lang.lang_module then
+		return nil
+	end
+	local ok, mod = pcall(require, "krs.langs." .. lang.lang_module)
+	return ok and mod.lsp_server and mod.lsp_server[1] or nil
+end
 
 --- Kept as top-level fields: other modules and docs refer to them.
 M.REF_FILE = M.settings.ref_file
@@ -101,8 +117,8 @@ end
 -- ============================================================================
 
 --- Project root for a buffer.
---- An attached lua_ls/tsgo client knows the real root, so it wins; otherwise walk
---- up for a marker. The home directory is rejected: it is never a project.
+--- An attached lua_ls/TS-server client knows the real root, so it wins; otherwise
+--- walk up for a marker. The home directory is rejected: it is never a project.
 ---
 --- @param bufnr integer|nil
 --- @return string root
@@ -111,7 +127,7 @@ function M.get_project_root(bufnr)
 
 	for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
 		for _, lang in ipairs(M.settings.languages) do
-			if client.name == lang.lsp and client.root_dir then
+			if client.name == resolved_lsp_name(lang) and client.root_dir then
 				return vim.fs.normalize(client.root_dir)
 			end
 		end
@@ -346,7 +362,7 @@ local function ensure_ts_project_config(norm_root)
 			'\t"include": ["**/*", "' .. M.settings.include_glob .. '"]',
 			"}",
 		}, path.join(norm_root, "tsconfig.json"))
-		notify("Created tsconfig.json -- tsgo ignores injected types without one.")
+		notify("Created tsconfig.json -- the TS server ignores injected types without one.")
 		return
 	end
 
@@ -404,7 +420,7 @@ local function active_schema_entries(active_names)
 	return entries
 end
 
---- Rewrites `.krsnvim/types.d.ts` and tells tsgo the file changed.
+--- Rewrites `.krsnvim/types.d.ts` and tells the TS server the file changed.
 --- With no active schemas the file is deleted instead.
 ---
 --- @param root string Project root.
@@ -414,14 +430,15 @@ function M.sync_ts_type_links(root, active_names)
 	local ref_file = path.join(norm_root, M.settings.ref_file)
 	local entries = active_schema_entries(active_names or {})
 
-	--- tsgo watches files rather than polling; `kind` is the LSP FileChangeType
-	--- (1 = created, 2 = changed, 3 = deleted).
-	local function notify_tsgo(kind, also_config)
+	--- The TS server watches files rather than polling; `kind` is the LSP
+	--- FileChangeType (1 = created, 2 = changed, 3 = deleted).
+	local ts_lsp_name = require("krs.langs.typescript").lsp_server[1]
+	local function notify_ts_lsp(kind, also_config)
 		local changes = { { uri = vim.uri_from_fname(ref_file), type = kind } }
 		if also_config then
 			table.insert(changes, { uri = vim.uri_from_fname(path.join(norm_root, "tsconfig.json")), type = 1 })
 		end
-		for _, client in ipairs(vim.lsp.get_clients({ name = "tsgo" })) do
+		for _, client in ipairs(vim.lsp.get_clients({ name = ts_lsp_name })) do
 			client:notify("workspace/didChangeWatchedFiles", { changes = changes })
 		end
 	end
@@ -429,7 +446,7 @@ function M.sync_ts_type_links(root, active_names)
 	if #entries == 0 then
 		if path.is_file(ref_file) then
 			vim.fn.delete(ref_file)
-			notify_tsgo(3, false)
+			notify_ts_lsp(3, false)
 		end
 		return
 	end
@@ -445,7 +462,7 @@ function M.sync_ts_type_links(root, active_names)
 	end
 	vim.fn.writefile(lines, ref_file)
 
-	notify_tsgo(1, not had_config)
+	notify_ts_lsp(1, not had_config)
 end
 
 --- Pushes the active schemas into the running language servers.

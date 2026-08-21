@@ -1,5 +1,4 @@
 {
-	"$schema": "./snippets.schema.json",
 	"Lua Module Boilerplate": {
 		"prefix": "mod",
 		"body": [

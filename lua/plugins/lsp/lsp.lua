@@ -2,20 +2,19 @@
 -- PLUGINS: LSP -- mason, nvim-lspconfig and blink.cmp.
 -- ============================================================================
 -- HOW A SERVER GETS ENABLED
---   1. `opts.servers` below holds one entry per server: its settings, filetypes
---      and root resolution. ADD A LANGUAGE SERVER THERE.
---   2. `mason-lspconfig.ensure_installed` lists what mason installs for you.
---   3. `config()` merges blink.cmp capabilities into each entry and enables it.
---
--- TYPESCRIPT
---   Only `tsgo` runs. vtsls/ts_ls/tsserver are skipped when mason offers them,
---   and stopped on attach if something else starts them anyway -- two TypeScript
---   servers means duplicated diagnostics and doubled memory.
+--   Every server's settings live in its owning language module, NOT here -- see
+--   lua/krs/langs/<lang>/init.lua's `M.lsp_config`, keyed by server name (e.g.
+--   lua/krs/langs/typescript/init.lua for vtsls/jsonls/biome/eslint). This file only:
+--   1. Merges every language's `lsp_config` into one `opts.servers` table.
+--   2. Adds settings that need a plugin only available at runtime (SchemaStore).
+--   3. Merges blink.cmp capabilities into each entry and enables it.
+--   A handful of generic, language-agnostic servers (taplo/yamlls/lemminx --
+--   TOML/YAML/XML have no per-language buffer-default module) are defined directly
+--   below instead of in a language module.
 --
 -- LUA
---   `lua_ls` also serves `.krsnvim` scripts: the workspace library comes from the
---   type injector, and script globals (fetch, console, import, krsnvim) are added
---   on attach so they do not show up as undefined.
+--   `lua_ls` also serves `.krsnvim` scripts: script globals (fetch, console, import,
+--   krsnvim) are re-added on attach so they do not show up as undefined.
 --
 -- JSON / TOML SCHEMAS
 --   Bundled schemas in `schemas/` are preferred over the online SchemaStore
@@ -29,6 +28,64 @@
 -- MSBuild project/props files are XML; registering them makes lemminx attach and
 -- give IntelliSense inside .csproj and friends. `.blade.php` needs a pattern
 -- rather than an extension, because the filetype depends on the double suffix.
+local langs = require("krs.langs").langs
+
+--- Generic, language-agnostic servers with no owning lua/krs/langs/<lang> module.
+local function generic_servers()
+	return {
+		taplo = {},
+		yamlls = {},
+		lemminx = {
+			settings = {
+				xml = {
+					validation = {
+						enabled = true,
+						noGrammar = "hint",
+					},
+					completion = {
+						autoCloseTags = true,
+					},
+					fileAssociations = {
+						{
+							systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+							pattern = "*.csproj",
+						},
+						{
+							systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+							pattern = "*.props",
+						},
+						{
+							systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+							pattern = "*.targets",
+						},
+						{
+							systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+							pattern = "*.fsproj",
+						},
+						{
+							systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
+							pattern = "*.vbproj",
+						},
+					},
+				},
+			},
+		},
+	}
+end
+
+--- Merges every language module's `lsp_config` into one servers table.
+local function build_servers()
+	local servers = generic_servers()
+	for _, lang in pairs(langs) do
+		if lang.lsp_config then
+			for name, cfg in pairs(lang.lsp_config) do
+				servers[name] = cfg
+			end
+		end
+	end
+	return servers
+end
+
 vim.filetype.add({
 	extension = {
 		csproj = "xml",
@@ -61,350 +118,7 @@ return {
 			"b0o/schemastore.nvim",
 		},
 		opts = {
-			servers = {
-				buf_ls = { enabled = false },
-				intelephense = {
-					filetypes = { "php", "blade" },
-					settings = {
-						intelephense = {
-							files = {
-								maxSize = 1000000,
-							},
-							stubs = {
-								"bcmath",
-								"Core",
-								"curl",
-								"date",
-								"hash",
-								"json",
-								"mbstring",
-								"openssl",
-								"pcre",
-								"PDO",
-								"Reflection",
-								"SPL",
-								"standard",
-								"tokenizer",
-								"zlib",
-								"laravel",
-								"phpunit",
-							},
-						},
-					},
-				},
-				taplo = {},
-				yamlls = {},
-				jsonls = {},
-				vtsls = {
-					root_dir = function(bufnr, on_dir)
-						local root = vim.fs.root(bufnr, {
-							"tsconfig.json",
-							"jsconfig.json",
-							"package.json",
-						})
-						local home = vim.fs.normalize(vim.env.USERPROFILE or vim.env.HOME or ""):lower()
-						if not root or vim.fs.normalize(root):lower() == home then
-							on_dir(vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)))
-						else
-							on_dir(root)
-						end
-					end,
-					settings = {
-						vtsls = {
-							autoUseWorkspaceTsdk = true,
-							experimental = {
-								completion = { enableServerSideFuzzyMatch = true },
-							},
-						},
-						typescript = {
-							tsserver = { maxTsServerMemory = 8192 },
-							inlayHints = {
-								parameterNames = { enabled = "all" },
-								parameterTypes = { enabled = true },
-								variableTypes = { enabled = true },
-								propertyDeclarationTypes = { enabled = true },
-								functionLikeReturnTypes = { enabled = true },
-								enumMemberValues = { enabled = true },
-							},
-						},
-						javascript = {
-							inlayHints = {
-								parameterNames = { enabled = "all" },
-								parameterTypes = { enabled = true },
-								variableTypes = { enabled = true },
-								propertyDeclarationTypes = { enabled = true },
-								functionLikeReturnTypes = { enabled = true },
-								enumMemberValues = { enabled = true },
-							},
-						},
-					},
-				},
-				biome = {
-					root_dir = function(bufnr, on_dir)
-						local root = vim.fs.root(bufnr, { "biome.json", "biome.jsonc" })
-						if root then
-							on_dir(root)
-						end
-					end,
-				},
-				eslint = {},
-				svelte = {
-					on_attach = function(client, _)
-						vim.api.nvim_create_autocmd("BufWritePost", {
-							pattern = { "*.js", "*.ts" },
-							callback = function(ctx)
-								client.notify("$/onDidChangeTsOrJsFile", { uri = ctx.match })
-							end,
-						})
-					end,
-				},
-				astro = {
-					init_options = {
-						typescript = {
-							tsdk = (function()
-								local mason_path = vim.fs.normalize(vim.fn.stdpath("data") .. "/mason/packages")
-								local candidate_vtsls = mason_path .. "/vtsls/node_modules/typescript/lib"
-								local candidate_ts = mason_path .. "/typescript-language-server/node_modules/typescript/lib"
-								if (vim.uv or vim.loop).fs_stat(candidate_vtsls) then
-									return candidate_vtsls
-								elseif (vim.uv or vim.loop).fs_stat(candidate_ts) then
-									return candidate_ts
-								end
-								return nil
-							end)(),
-						},
-					},
-				},
-				html = {
-					filetypes = { "html", "templ", "hbs", "php", "blade" },
-				},
-				cssls = {
-					settings = {
-						css = { validate = true, lint = { unknownAtRules = "ignore" } },
-						scss = { validate = true, lint = { unknownAtRules = "ignore" } },
-						less = { validate = true },
-					},
-				},
-				tailwindcss = {
-					filetypes = {
-						"html",
-						"css",
-						"scss",
-						"javascript",
-						"javascriptreact",
-						"typescript",
-						"typescriptreact",
-						"svelte",
-						"vue",
-						"astro",
-						"php",
-						"blade",
-					},
-					root_dir = function(bufnr, on_dir)
-						local root = vim.fs.root(bufnr, {
-							"tailwind.config.js",
-							"tailwind.config.cjs",
-							"tailwind.config.mjs",
-							"tailwind.config.ts",
-							"postcss.config.js",
-							"astro.config.mjs",
-							"package.json",
-						})
-						if root then
-							on_dir(root)
-						end
-					end,
-					settings = {
-						tailwindCSS = {
-							validate = true,
-							hovers = true,
-							suggestions = true,
-							codeActions = true,
-							experimental = {
-								classRegex = {
-									{ "cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*)" },
-									{ "cx\\(([^)]*)\\)", "[\"'`]([^\"'`]*)" },
-									{ "cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*)" },
-								},
-							},
-						},
-					},
-				},
-				emmet_ls = {
-					filetypes = {
-						"html",
-						"typescriptreact",
-						"javascriptreact",
-						"css",
-						"sass",
-						"scss",
-						"less",
-						"svelte",
-						"vue",
-						"astro",
-						"php",
-						"blade",
-					},
-				},
-				omnisharp = {
-					cmd = { "omnisharp", "--languageserver", "--hostPID", tostring(vim.fn.getpid()) },
-					enable_roslyn_analyzers = true,
-					organize_imports_on_format = true,
-					enable_import_completion = true,
-					root_dir = function(bufnr, on_dir)
-						local util = require("lspconfig.util")
-						local fname = vim.api.nvim_buf_get_name(bufnr)
-						local root = util.root_pattern("*.sln")(fname)
-							or util.root_pattern("*.csproj", "omnisharp.json", "global.json", ".git")(fname)
-						if root then
-							on_dir(root)
-						else
-							on_dir(vim.fs.dirname(fname))
-						end
-					end,
-					settings = {
-						FormattingOptions = {
-							EnableEditorConfigSupport = true,
-							OrganizeImports = true,
-						},
-						MsBuild = {
-							LoadProjectsOnDemand = false,
-						},
-						RoslynExtensionsOptions = {
-							EnableAnalyzersSupport = true,
-							EnableImportCompletion = true,
-							AnalyzeOpenDocumentsOnly = false,
-							DiagnosticWorkersThreadCount = 4,
-						},
-						Sdk = {
-							IncludePrereleases = true,
-						},
-					},
-				},
-				csharp_ls = {
-					enabled = false,
-					root_dir = function(bufnr, on_dir)
-						local util = require("lspconfig.util")
-						local fname = vim.api.nvim_buf_get_name(bufnr)
-						local root = util.root_pattern("*.sln")(fname) or util.root_pattern("*.csproj", ".git")(fname)
-						if root then
-							on_dir(root)
-						else
-							on_dir(vim.fs.dirname(fname))
-						end
-					end,
-				},
-				lemminx = {
-					settings = {
-						xml = {
-							validation = {
-								enabled = true,
-								noGrammar = "hint",
-							},
-							completion = {
-								autoCloseTags = true,
-							},
-							fileAssociations = {
-								{
-									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
-									pattern = "*.csproj",
-								},
-								{
-									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
-									pattern = "*.props",
-								},
-								{
-									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
-									pattern = "*.targets",
-								},
-								{
-									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
-									pattern = "*.fsproj",
-								},
-								{
-									systemId = vim.fn.stdpath("config") .. "/schemas/xml/msbuild.xsd",
-									pattern = "*.vbproj",
-								},
-							},
-						},
-					},
-				},
-				dockerls = {},
-				gopls = {
-					settings = {
-						gopls = {
-							codelenses = {
-								gc_details = false,
-								generate = true,
-								regenerate_cgo = true,
-								run_govulncheck = true,
-								test = true,
-								tidy = true,
-								upgrade_dependency = true,
-								vendor = true,
-							},
-							hints = {
-								assignVariableTypes = true,
-								compositeLiteralFields = true,
-								compositeLiteralTypes = true,
-								constantValues = true,
-								functionTypeParameters = true,
-								parameterNames = true,
-								rangeVariableTypes = true,
-							},
-							analyses = {
-								unusedparams = true,
-								shadow = true,
-							},
-							staticcheck = true,
-							gofumpt = true,
-						},
-					},
-				},
-				bashls = {
-					filetypes = { "sh", "bash", "zsh", "csh", "ksh" },
-				},
-				lua_ls = {
-					filetypes = { "lua", "krsnvim" },
-					settings = {
-						Lua = {
-							runtime = {
-								version = "LuaJIT",
-							},
-
-							diagnostics = {
-								globals = { "vim", "fetch", "console", "import", "krsnvim", "cli", "terminal", "fs" },
-							},
-
-							workspace = {
-								checkThirdParty = false,
-								library = require("plugins.krs.type_injector").get_active_lua_libraries(),
-							},
-
-							completion = {
-								callSnippet = "Replace",
-							},
-
-							hint = {
-								enable = true,
-								setType = true,
-							},
-
-							telemetry = {
-								enable = false,
-							},
-
-							format = {
-								enable = true,
-								defaultConfig = {
-									indent_style = "tab",
-									indent_size = "2",
-								},
-							},
-						},
-					},
-				},
-			},
+			servers = build_servers(),
 		},
 		config = function(_, opts)
 			local has_blink, blink = pcall(require, "blink.cmp")
@@ -487,10 +201,10 @@ return {
 				end,
 			})
 
-			-- tsgo advertises `diagnosticProvider`, so nvim pulls and refreshes diagnostics
-			-- natively. A hand-rolled fetch into a private namespace only froze whatever
-			-- the server happened to know a few hundred ms after attach -- typically
-			-- before node_modules was loaded -- and never refreshed it.
+			-- The TS server advertises `diagnosticProvider`, so nvim pulls and refreshes
+			-- diagnostics natively. A hand-rolled fetch into a private namespace only froze
+			-- whatever the server happened to know a few hundred ms after attach --
+			-- typically before node_modules was loaded -- and never refreshed it.
 
 			local function get_schema_uri(category, filename)
 				local path = vim.fs.normalize(vim.fn.stdpath("config") .. "/schemas/" .. category .. "/" .. filename)
@@ -523,6 +237,7 @@ return {
 								"babelrc.json",
 								"Turborepo",
 								"biome.json",
+								"KrsVim Snippets Schema",
 							},
 							replace = {
 								["tsconfig.json"] = get_schema_uri("json", "tsconfig.json"),

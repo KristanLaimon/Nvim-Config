@@ -50,10 +50,12 @@ return {
 			extension = {
 				krsnvim = { glyph = "🦊", hl = "MiniIconsOrange" },
 				proto = { glyph = "", hl = "MiniIconsAzure" },
+				lua = { hl = "MiniIconsBlue" },
 			},
 			filetype = {
 				krsnvim = { glyph = "🦊", hl = "MiniIconsOrange" },
 				proto = { glyph = "", hl = "MiniIconsAzure" },
+				lua = { hl = "MiniIconsBlue" },
 			},
 		},
 		config = function(_, opts)

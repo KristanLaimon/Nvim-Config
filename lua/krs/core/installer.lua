@@ -21,64 +21,47 @@ local function get_state_path()
 	return vim.fn.stdpath("data") .. "/krs_setup_completed.json"
 end
 
---- Expected Mason LSP & Tool packages.
-M.mason_packages = {
-	"vtsls",
-	"intelephense",
-	"lua_ls",
-	"jsonls",
-	"taplo",
-	"yamlls",
-	"biome",
-	"eslint",
-	"svelte",
-	"astro",
-	"html",
-	"cssls",
-	"tailwindcss",
-	"emmet_ls",
-	"omnisharp",
-	"netcoredbg",
-	"lemminx",
-	"dockerls",
-	"gopls",
-	"bashls",
-	-- Formatters & Linters (Conform / Mason-Conform)
-	"stylua",
-	"gofumpt",
-	"goimports",
-	"prettierd",
-	"prettier",
-	"blade-formatter",
-	"beautysh",
-	"protolint",
-	"csharpier",
+--- Generic, language-agnostic tools with no owning lua/krs/langs/<lang> module
+--- (TOML/YAML/XML have no per-language buffer-default module -- see
+--- lua/krs/langs/init.lua for where per-language tool metadata lives instead).
+--- @class KrsTool
+--- @field mason string Mason package directory/install name.
+--- @field type "lsp"|"formatter"|"dap"
+--- @field cmd string CLI binary used to detect an already-installed tool.
+--- @field lang? string Human-readable language label (lsp/dap tools).
+--- @field name? string Human-readable tool label (formatter tools).
+local GENERIC_TOOLS = {
+	taplo = { mason = "taplo", lang = "TOML", type = "lsp", cmd = "taplo" },
+	yamlls = { mason = "yaml-language-server", lang = "YAML", type = "lsp", cmd = "yaml-language-server" },
+	lemminx = { mason = "lemminx", lang = "XML", type = "lsp", cmd = "lemminx" },
 }
+local GENERIC_MASON_ORDER = { "taplo", "yamlls", "lemminx" }
 
---- Map lspconfig server names to Mason package directory/install names.
-M.lsp_to_mason = {
-	vtsls = "vtsls",
-	buf_ls = "buf",
-	intelephense = "intelephense",
-	lua_ls = "lua-language-server",
-	jsonls = "json-lsp",
-	taplo = "taplo",
-	yamlls = "yaml-language-server",
-	biome = "biome",
-	eslint = "eslint-lsp",
-	svelte = "svelte-language-server",
-	astro = "astro-language-server",
-	html = "html-lsp",
-	cssls = "css-lsp",
-	tailwindcss = "tailwindcss-language-server",
-	emmet_ls = "emmet-ls",
-	omnisharp = "omnisharp",
-	netcoredbg = "netcoredbg",
-	lemminx = "lemminx",
-	dockerls = "dockerfile-language-server",
-	gopls = "gopls",
-	bashls = "bash-language-server",
-}
+--- Every LSP/formatter tool this config manages, merged from each language module's
+--- `M.mason` (see lua/krs/langs/<lang>/init.lua) plus the generic tools above. Add,
+--- remove, or swap a tool by editing its owning language module, NOT here.
+M.tools = vim.deepcopy(GENERIC_TOOLS)
+
+--- Expected Mason LSP & Tool packages, in install/display order. Built by
+--- concatenating each language module's `M.mason_order` (its Mason install
+--- sequence) with the generic tools' order. Any tool disabled in its
+--- lsp_config (e.g. `buf_ls`, `csharp_ls`) is intentionally excluded from its
+--- language's `mason_order`, so it is never auto-installed.
+M.mason_packages = {}
+do
+	local langs = require("krs.langs").langs
+	for _, lang in pairs(langs) do
+		if lang.mason then
+			for tool_name, info in pairs(lang.mason) do
+				M.tools[tool_name] = info
+			end
+		end
+		if lang.mason_order then
+			vim.list_extend(M.mason_packages, lang.mason_order)
+		end
+	end
+	vim.list_extend(M.mason_packages, GENERIC_MASON_ORDER)
+end
 
 --- Resolves an lspconfig or tool name to its actual Mason package directory name.
 --- @param pkg string
@@ -88,42 +71,9 @@ function M.get_mason_package_name(pkg)
 	if ok and mappings.lspconfig_to_package and mappings.lspconfig_to_package[pkg] then
 		return mappings.lspconfig_to_package[pkg]
 	end
-	return M.lsp_to_mason[pkg] or pkg
+	local tool = M.tools[pkg]
+	return (tool and tool.mason) or pkg
 end
-
---- Package metadata mapping Mason package names to Human-readable Languages/Formatters and CLI binaries.
-M.package_info = {
-	vtsls = { lang = "TypeScript / JavaScript", type = "lsp", cmd = "vtsls" },
-	intelephense = { lang = "PHP", type = "lsp", cmd = "intelephense" },
-	lua_ls = { lang = "Lua", type = "lsp", cmd = "lua-language-server" },
-	jsonls = { lang = "JSON", type = "lsp", cmd = "vscode-json-language-server" },
-	taplo = { lang = "TOML", type = "lsp", cmd = "taplo" },
-	yamlls = { lang = "YAML", type = "lsp", cmd = "yaml-language-server" },
-	biome = { lang = "JS/TS/JSON", type = "lsp", cmd = "biome" },
-	eslint = { lang = "JS/TS (ESLint)", type = "lsp", cmd = "vscode-eslint-language-server" },
-	svelte = { lang = "Svelte", type = "lsp", cmd = "svelteserver" },
-	astro = { lang = "Astro", type = "lsp", cmd = "astro-ls" },
-	html = { lang = "HTML", type = "lsp", cmd = "vscode-html-language-server" },
-	cssls = { lang = "CSS", type = "lsp", cmd = "vscode-css-language-server" },
-	tailwindcss = { lang = "Tailwind CSS", type = "lsp", cmd = "tailwindcss-language-server" },
-	emmet_ls = { lang = "Emmet", type = "lsp", cmd = "emmet-ls" },
-	omnisharp = { lang = "C#", type = "lsp", cmd = "OmniSharp" },
-	netcoredbg = { lang = "C# Debugger", type = "dap", cmd = "netcoredbg" },
-	lemminx = { lang = "XML", type = "lsp", cmd = "lemminx" },
-	dockerls = { lang = "Docker", type = "lsp", cmd = "docker-langserver" },
-	gopls = { lang = "Go", type = "lsp", cmd = "gopls" },
-	bashls = { lang = "Bash / Shell", type = "lsp", cmd = "bash-language-server" },
-
-	stylua = { name = "stylua", type = "formatter", cmd = "stylua" },
-	gofumpt = { name = "gofumpt", type = "formatter", cmd = "gofumpt" },
-	goimports = { name = "goimports", type = "formatter", cmd = "goimports" },
-	prettierd = { name = "prettierd", type = "formatter", cmd = "prettierd" },
-	prettier = { name = "prettier", type = "formatter", cmd = "prettier" },
-	["blade-formatter"] = { name = "blade-formatter", type = "formatter", cmd = "blade-formatter" },
-	beautysh = { name = "beautysh", type = "formatter", cmd = "beautysh" },
-	protolint = { name = "protolint", type = "formatter", cmd = "protolint" },
-	csharpier = { name = "csharpier", type = "formatter", cmd = "csharpier" },
-}
 
 --- Expected essential CLI tools.
 M.essential_tools = {
@@ -435,7 +385,7 @@ function M.open_toggle_menu()
 		local pkg_dir = mason_share .. "/" .. mason_pkg
 		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
 
-		local info = M.package_info[pkg] or {}
+		local info = M.tools[pkg] or {}
 		local bin_cmd = info.cmd or pkg
 		local is_installed = (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1)
 
@@ -808,7 +758,7 @@ function M.scan_status()
 		local pkg_dir = mason_share .. "/" .. mason_pkg
 		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
 
-		local info = M.package_info[pkg] or {}
+		local info = M.tools[pkg] or {}
 		local bin_cmd = info.cmd or pkg
 		local is_installed = (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1)
 
@@ -1118,7 +1068,14 @@ M.language_bundles = {
 		requires = {
 			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
 		},
-		mason_pkgs = { "vtsls", "eslint-lsp", "biome", "js-debug-adapter", "prettier", "prettierd" },
+		mason_pkgs = {
+			require("krs.langs.typescript").lsp_server[1],
+			"eslint-lsp",
+			"biome",
+			"js-debug-adapter",
+			"prettier",
+			"prettierd",
+		},
 		treesitter = { "typescript", "javascript", "tsx", "jsx" },
 	},
 	{
@@ -1210,7 +1167,7 @@ function M.get_bundle_status(bundle)
 		total = total + 1
 		local pkg_dir = mason_share .. "/" .. pkg
 		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
-		local info = M.package_info[pkg] or {}
+		local info = M.tools[pkg] or {}
 		local bin_cmd = info.cmd or pkg
 		if (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1) then
 			installed = installed + 1

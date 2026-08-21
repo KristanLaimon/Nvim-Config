@@ -7,6 +7,21 @@
 --   2. Provides `has_editorconfig(buf)` and `has_project_config(buf, config_files)`
 --      helpers so per-language defaults apply only when no project-level
 --      formatter configs (Prettier, Biome, ESLint, EditorConfig, Pint, etc.) exist.
+--
+-- WHERE LANGUAGE-SPECIFIC CONFIG LIVES
+--   This file only holds generic, language-agnostic helpers and the module
+--   registry. Anything specific to one language or its tools (LSP server
+--   settings, mason package names, formatter file lists, conform entries)
+--   belongs in that language's own lua/krs/langs/<lang>/init.lua -- see
+--   lua/krs/langs/typescript/init.lua for the fullest example:
+--     M.lsp_server        array of lspconfig server names this language owns
+--     M.lsp_config         { [server_name] = <lspconfig opts> }
+--     M.mason              { [tool_name] = { mason=, cmd=, lang=/name=, type= } }
+--     M.formatters_by_ft    { [filetype] = <conform formatter list> }
+--     M.conform_formatters  { [formatter_name] = <conform formatter opts> }
+--   lua/plugins/lsp/lsp.lua, lua/plugins/lsp/formatting.lua and
+--   lua/krs/core/installer.lua all read these fields instead of hardcoding
+--   settings -- swapping a server or formatter is a one-file edit.
 -- ============================================================================
 
 local M = {}

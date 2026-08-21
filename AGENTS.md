@@ -9,11 +9,32 @@ This file defines mandatory guidelines and reference links for AI coding assista
 ## 📌 1. Mandatory Development & Architecture Guidelines
 
 ### 🌐 1.1 Language Additions & Tooling Registration Rule
+
+**Centralized-config pattern**: everything specific to one language -- LSP server settings, Mason package names, formatter assignment, indentation defaults -- lives in that language's own `lua/krs/langs/<language>/init.lua`, never scattered across `lsp.lua`/`formatting.lua`/`installer.lua`. Those three files only *aggregate* what each language module exports; swapping a tool (e.g. `vtsls` -> `tsgo`) or changing its settings is a one-file edit. See `lua/krs/langs/typescript/init.lua` for the fullest example. A language module exports whichever of these fields it needs:
+
+| Field | Shape | Consumed by |
+|---|---|---|
+| `M.lsp_server` | array of lspconfig server names (`{"vtsls"}`, even for a single server -- rare multi-server languages just list more) | `installer.lua` bundles, cross-refs from other modules |
+| `M.lsp_config` | `{ [server_name] = <lspconfig opts: root_dir, settings, filetypes, ...> }` | `lua/plugins/lsp/lsp.lua` merges every language's `lsp_config` into `opts.servers` |
+| `M.mason` | `{ [tool_name] = { mason=, cmd=, lang=/name=, type="lsp"\|"formatter"\|"dap" } }` | `lua/krs/core/installer.lua` merges every language's `mason` into `M.tools` |
+| `M.mason_order` | array of tool-name strings, this language's Mason install/display order | `installer.lua` concatenates these into `M.mason_packages` |
+| `M.formatters_by_ft` | `{ [filetype] = <conform formatter list> }` | `lua/plugins/lsp/formatting.lua` merges into `opts.formatters_by_ft` |
+| `M.conform_formatters` | `{ [formatter_name] = <conform formatter opts: condition/args> }` | `formatting.lua` merges into `opts.formatters` |
+| `M.dap_filetypes` + `M.dap_configs` | array of filetypes; array of static nvim-dap config tables | `lua/plugins/editor/dap.lua` calls `debuggers._shared.add(dap, dap_filetypes, dap_configs)` for languages with a plain static list (see `php`/`csharp`/`python`) |
+| `M.dap_setup` | `function(dap)` | `dap.lua` calls this instead, for languages whose adapter needs runtime setup (conditional adapter registration, delegating to another plugin's own `setup()`) -- see `bash` (conditional bashdb/bash adapter), `go` (`dap-go`), `lua` (krsnvimscript adapter) |
+| `M.launch_runtimes` | `{ [runtime_key] = { command=, dap=, execute= } }` | `lua/krs/launch/runtimes.lua` merges every language's `launch_runtimes` into its registry -- one language can own several runtime flavors (e.g. `typescript` owns `bun`/`node`/`deno`) |
+
+A handful of truly generic, cross-language things have no owning module and stay where they are instead of being forced into one:
+- **Generic servers** with no per-language buffer-default concept (TOML/YAML/XML: `taplo`, `yamlls`, `lemminx`) stay directly in `lsp.lua`/`installer.lua`.
+- **Cross-language debuggers** that serve multiple `krs.langs` modules at once (`bun`/`node`/`browsers` -- all debug the same JS/TS/web filetypes via js-debug or Bun's own adapter) stay as their own file in `lua/plugins/krs/debuggers/`, loaded explicitly by `dap.lua` alongside the per-language loop.
+- **`custom`** (the fallback launch runtime for anything unrecognized) has no language at all and stays in `runtimes.lua`.
+
+Don't invent a language module, or force a field into one, just to host something that doesn't actually belong to a single language.
+
 When adding support for a new programming language (or updating an existing one):
-1. **Update `installer.lua` (`M.language_bundles`)**: Add the language bundle specifying its Mason packages (`mason_pkgs`) and Treesitter parsers (`treesitter`).
+1. **Update `installer.lua` (`M.language_bundles`)**: Add the language bundle specifying its Mason packages (`mason_pkgs`) and Treesitter parsers (`treesitter`) -- this is the install-wizard grouping, separate from the per-language config above.
 2. **Add to Interactive Selection UI**: Ensure the language appears as an **optional selectable bundle** in the Language Tooling Manager (`:LanguageManager`, `:KrsLanguageManager`, `:KrsInstallDependencies`, `:KrsSetup`).
-3. **Update LSP, Formatter, DAP & Wiki Specs**: Register server options in `lua/plugins/lsp/lsp.lua`, formatters in `lua/plugins/lsp/formatting.lua`, debugger profiles in `lua/plugins/krs/debuggers/<lang>.lua`, and document it in a dedicated file under [`docs/languages/<lang>.md`](docs/languages/).
-4. **Per-Language Defaults in `lua/krs/langs/`**: Put all non-UI, non-plugin-specific language configuration (such as default indentation settings when no `.editorconfig` exists, environment path resolution, and language setup hooks) inside `lua/krs/langs/<language>/init.lua` and register the submodule in `lua/krs/langs/init.lua`.
+3. **Put everything in `lua/krs/langs/<language>/init.lua`**: LSP server settings, Mason metadata, formatter assignment, debugger config, launch-profile runtimes, indentation defaults, environment path resolution, and setup hooks -- see the field table above. Register the submodule in `lua/krs/langs/init.lua`. Document the language in a dedicated file under [`docs/languages/<lang>.md`](docs/languages/).
 
 
 ### 🌙 1.2 Minimal Fresh Setup Rule (Lua Only)
@@ -107,5 +128,5 @@ Detailed setup, Ex commands, DAP debug profiles, and plugin integrations for eac
 > 2. **Always list new languages in `:LanguageManager`** as optional UI selections.
 > 3. **Prefer Command Palette options** over assigning `<leader>` keymaps.
 > 4. **Reference dedicated wiki pages** under [`docs/languages/`](docs/languages/) for language-specific toolchain details.
-> 5. **Place all non-UI, non-plugin per-language defaults** in `lua/krs/langs/<language>/init.lua` and register them in `lua/krs/langs/init.lua`.
+> 5. **Place ALL per-language config** -- LSP settings, Mason metadata, formatter assignment, debugger config, launch-profile runtimes, indentation defaults -- in `lua/krs/langs/<language>/init.lua` (see §1.1's field table) and register the module in `lua/krs/langs/init.lua`. `lsp.lua`/`formatting.lua`/`installer.lua`/`dap.lua`/`runtimes.lua` only aggregate; never hardcode a language's settings there.
 

@@ -7,15 +7,13 @@
 -- requires each module by name and calls it with the `dap` module.
 -- ============================================================================
 
-local runtimes = require("krs.launch.runtimes")
-
 local M = {}
 
 -- Without this js-debug stops inside node internals and the tsx/ts-node loader.
 -- nvim-dap force-lists every frame's buffer (session.lua: buflisted = true), so
 -- each one becomes a bufferline tab with a long absolute path.
 -- Shared with the launch profiles, so both debug paths skip the same files.
-M.js_skip = runtimes.js_skip_files
+M.js_skip = require("krs.langs.typescript").js_skip_files
 
 M.web_filetypes = {
 	"typescript",

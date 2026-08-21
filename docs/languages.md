@@ -4,7 +4,7 @@
 
 Mason, `mason-lspconfig`, `mason-conform` and `mason-nvim-dap` install everything below on first start — no manual `:MasonInstall`.
 
-Config files: `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp/formatting.lua` (Conform), `lua/plugins/lsp/treesitter.lua` (parsers), `lua/plugins/editor/dap.lua` (debug adapters).
+**Where a language's actual settings live**: `lua/krs/langs/<language>/init.lua` — LSP server settings, Mason package names, formatter assignment, debugger config and launch-profile runtimes are all defined there, one file per language. `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp/formatting.lua` (Conform), `lua/plugins/lsp/treesitter.lua` (parsers), `lua/plugins/editor/dap.lua` (debug adapters), and `lua/krs/core/installer.lua` (Mason install list) only *aggregate* what every language module exports — swapping a tool means editing the one language file, not four.
 
 ---
 
@@ -14,7 +14,7 @@ Config files: `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp
 |---|---|---|---|---|
 | **Lua** | `lua_ls` | `stylua` | `lua` | — |
 | **JSON** | `jsonls` *(SchemaStore + local schemas)* | `prettierd` → `prettier` → `biome` | `json` | — |
-| **JavaScript / TS / React** | `tsgo` | `prettierd` → `prettier` → `biome` | `typescript`, `javascript`, `tsx`, `jsx` | `js-debug-adapter` (`pwa-node`), Bun adapter |
+| **JavaScript / TS / React** | `vtsls` | `prettierd` → `prettier` → `biome` | `typescript`, `javascript`, `tsx`, `jsx` | `js-debug-adapter` (`pwa-node`), Bun adapter |
 | **HTML / CSS** | `html`, `cssls`, `emmet_ls`, `tailwindcss` | `prettierd` → `prettier` → `biome` | `html`, `css` | browser adapters |
 | **Svelte** | `svelte` | `prettierd` → `prettier` → `biome` | `svelte` | browser adapters |
 | **Astro** | `astro` | `prettier` (always) | `astro` | browser adapters |
@@ -32,9 +32,9 @@ Config files: `lua/plugins/lsp/lsp.lua` (servers + completion), `lua/plugins/lsp
 
 ## 🧠 Server notes
 
-**TypeScript runs on `tsgo`, not `ts_ls`.** The Mason handler skips `vtsls` / `ts_ls` / `tsserver`, the main enable loop skips them too, and an `LspAttach` autocmd stops any of them that still manages to attach — so exactly one TS server is ever live. `tsgo` also gets a custom `root_dir` (nvim 0.11+ `(bufnr, on_dir)` signature, which must *call* `on_dir`): it roots at `tsconfig.json` / `jsconfig.json` / `package.json` / `.krsnvim` / `.nvimkrs`, and falls back to the file's own directory when the only match would be `$HOME` — otherwise opening a stray script indexes the whole home directory. Automatic type acquisition is off; types come from the [Type Injector](type-injector.md) instead.
+**TypeScript runs on `vtsls`.** Its name is defined once, in `lua/krs/langs/typescript/init.lua`'s `M.lsp_server` — swap TS servers (e.g. to `tsgo`) by changing that one value; `lsp.lua` and `installer.lua` both read it from there. It gets a custom `root_dir` (nvim 0.11+ `(bufnr, on_dir)` signature, which must *call* `on_dir`): it roots at `tsconfig.json` / `jsconfig.json` / `package.json`, and falls back to the file's own directory when the only match would be `$HOME` — otherwise opening a stray script indexes the whole home directory. Automatic type acquisition is off; types come from the [Type Injector](type-injector.md) instead.
 
-**Diagnostics are native.** `tsgo` advertises `diagnosticProvider`, so Neovim pulls and refreshes diagnostics itself. An earlier hand-rolled fetch into a private namespace froze whatever the server knew a few hundred ms after attach — usually before `node_modules` was indexed — and never refreshed.
+**Diagnostics are native.** `vtsls` advertises `diagnosticProvider`, so Neovim pulls and refreshes diagnostics itself. An earlier hand-rolled fetch into a private namespace froze whatever the server knew a few hundred ms after attach — usually before `node_modules` was indexed — and never refreshed.
 
 **PHP** — `intelephense` with a large stub set and `maxSize = 1000000`. `pint` and `php_cs_fixer` are conditional formatters: they only run when the binary is on `PATH` **or** `vendor/bin/pint(.bat)` / `vendor/bin/php-cs-fixer(.bat)` exists upward from the file. `.blade.php` is remapped to the `blade` filetype. `:PHPCheckTools` reports which PHP tools are missing on the host and inside WSL, with install steps.
 

@@ -8,8 +8,9 @@
 --   `vim.notify` to alert the user that keyboard shortcuts may fail.
 --
 -- HOW IT WORKS
---   * On Windows, uses LuaJIT FFI with `user32.dll` (`GetKeyState(0x14)`) for zero-overhead,
---     0ms latency state queries.
+--   * State queries go through lua/krs/core/os/shared.lua, which on Windows uses
+--     LuaJIT FFI with `user32.dll` (`GetKeyState(0x14)`) for zero-overhead, 0ms
+--     latency; no other OS has an implementation yet (see that file for why).
 --   * Uses a focus-aware libuv timer and autocmds (`CursorHold`, `WinEnter`, `BufEnter`,
 --     `ModeChanged`) to check state without background CPU waste when unfocused.
 --   * Throttles notifications so only one toast is shown per Caps Lock session.
@@ -43,7 +44,7 @@ M.settings = {
 }
 
 -- ============================================================================
--- STATE & FFI BINDINGS
+-- STATE
 -- ============================================================================
 
 local uv = vim.uv or vim.loop
@@ -52,16 +53,6 @@ local check_timer = nil
 local caps_on_since = nil
 local notified = false
 
-local ffi_ok, ffi = pcall(require, "ffi")
-local user32 = nil
-
-if ffi_ok and vim.fn.has("win32") == 1 then
-	pcall(function()
-		ffi.cdef([[ short GetKeyState(int nVirtKey); ]])
-		user32 = ffi.load("user32")
-	end)
-end
-
 -- ============================================================================
 -- API
 -- ============================================================================
@@ -69,15 +60,7 @@ end
 --- Checks whether Caps Lock is toggled ON.
 --- @return boolean
 function M.is_caps_lock_on()
-	if user32 then
-		local ok, res = pcall(function()
-			return user32.GetKeyState(0x14)
-		end)
-		if ok and res then
-			return bit.band(res, 1) ~= 0
-		end
-	end
-	return false
+	return require("krs.core.os.shared").is_caps_lock_on()
 end
 
 --- Identifies the user's current context name (e.g., Neo-tree, Menu, Telescope).

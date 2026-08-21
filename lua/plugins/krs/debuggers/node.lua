@@ -7,7 +7,7 @@ local shared = require("plugins.krs.debuggers._shared")
 -- Node cannot execute .ts directly. Same resolver the launch profiles use, so
 -- "debug this file" and "debug this profile" start TypeScript the same way.
 local function ts_launch()
-	return require("krs.launch.runtimes").ts_runtime(vim.fn.getcwd(), vim.fn.expand("%:p"))
+	return require("krs.langs.typescript").ts_runtime(vim.fn.getcwd(), vim.fn.expand("%:p"))
 end
 
 return function(dap)

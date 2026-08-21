@@ -25,6 +25,7 @@ This guide explains how offline, 100% local JSON schema validation and autocompl
 | **Babel** | `schemas/json/babelrc.json` | `.babelrc`, `.babelrc.json`, `babel.config.json` | Standard SchemaStore override (`replace`) |
 | **Turborepo** | `schemas/json/turbo.json` | `turbo.json` | Standard SchemaStore override (`replace`) |
 | **Biome** | `schemas/json/biome.json` | `biome.json`, `biome.jsonc` | Custom schema entry (`extra`) |
+| **KrsVim Snippets** | `snippets/snippets.schema.json` | `snippets/*.json`, `snippets/**/*.json` | Custom schema entry (`extra`) |
 
 ---
 

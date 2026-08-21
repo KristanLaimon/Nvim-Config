@@ -3,10 +3,70 @@
 -- ============================================================================
 -- WHAT IT DOES
 --   Sets standard PEP 8 4-space indentation defaults for Python buffers when no
---   .editorconfig file specifies buffer settings.
+--   .editorconfig file specifies buffer settings. Also owns the debugpy DAP
+--   adapter (no LSP is configured for Python in this setup) and the `python`
+--   launch-profile runtime.
 -- ============================================================================
 
 local M = {}
+
+--- Prefers the project's virtualenv interpreter over whatever `python` resolves
+--- to on PATH, so imports match what the project actually installed.
+--- @return string
+local function python_path()
+	local cwd = vim.fn.getcwd()
+	for _, candidate in ipairs({
+		"/venv/Scripts/python.exe",
+		"/.venv/Scripts/python.exe",
+		"/venv/bin/python",
+		"/.venv/bin/python",
+	}) do
+		if vim.fn.executable(cwd .. candidate) == 1 then
+			return cwd .. candidate
+		end
+	end
+	return "python"
+end
+
+--- Filetypes the DAP configurations below attach to.
+M.dap_filetypes = { "python" }
+
+--- Static nvim-dap configurations, appended by lua/plugins/editor/dap.lua.
+M.dap_configs = {
+	{
+		type = "python",
+		request = "launch",
+		name = "Launch Current File (Python)",
+		program = "${file}",
+		cwd = "${workspaceFolder}",
+		console = "integratedTerminal",
+		pythonPath = python_path,
+	},
+}
+
+--- Mason package metadata, keyed by tool name.
+M.mason = {
+	debugpy = { mason = "debugpy", lang = "Python Debugger", type = "dap", cmd = "debugpy-adapter" },
+}
+
+M.mason_order = { "debugpy" }
+
+--- Launch-profile runtimes this language owns (see lua/krs/launch/runtimes.lua).
+M.launch_runtimes = {
+	python = {
+		command = "python",
+		dap = function(profile, root, ctx)
+			return {
+				type = "python",
+				request = "launch",
+				name = profile.name,
+				program = ctx.full_entry,
+				cwd = root,
+				console = "integratedTerminal",
+			}
+		end,
+	},
+}
 
 --- Standard PEP 8 defaults for Python (4 spaces).
 M.defaults = {

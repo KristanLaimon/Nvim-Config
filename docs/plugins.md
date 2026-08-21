@@ -23,7 +23,7 @@ See [Module Architecture](module-architecture.md) for how the custom ones are wi
 | **Multi-Terminal Manager** | `terminal.lua` | 9 lazily-spawned terminals, toggled independently. A `cwd` inside a WSL distro path launches `wsl.exe` there instead of the Windows shell. | `<A-1>`..`<A-9>`, `<C-;>` |
 | **Desktop File Explorer** | `file_explorer.lua` | Pure-Lua floating file browser rooted at `~/Desktop`. Create/rename/delete, drill in/out, set folder as active project. | `<C-S-f>`, `:TelescopeFileBrowserDesktop` |
 | **WSL File Explorer** | `file_explorer.lua` | Same explorer rooted at `\\wsl.localhost\<Distro>\`; lists distros when more than one is installed. Windows-only. | `<leader>fw`, `:TelescopeFileBrowserWSL` |
-| **Type Injector** | `type_injector.lua` | Per-project Lua/TS type schemas + `@types` package installer, applied live to `lua_ls` and `tsgo`. | `:KrsTypes`, `:TypeInjector` |
+| **Type Injector** | `type_injector.lua` | Per-project Lua/TS type schemas + `@types` package installer, applied live to `lua_ls` and `vtsls`. | `:KrsTypes`, `:TypeInjector` |
 | **Tailwind Organizer** | `tailwind_organizer.lua` | Sorts and multi-rows `class` / `className` attributes on save. | `<leader>tw`, `<leader>tt`, `:TailwindOrganize` |
 | **Nuget Package Manager** | `nuget.lua` | CRUD for `<PackageReference>` in a `.csproj` via `dotnet add/remove package`, in a Telescope picker. | `<leader>ng`, `:NugetManager` |
 | **Buffer Cleaner & Smart Quit** | `buffer_cleaner.lua` | Makes `:q` context-aware (close split → close tab → back to dashboard → quit) and sweeps empty `[No Name]` buffers. | `:q`, `:q!` |

@@ -3,9 +3,13 @@
 -- ============================================================================
 -- WHAT THIS FILE OWNS
 --   1. mason-nvim-dap: which adapters get installed automatically.
---   2. The per-language modules in lua/plugins/krs/debuggers/, loaded in the
---      order they appear in the picker. ADD A LANGUAGE by adding one file there
---      and its name to the list below.
+--   2. Per-language DAP config, read from each krs.langs module's `dap_setup`
+--      (function) and/or `dap_filetypes`/`dap_configs` (plain data) -- see
+--      lua/krs/langs/php/init.lua for the plain-data shape and
+--      lua/krs/langs/bash/init.lua for the function shape. ADD A LANGUAGE's
+--      debugger there, not here; only cross-language modules (bun/node/browsers
+--      -- they all debug the same JS/TS/web filetypes via js-debug, so no single
+--      language owns them) stay as their own file in lua/plugins/krs/debuggers/.
 --   3. `.vscode/launch.json` support: the `type` -> filetype table nvim-dap needs
 --      to know which configurations apply to the file you are in.
 --   4. dap-ui layout, ANSI colour in the repl, inline variable values, and the
@@ -72,32 +76,46 @@ return {
 			end
 
 			-- ----------------------------------------------------------------------
-			-- Per-language adapters & configurations
+			-- Cross-language adapters & configurations
 			-- ----------------------------------------------------------------------
-			-- One module per language/debugger in lua/plugins/krs/debuggers/. Each
-			-- returns a function(dap) that registers its own adapter and appends its
-			-- configurations. Order here is the order they appear in the picker, so
-			-- the first entry of the first module is what <F5> runs by default.
-			-- Adding a language = one new file there + its name in this list.
-			for _, language in ipairs({
-				"bun",
-				"node",
-				"browsers",
-				"python",
-				"csharp",
-				"php",
-				"go",
-				"bash",
-				"krsnvimscript",
-			}) do
+			-- bun/node/browsers all debug the same JS/TS/web filetypes through
+			-- js-debug (or Bun's own adapter), shared by multiple krs.langs modules
+			-- (typescript, web) -- no single language module owns them, so they stay
+			-- as their own file in lua/plugins/krs/debuggers/. Order here is the
+			-- order they appear in the picker, so the first entry of the first
+			-- module is what <F5> runs by default.
+			for _, generic in ipairs({ "bun", "node", "browsers" }) do
 				local ok, err = pcall(function()
-					require("plugins.krs.debuggers." .. language)(dap)
+					require("plugins.krs.debuggers." .. generic)(dap)
 				end)
 				if not ok then
-					vim.notify(
-						"DAP: failed to load debugger '" .. language .. "': " .. tostring(err),
-						vim.log.levels.WARN
-					)
+					vim.notify("DAP: failed to load debugger '" .. generic .. "': " .. tostring(err), vim.log.levels.WARN)
+				end
+			end
+
+			-- ----------------------------------------------------------------------
+			-- Per-language adapters & configurations
+			-- ----------------------------------------------------------------------
+			-- Each krs.langs module owns its own debugger: `dap_setup(dap)` for
+			-- anything that needs to register an adapter or build configs at
+			-- runtime (bash, go, lua/krsnvimscript), or plain `dap_filetypes` +
+			-- `dap_configs` for a static list (php, csharp, python). This fixed
+			-- order is what the picker shows -- krs.langs.langs itself is an
+			-- unordered table, so it can't be walked directly here.
+			local shared = require("plugins.krs.debuggers._shared")
+			local langs = require("krs.langs").langs
+			for _, key in ipairs({ "python", "csharp", "php", "bash", "go", "lua" }) do
+				local lang = langs[key]
+				if lang then
+					if lang.dap_setup then
+						local ok, err = pcall(lang.dap_setup, dap)
+						if not ok then
+							vim.notify("DAP: failed to set up '" .. key .. "': " .. tostring(err), vim.log.levels.WARN)
+						end
+					end
+					if lang.dap_configs and lang.dap_filetypes then
+						shared.add(dap, lang.dap_filetypes, lang.dap_configs)
+					end
 				end
 			end
 
@@ -116,12 +134,12 @@ return {
 				node = web_filetypes,
 				chrome = web_filetypes,
 				firefox = web_filetypes,
-				coreclr = { "cs" },
-				python = { "python" },
-				php = { "php", "blade" },
+				coreclr = langs.csharp.dap_filetypes,
+				python = langs.python.dap_filetypes,
+				php = langs.php.dap_filetypes,
 				go = { "go" },
-				bashdb = { "sh", "bash", "zsh", "csh", "ksh" },
-				bash = { "sh", "bash", "zsh", "csh", "ksh" },
+				bashdb = langs.bash.lsp_config.bashls.filetypes,
+				bash = langs.bash.lsp_config.bashls.filetypes,
 			}
 
 			dapui.setup({
