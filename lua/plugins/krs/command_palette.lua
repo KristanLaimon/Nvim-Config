@@ -103,6 +103,17 @@ M.commands = {
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 
 	-- --------------------------------------------------------------------------
+	-- 📋 Snippets & 📚 Offline Documentation
+	-- --------------------------------------------------------------------------
+	{ name = "⚡ Open Snippet Manager (Create, Edit & Delete Snippets)", cmd = "KrsSnippetManager", category = "Snippets" },
+	{ name = "📝 Edit Snippets JSON for Current Filetype", cmd = "KrsSnippetEdit", category = "Snippets" },
+	{ name = "➕ Add New Snippet Interactively", cmd = "KrsSnippetAdd", category = "Snippets" },
+	{ name = "🔄 Reload Snippets in Completion Engine", cmd = "KrsSnippetReload", category = "Snippets" },
+	{ name = "📚 Open Offline Documentation Store", cmd = "KrsDocManager", category = "Documentation" },
+	{ name = "🔍 Fuzzy Search Offline Language Documentation", cmd = "KrsDocSearch", category = "Documentation" },
+	{ name = "⚙️ Open VSCode Settings Sync (.vscode/settings.json)", cmd = "KrsVSCodeSettings", category = "VSCode / Settings" },
+
+	-- --------------------------------------------------------------------------
 	-- 🐘 PHP & Laravel
 	-- --------------------------------------------------------------------------
 	{ name = "🐘 Check PHP & Laravel Environment Status", cmd = "PHPCheckTools", category = "PHP / Laravel" },

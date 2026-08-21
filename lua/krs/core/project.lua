@@ -31,6 +31,7 @@ local M = {}
 --- Order matters only for readability; `vim.fs.find` returns the nearest match.
 M.root_markers = {
 	".krsnvim",
+	".vscode",
 	".nvimkrs",
 	"Makefile",
 	"package.json",
@@ -42,7 +43,7 @@ M.root_markers = {
 
 --- Directories that may hold per-project KRS config, in lookup order.
 --- The first entry is also the write target when no config exists yet.
-M.config_dirs = { ".krsnvim", ".krslocal", ".nvimkrs" }
+M.config_dirs = { ".krsnvim", ".vscode", ".krslocal", ".nvimkrs" }
 
 -- ---------------------------------------------------------------------------
 -- API

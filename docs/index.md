@@ -84,6 +84,7 @@ If you have just installed or launched KrsVim for the first time, follow these s
 | 🏛️ [**Architecture Overview**](architecture.md) | Four-layer architecture, startup sequence & dependency graph |
 | 🧩 [**Module Architecture**](module-architecture.md) | How `lua/plugins/krs` modules self-register with `lazy.nvim` |
 | 🔌 [**Creating Local Plugins**](how-to-create-local-plugin.md) | Step-by-step guide for creating custom local features in `lua/plugins/krs/` |
+| 🧬 [**Managing Lua Type Schemas**](how-to-manage-lua-type-schemas.md) | Create/update/delete/register a [Type Injector](type-injector.md) Lua schema by hand, no picker needed |
 | 📶 [**Dynamic Z-Index Manager**](z-index.md) | Centralized Z-index stack manager (`krs.core.z_index`) for floating windows |
 | 🧪 [**Testing Suite**](testing.md) | Running unit & integration tests (`:KrsTest`, `tests/run.lua`) |
 

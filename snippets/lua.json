@@ -1,0 +1,33 @@
+{
+  "Lua Module Boilerplate": {
+    "prefix": "mod",
+    "body": [
+      "local M = {}",
+      "",
+      "function M.setup(opts)",
+      "    ${0}",
+      "end",
+      "",
+      "return M"
+    ],
+    "description": "Standard Lua module template"
+  },
+  "Lua Class Boilerplate": {
+    "prefix": "class",
+    "body": [
+      "---@class ${1:ClassName}",
+      "local ${1:ClassName} = {}",
+      "${1:ClassName}.__index = ${1:ClassName}",
+      "",
+      "---@return ${1:ClassName}",
+      "function ${1:ClassName}.new()",
+      "    local self = setmetatable({}, ${1:ClassName})",
+      "    ${0}",
+      "    return self",
+      "end",
+      "",
+      "return ${1:ClassName}"
+    ],
+    "description": "Lua object-oriented class template with EmmyLua annotations"
+  }
+}

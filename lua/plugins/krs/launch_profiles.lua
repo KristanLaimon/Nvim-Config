@@ -136,12 +136,61 @@ function M.get_launch_filepath(root)
 	return (project.config_path(M.settings.config_file, root or M.get_project_root()))
 end
 
+local function load_vscode_launch_configs(root)
+	local vscode_path = path.join(root or M.get_project_root(), ".vscode", "launch.json")
+	if not path.is_file(vscode_path) then
+		return {}
+	end
+	local raw_data = store.load(vscode_path, {})
+	local configs = raw_data.configurations or {}
+	local profiles = {}
+
+	for idx, cfg in ipairs(configs) do
+		if type(cfg) == "table" and cfg.name then
+			local entry = cfg.program or cfg.script or cfg.main or ""
+			if type(entry) == "string" then
+				entry = entry:gsub("^%${workspaceFolder}/", "")
+			end
+
+			table.insert(profiles, {
+				id = "vscode-" .. (cfg.name:gsub("%s+", "_"):lower()) .. "-" .. idx,
+				name = "⚡ [VSCode] " .. cfg.name,
+				runtime = cfg.type or "node",
+				entry_point = entry,
+				args = type(cfg.args) == "table" and cfg.args or {},
+				env = type(cfg.env) == "table" and cfg.env or {},
+				pre_launch_tasks = cfg.preLaunchTask and { cfg.preLaunchTask } or {},
+				mode = cfg.request == "attach" and "debug" or "run",
+				is_default = false,
+				is_vscode = true,
+			})
+		end
+	end
+	return profiles
+end
+
 --- Loads every profile defined for the project.
 --- @param root string|nil Project root.
 --- @return table data `{ profiles = {...} }`, always with a profiles array.
 function M.load_profiles(root)
+	root = root or M.get_project_root()
 	local data = store.load(M.get_launch_filepath(root), { profiles = {} })
 	data.profiles = data.profiles or {}
+
+	local vscode_profiles = load_vscode_launch_configs(root)
+	for _, vp in ipairs(vscode_profiles) do
+		local exists = false
+		for _, existing in ipairs(data.profiles) do
+			if existing.name == vp.name then
+				exists = true
+				break
+			end
+		end
+		if not exists then
+			table.insert(data.profiles, vp)
+		end
+	end
+
 	return data
 end
 

@@ -596,6 +596,10 @@ return {
 				enabled = function()
 					return vim.bo.filetype ~= "krsinputmodal" and vim.b.completion ~= false
 				end,
+				snippets = {
+					preset = "default",
+					search_paths = { vim.fn.stdpath("config") .. "/snippets" },
+				},
 				keymap = {
 					preset = "default",
 					["<CR>"] = { "accept", "fallback" },

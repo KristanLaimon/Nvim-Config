@@ -127,6 +127,23 @@ M.settings = {
 		},
 		{ file = "Cargo.toml", tasks = { "cargo run", "cargo build", "cargo test" } },
 		{ file = "go.mod", tasks = { "go run .", "go test ./..." } },
+		{
+			file = ".vscode/tasks.json",
+			tasks = function(filepath)
+				local out = {}
+				local data = store.load(filepath, {})
+				local tasks_list = data.tasks or {}
+				for _, t in ipairs(tasks_list) do
+					local cmd = t.command or t.script
+					if type(cmd) == "string" and cmd ~= "" then
+						table.insert(out, cmd)
+					elseif type(t.label) == "string" and t.label ~= "" then
+						table.insert(out, t.label)
+					end
+				end
+				return out
+			end,
+		},
 	},
 }
 

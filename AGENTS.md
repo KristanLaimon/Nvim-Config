@@ -76,8 +76,11 @@ Refer to the specific wiki documentation page for each feature or development us
 ### 🧬 Code Helpers & Tooling Use Cases
 * 🌬️ [**Tailwind Class Organizer**](docs/tailwind-organizer.md) — Multi-row class sorting on save or on command (`:TailwindOrganize`).
 * 🧬 [**Type Injector**](docs/type-injector.md) — Per-project Lua & TypeScript type definitions manager (`:TypeInjector`).
+* 📋 [**Snippets Manager**](docs/snippets-manager.md) — Create, edit, override & list per-language VSCode JSON snippets (`:SnippetManager`).
+* 📚 [**Offline Documentation Store**](docs/offline-docs-manager.md) — Store & fuzzy search language docs offline per version (`:DocManager`).
 * 📝 [**Input Modal Dialog**](docs/input-modal.md) — Rounded floating dialog for `vim.ui.input`.
 * 📄 [**JSON Schemas Catalog**](docs/schemas-json.md) & [**TOML Schemas Catalog**](docs/schemas-toml.md) — Local offline validation schemas.
+* ⚙️ [**VSCode Compatibility**](docs/vscode-support.md) — Native support for `.vscode/settings.json`, `launch.json` & `tasks.json` (`:VSCodeSettings`).
 
 ---
 
