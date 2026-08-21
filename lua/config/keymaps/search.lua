@@ -2,7 +2,7 @@
 -- KEYMAPS: Search -- finding files, opening them in splits, following URLs.
 -- ============================================================================
 -- KEYS
---   <C-/>            Find files, respecting .gitignore
+--   <C-k>            Find files, respecting .gitignore
 --   <C-S-/> / <C-?>  Find files, including ignored and hidden ones
 --   <C-S-h/j/k/l>    Find a file and open it in a split in that direction
 --   <C-LeftMouse>    Open the URL under the mouse in the browser
@@ -24,7 +24,7 @@ local M = {}
 M.settings = {
 	keys = {
 		--- Fuzzy find, honouring .gitignore.
-		find_files = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
+		find_files = { "<C-k>", "<C-K>" },
 		--- Fuzzy find everything, ignored and hidden files included.
 		find_all_files = {
 			"<C-A-k>", "<C-A-K>", "<C-M-k>", "<C-M-K>",

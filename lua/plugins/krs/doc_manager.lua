@@ -6,11 +6,20 @@
 --   and provides full CRUD (Create, Read/View, Update, Delete) and Telescope
 --   fuzzy searching so you never need internet to check language docs.
 --
+--   Real documentation can be pulled straight from devdocs.io (same source as
+--   https://devdocs.io) with `:KrsDocDownload` -- every language/framework it
+--   lists is fetchable, one HTML page per topic, saved under the same offline
+--   store so search/view/delete all just work on it.
+--
 -- COMMANDS
 --   :DocManager / :KrsDocManager          Open the Offline Doc Manager UI.
 --   :KrsDocSearch [query]                 Fuzzy search offline documentation.
 --   :KrsDocView [lang] [version]          Browse docs for language and version.
 --   :KrsDocAdd [lang] [version] [topic]   Create a new offline doc file.
+--   :KrsDocDownload [slug]                Download real docs from devdocs.io
+--                                          (e.g. "python~3.12", "lua~5.4"); with
+--                                          no slug, opens a picker of everything
+--                                          devdocs.io serves.
 -- ============================================================================
 
 local lazy_req = require("krs.core.lazy_require")
@@ -22,10 +31,72 @@ M.settings = {
 	docs_dir = vim.fn.stdpath("config") .. "/docs/offline",
 	lang_docs_dir = vim.fn.stdpath("config") .. "/docs/languages",
 	notify_title = "KRS Offline Doc Manager",
+
+	--- devdocs.io endpoints. `documents_base .. "/" .. slug .. "/db.json"` is the
+	--- content bundle for one doc set: a flat `{ [page_path] = html_string }` map.
+	devdocs_index_url = "https://devdocs.io/docs/docs.json",
+	devdocs_documents_base = "https://documents.devdocs.io",
 }
 
 local function notify(msg, level)
 	vim.notify(msg, level or vim.log.levels.INFO, { title = M.settings.notify_title })
+end
+
+--- Opens a styled Telescope picker (matching the rest of KRS's menus) for a
+--- flat list of items, falling back to `vim.ui.select` when Telescope isn't
+--- available -- so the caller never has to branch on it themselves.
+--- @param prompt_title string
+--- @param items any[] Arbitrary entries (strings, tables, whatever `display` handles).
+--- @param display fun(item: any): string Label shown per entry.
+--- @param on_select fun(item: any) Called with the chosen entry.
+local function pick(prompt_title, items, display, on_select)
+	if #items == 0 then
+		return
+	end
+
+	local has_telescope, pickers = pcall(require, "telescope.pickers")
+	if not has_telescope then
+		local labels, by_label = {}, {}
+		for _, item in ipairs(items) do
+			local label = display(item)
+			table.insert(labels, label)
+			by_label[label] = item
+		end
+		vim.ui.select(labels, { prompt = prompt_title }, function(choice)
+			if choice then
+				on_select(by_label[choice])
+			end
+		end)
+		return
+	end
+
+	local finders = require("telescope.finders")
+	local conf = require("telescope.config").values
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
+
+	pickers
+		.new({}, {
+			prompt_title = prompt_title,
+			finder = finders.new_table({
+				results = items,
+				entry_maker = function(item)
+					return { value = item, display = display(item), ordinal = display(item) }
+				end,
+			}),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, map)
+				actions.select_default:replace(function()
+					local selection = action_state.get_selected_entry()
+					actions.close(prompt_bufnr)
+					if selection then
+						on_select(selection.value)
+					end
+				end)
+				return true
+			end,
+		})
+		:find()
 end
 
 --- Ensures the offline docs directory exists.
@@ -146,10 +217,10 @@ function M.view_docs(lang, version)
 		elseif #versions == 1 then
 			version = versions[1]
 		else
-			vim.ui.select(versions, { prompt = "Select " .. lang .. " documentation version:" }, function(choice)
-				if choice then
-					M.view_docs(lang, choice)
-				end
+			pick("📖 Select " .. lang .. " documentation version", versions, function(v)
+				return v
+			end, function(v)
+				M.view_docs(lang, v)
 			end)
 			return
 		end
@@ -245,31 +316,129 @@ Offline documentation reference for %s version %s.
 	end
 end
 
+-- ============================================================================
+-- DEVDOCS DOWNLOAD -- pull real documentation offline from devdocs.io
+-- ============================================================================
+
+--- Fetches the list of every documentation set devdocs.io serves.
+--- @param callback fun(list: table[]) Called with the decoded docs.json array.
+function M.fetch_available(callback)
+	vim.system({ "curl", "-sL", M.settings.devdocs_index_url }, { text = true }, function(obj)
+		vim.schedule(function()
+			if obj.code ~= 0 or not obj.stdout or obj.stdout == "" then
+				notify("Failed to reach devdocs.io: " .. (obj.stderr or "unknown error"), vim.log.levels.ERROR)
+				return
+			end
+			local ok, list = pcall(vim.json.decode, obj.stdout)
+			if not ok or type(list) ~= "table" then
+				notify("Failed to parse devdocs.io doc list", vim.log.levels.ERROR)
+				return
+			end
+			callback(list)
+		end)
+	end)
+end
+
+--- Downloads one devdocs.io doc set and writes one `.html` file per page.
+--- @param slug string devdocs slug, e.g. "python~3.12", "lua~5.4", "node".
+--- @param callback fun(ok: boolean, lang: string|nil, version: string|nil)|nil
+function M.download(slug, callback)
+	slug = vim.trim(slug or "")
+	if slug == "" then
+		return
+	end
+
+	notify("⬇️ Downloading " .. slug .. " from devdocs.io ...")
+	local db_url = M.settings.devdocs_documents_base .. "/" .. slug .. "/db.json"
+
+	vim.system({ "curl", "-sL", db_url }, { text = true }, function(obj)
+		vim.schedule(function()
+			if obj.code ~= 0 or not obj.stdout or obj.stdout == "" then
+				notify("Failed to download " .. slug .. ": " .. (obj.stderr or "unknown error"), vim.log.levels.ERROR)
+				if callback then
+					callback(false)
+				end
+				return
+			end
+
+			local ok, pages = pcall(vim.json.decode, obj.stdout)
+			if not ok or type(pages) ~= "table" then
+				notify("Failed to parse downloaded docs for " .. slug, vim.log.levels.ERROR)
+				if callback then
+					callback(false)
+				end
+				return
+			end
+
+			local lang, version = slug:match("^([^~]+)~?(.*)$")
+			if not version or version == "" then
+				version = "latest"
+			end
+
+			local target_dir = M.settings.docs_dir .. "/" .. lang .. "/" .. version
+			vim.fn.mkdir(target_dir, "p")
+
+			local count = 0
+			for page_path, html in pairs(pages) do
+				local filename = page_path:gsub("[^%w_%-]", "_")
+				if filename == "" then
+					filename = "index"
+				end
+				local f = io.open(target_dir .. "/" .. filename .. ".html", "w")
+				if f then
+					f:write(html)
+					f:close()
+					count = count + 1
+				end
+			end
+
+			notify("✅ Downloaded " .. count .. " pages: " .. lang .. " " .. version .. " -> " .. target_dir)
+			if callback then
+				callback(true, lang, version)
+			end
+		end)
+	end)
+end
+
+--- Fetches the devdocs.io catalog and lets the user pick a doc set to download.
+function M.browse_and_download()
+	M.fetch_available(function(list)
+		table.sort(list, function(a, b)
+			return a.name < b.name or (a.name == b.name and a.slug < b.slug)
+		end)
+
+		pick("📥 Download DevDocs Documentation (Offline)", list, function(entry)
+			return "📘 " .. entry.name .. (entry.version ~= "" and (" " .. entry.version) or "") .. "  [" .. entry.slug .. "]"
+		end, function(entry)
+			M.download(entry.slug)
+		end)
+	end)
+end
+
 --- Main interactive Offline Doc Manager UI picker.
 function M.open_manager()
 	local ft = vim.bo.filetype ~= "" and vim.bo.filetype or "lua"
 	local options = {
-		"🔍 Search All Offline Docs (Telescope Grep)",
-		"📖 View Docs for Current Language (" .. ft .. ")",
-		"➕ Create New Offline Doc (Add Topic)",
-		"📂 Open Offline Docs Root Folder in Explorer",
+		{ label = "⬇️ Download Docs from DevDocs.io (Offline)", action = M.browse_and_download },
+		{ label = "🔍 Search All Offline Docs (Telescope Grep)", action = M.search_docs },
+		{ label = "📖 View Docs for Current Language (" .. ft .. ")", action = function()
+			M.view_docs(ft)
+		end },
+		{ label = "➕ Create New Offline Doc (Add Topic)", action = function()
+			M.add_doc(ft)
+		end },
+		{
+			label = "📂 Open Offline Docs Root Folder in Explorer",
+			action = function()
+				vim.cmd("Neotree " .. vim.fn.fnameescape(M.ensure_dir()))
+			end,
+		},
 	}
 
-	vim.ui.select(options, { prompt = "📚 KRS Offline Documentation Store" }, function(choice, idx)
-		if not idx then
-			return
-		end
-
-		if idx == 1 then
-			M.search_docs()
-		elseif idx == 2 then
-			M.view_docs(ft)
-		elseif idx == 3 then
-			M.add_doc(ft)
-		elseif idx == 4 then
-			local dir = M.ensure_dir()
-			vim.cmd("Neotree " .. vim.fn.fnameescape(dir))
-		end
+	pick("📚 KRS Offline Documentation Store", options, function(item)
+		return item.label
+	end, function(item)
+		item.action()
 	end)
 end
 
@@ -296,6 +465,14 @@ function M.setup()
 		local args = vim.split(opts.args, "%s+", { trimempty = true })
 		M.add_doc(args[1], args[2], args[3])
 	end, { nargs = "*", desc = "Add new offline doc topic" })
+
+	vim.api.nvim_create_user_command("KrsDocDownload", function(opts)
+		if opts.args ~= "" then
+			M.download(opts.args)
+		else
+			M.browse_and_download()
+		end
+	end, { nargs = "?", desc = "Download real docs from devdocs.io for offline use" })
 end
 
 return setmetatable({

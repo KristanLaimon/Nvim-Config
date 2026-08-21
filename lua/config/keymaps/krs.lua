@@ -6,7 +6,7 @@
 --   <C-1>..<C-4>  Toggle task output 1-4  <F7>     Toggle last task output
 --   <C-S-s>       Smart launch            <C-S-q>  Launch profiles manager
 --   <C-S-x>/<A-s> Stage everything (git)
---   <C-S-f>       Floating desktop explorer    <leader>fw  WSL explorer
+--   <C-/>         Floating desktop explorer    <leader>fw  WSL explorer
 --   <C-,>         Run the current .krsnvim script
 --   <C-S-,>       Open the krsnvimscript wiki
 --
@@ -58,7 +58,7 @@ M.settings = {
 		toggle_last_output_no_terminal = {},
 		--- Prefix for per-slot task output toggles; the slot number is appended.
 		task_slot_prefix = "<C-",
-		explorer = { "<C-S-f>", "<C-S-F>", "<C-F>" },
+		explorer = { "<C-/>", "<C-_>" },
 		wsl_explorer = nil,
 		sneak_peek = is_mobile and { "<C-S-y>", "<C-S-Y>", "<C-Y>", "<C-y>" } or { "<C-S-y>", "<C-S-Y>" },
 		--- Run the current .lua or .krsnvim script.

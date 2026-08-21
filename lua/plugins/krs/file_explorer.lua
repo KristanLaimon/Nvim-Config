@@ -45,7 +45,7 @@ M.settings = {
 
 	keys = {
 		--- Open the explorer. Bound in normal, insert, visual and terminal mode.
-		open = { "<C-S-f>", "<C-S-F>", "<C-F>" },
+		open = { "<C-/>", "<C-_>" },
 	},
 }
 
@@ -757,8 +757,8 @@ return setmetatable({
 	dir = require("krs.core.lazyspec").for_module(),
 	cmd = { "TelescopeFileBrowserDesktop", "TelescopeFileBrowserWSL" },
 	keys = {
-		{ "<C-S-f>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
-		{ "<C-F>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer (Mobile)" },
+		{ "<C-/>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
+		{ "<C-_>", mode = { "n", "i", "v" }, desc = "Desktop File Explorer" },
 	},
 	dependencies = { "nvim-telescope/telescope.nvim" },
 	config = M.setup,

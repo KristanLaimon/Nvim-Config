@@ -3,7 +3,7 @@
 -- ============================================================================
 -- WHAT THIS FILE ADDS ON TOP OF TELESCOPE
 --   1. Two file finders with a sensible search strategy per project:
---        <C-k> / <C-/>   respect .gitignore (git ls-files inside a repo)
+--        <C-k>           respect .gitignore (git ls-files inside a repo)
 --        <C-A-k> / <C-?> ignore it entirely (everything, including hidden)
 --      Both are also exported as `_G.FindFilesGitignore` / `_G.FindFilesNoIgnore`,
 --      which is what the keymaps in lua/config/keymaps/search.lua call.
@@ -24,7 +24,7 @@
 
 local settings = {
 	--- Find files, honouring .gitignore.
-	find_keys = { "<C-k>", "<C-K>", "<C-/>", "<C-_>" },
+	find_keys = { "<C-k>", "<C-K>" },
 
 	--- Find files, ignoring .gitignore. Several aliases: Alt/Meta combinations
 	--- arrive differently depending on terminal and GUI.
@@ -36,7 +36,7 @@ local settings = {
 	live_grep_key = "<C-f>",
 	help_tags_key = nil,
 	open_folder_key = "<C-S-y>",
-	desktop_explorer_key = "<C-S-f>",
+	desktop_explorer_key = "<C-/>",
 	wsl_explorer_key = nil,
 
 	--- Directory scan depth for the folder picker, and what it never descends into.
@@ -85,7 +85,7 @@ return {
 		{ "<M-C-K>", "<cmd>TelescopeFindFilesNoIgnore<CR>", mode = { "n", "i" }, desc = "Telescope find files (ignoring .gitignore)" },
 		{ "<C-f>", "<cmd>Telescope live_grep<CR>", mode = { "n", "i" }, desc = "Telescope live grep" },
 		{ "<C-S-y>", "<cmd>TelescopeOpenFolder<CR>", mode = { "n", "i" }, desc = "Telescope open folder" },
-		{ "<C-S-f>", "<cmd>TelescopeFileBrowserDesktop<CR>", mode = { "n", "i", "v" }, desc = "Open Desktop File Explorer" },
+		{ "<C-/>", "<cmd>TelescopeFileBrowserDesktop<CR>", mode = { "n", "i", "v" }, desc = "Open Desktop File Explorer" },
 	},
 	dependencies = {
 		"nvim-lua/plenary.nvim",
