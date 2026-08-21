@@ -208,8 +208,20 @@ function M.apply_defaults(buf)
 	end
 end
 
+--- Forces workstation GC under proot Termux: Server GC reserves 256GB of virtual
+--- address space per core, which fails under proot's ulimit -v cap even though
+--- nothing is actually used ("GC: reserving (256 gb) for the regions range failed").
+local function apply_proot_gc_workaround()
+	local ok, env_mod = pcall(require, "krs.core.environment")
+	if ok and env_mod.detect().is_proot then
+		vim.env.DOTNET_gcServer = "0"
+	end
+end
+
 --- Initialize C# language configuration autocmds.
 function M.setup()
+	apply_proot_gc_workaround()
+
 	vim.api.nvim_create_autocmd("FileType", {
 		pattern = { "cs" },
 		callback = function(args)
