@@ -226,6 +226,52 @@ local function create_expect(actual, is_not)
 		)
 	end
 
+	matchers.toHaveBeenCalled = function()
+		local calls = actual and actual.mock and actual.mock.calls
+		assert_cond(
+			calls ~= nil and #calls > 0,
+			"Expected mock NOT to have been called",
+			"Expected mock to have been called"
+		)
+	end
+
+	matchers.toHaveBeenCalledTimes = function(n)
+		local calls = (actual and actual.mock and actual.mock.calls) or {}
+		assert_cond(
+			#calls == n,
+			"Expected mock NOT to have been called " .. tostring(n) .. " times",
+			"Expected mock to have been called " .. tostring(n) .. " times, but was called " .. #calls .. " times"
+		)
+	end
+
+	matchers.toHaveBeenCalledWith = function(...)
+		local expected_args = { ... }
+		local calls = (actual and actual.mock and actual.mock.calls) or {}
+		local found = false
+		for _, call in ipairs(calls) do
+			if deep_equal(call, expected_args) then
+				found = true
+				break
+			end
+		end
+		assert_cond(
+			found,
+			"Expected mock NOT to have been called with " .. format_val(expected_args),
+			"Expected mock to have been called with " .. format_val(expected_args)
+		)
+	end
+
+	matchers.toHaveBeenLastCalledWith = function(...)
+		local expected_args = { ... }
+		local calls = (actual and actual.mock and actual.mock.calls) or {}
+		local last = calls[#calls]
+		assert_cond(
+			last ~= nil and deep_equal(last, expected_args),
+			"Expected mock's last call NOT to be with " .. format_val(expected_args),
+			"Expected mock's last call to be with " .. format_val(expected_args) .. ", but got " .. format_val(last)
+		)
+	end
+
 	if not is_not then
 		local inv = create_expect(actual, true)
 		matchers["not"] = inv
@@ -251,8 +297,90 @@ function M.expect(actual)
 end
 
 -- ----------------------------------------------------------------------------
--- Suite & Test Registration
+-- Mocking & Spying
 -- ----------------------------------------------------------------------------
+
+--- Creates a standalone mock function that records every call and can fake
+--- an implementation or return value.
+---
+--- @param impl function|nil Optional implementation to run on each call.
+--- @return table mock_fn Callable mock. Also exposes `.mock.calls` (list of
+--- arg-lists), `.mockReturnValue(v)`, `.mockImplementation(fn)`,
+--- `.mockClear()` (wipes calls), `.mockReset()` (wipes calls & impl).
+---
+--- @example
+--- local fn = t.fn()
+--- fn(1, 2)
+--- expect(fn).toHaveBeenCalledWith(1, 2)
+function M.fn(impl)
+	local mock_fn
+	local record = { calls = {}, results = {} }
+	local state_box = { impl = impl, return_value = nil }
+
+	mock_fn = setmetatable({
+		mock = record,
+		mockReturnValue = function(v)
+			state_box.return_value = v
+			state_box.impl = nil
+			return mock_fn
+		end,
+		mockImplementation = function(fn)
+			state_box.impl = fn
+			return mock_fn
+		end,
+		mockClear = function()
+			record.calls = {}
+			record.results = {}
+			return mock_fn
+		end,
+		mockReset = function()
+			record.calls = {}
+			record.results = {}
+			state_box.impl = nil
+			state_box.return_value = nil
+			return mock_fn
+		end,
+	}, {
+		__call = function(_, ...)
+			local args = { ... }
+			table.insert(record.calls, args)
+			local result
+			if state_box.impl then
+				result = state_box.impl(...)
+			else
+				result = state_box.return_value
+			end
+			table.insert(record.results, result)
+			return result
+		end,
+	})
+
+	return mock_fn
+end
+
+--- Replaces `obj[method_name]` with a mock that wraps (and records calls to)
+--- the original function, and returns that mock. Call `.mockRestore()` on it
+--- to put the original function back on `obj`.
+---
+--- @param obj table Table/module holding the method.
+--- @param method_name string Key of the method to spy on.
+--- @return table spy_fn Mock function (see `M.fn`) plus `.mockRestore()`.
+---
+--- @example
+--- local spy = t.spyOn(_G, "Neotree_Smart_Quit")
+--- Neotree_Smart_Quit(true)
+--- expect(spy).toHaveBeenCalledWith(true)
+--- spy.mockRestore()
+function M.spyOn(obj, method_name)
+	local original = obj[method_name]
+	local spy_fn = M.fn(original)
+	spy_fn.mockRestore = function()
+		obj[method_name] = original
+		return original
+	end
+	obj[method_name] = spy_fn
+	return spy_fn
+end
 
 --- Groups related test cases into a test suite block.
 ---

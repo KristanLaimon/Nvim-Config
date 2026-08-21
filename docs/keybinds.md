@@ -58,7 +58,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | `<C-.>` | n, i, v | Code actions / quick fix at the caret |
 | `<C-o>` | n | Jump back in the jump list |
 | `<CR>` | i | Accept the highlighted completion |
-| `<C-space>` / `<C-@>` | i | Force the completion menu / documentation open |
+| `<C-space>` / `<C-@>` / `<C-l>` | i | Force the completion menu / documentation open |
 
 ---
 

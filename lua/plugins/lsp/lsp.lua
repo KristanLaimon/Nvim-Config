@@ -612,6 +612,7 @@ return {
 					["<CR>"] = { "accept", "fallback" },
 					["<C-space>"] = { "show", "show_documentation", "hide_documentation" },
 					["<C-@>"] = { "show", "show_documentation", "hide_documentation" },
+					["<C-l>"] = { "show", "show_documentation", "hide_documentation" },
 					["<Up>"] = { "select_prev", "fallback" },
 					["<Down>"] = { "select_next", "fallback" },
 				},
