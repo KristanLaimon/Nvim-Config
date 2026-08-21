@@ -3,6 +3,7 @@
 -- ============================================================================
 -- KEYS
 --   K                Hover documentation
+--   <C-n>            Diagnostic float at cursor line
 --   <C-j>            Signature / parameter help
 --   <C-.>            Code actions, in a dropdown at the caret
 --   <A-j> / <A-k>    Go to definition (jump back with <C-o>)
@@ -25,7 +26,7 @@ M.settings = {
 		goto_definition = { "<A-k>", "<M-k>", "<A-j>", "<M-j>" },
 		show_usages = { "<A-S-k>", "<A-S-K>", "<M-S-k>", "<M-S-K>" },
 		rename = "<F2>",
-		diagnostic_float = nil,
+		diagnostic_float = "<C-n>",
 		diagnostic_prev = nil,
 		diagnostic_next = nil,
 		format = nil,

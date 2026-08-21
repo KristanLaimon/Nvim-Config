@@ -1,58 +1,69 @@
 -- ============================================================================
--- PLUGIN: nvim-web-devicons -- filetype icons for every list in the editor.
+-- PLUGIN: mini.icons -- filetype icons for every list in the editor.
 -- ============================================================================
--- Loaded eagerly because neo-tree, telescope, the bufferline and the dashboard
--- all ask for icons during startup.
+-- Replaces nvim-web-devicons. Devicons' default JS/TS glyphs are the plain
+-- "JS"/"TS" brand-logo icons; mini.icons draws its default set from Material
+-- Design Icons instead, which is what this file is picking on purpose.
 --
--- The `.krsnvim` icon is registered three ways (extension, direct, filetype),
--- because each consumer looks it up differently.
+-- `mock_nvim_web_devicons()` makes `require("nvim-web-devicons")` (used by
+-- bufferline, neo-tree, telescope, etc.) transparently resolve to mini.icons,
+-- so none of those plugin configs need to change.
+--
+-- The `.krsnvim` and `.proto` icons are registered as both extension and
+-- filetype, same as before, because each consumer looks them up differently.
+--
+-- mini.icons LINKS its 9 `MiniIcons*` groups to built-in highlight groups by
+-- default, on purpose, to "blend with the colorscheme" -- with nagatoro-krs
+-- that means every icon inherits the same accent colour instead of keeping
+-- its own hue. Fixed hex below overrides that; reapplied on every
+-- `ColorScheme` event because a colorscheme change re-links them.
 -- ============================================================================
 
+local mini_icons_palette = {
+	MiniIconsAzure = "#3a8bfd",
+	MiniIconsBlue = "#4e79f0",
+	MiniIconsCyan = "#22d3ee",
+	MiniIconsGreen = "#6cc644",
+	MiniIconsGrey = "#8c8c8c",
+	MiniIconsOrange = "#f38019",
+	MiniIconsPurple = "#a855f7",
+	MiniIconsRed = "#f14c4c",
+	MiniIconsYellow = "#f1e05a",
+}
+
+local function apply_mini_icons_palette()
+	for group, fg in pairs(mini_icons_palette) do
+		vim.api.nvim_set_hl(0, group, { fg = fg, default = false })
+	end
+end
+
 return {
-  {
-    "nvim-tree/nvim-web-devicons",
-    lazy = false,
-    opts = {
-      -- enable default icons for unknown filetypes
-      default = true,
-      -- enable color icons
-      color_icons = true,
-      override_by_extension = {
-        ["krsnvim"] = {
-          icon = "🦊",
-          color = "#e67e22",
-          cterm_color = "166",
-          name = "KrsNvim",
-        },
-        ["proto"] = {
-          icon = "",
-          color = "#4285f4",
-          cterm_color = "69",
-          name = "Proto",
-        },
-      },
-    },
-    config = function(_, opts)
-      local devicons = require("nvim-web-devicons")
-      devicons.setup(opts)
-      devicons.set_icon({
-        krsnvim = {
-          icon = "🦊",
-          color = "#e67e22",
-          cterm_color = "166",
-          name = "KrsNvim",
-        },
-        proto = {
-          icon = "",
-          color = "#4285f4",
-          cterm_color = "69",
-          name = "Proto",
-        },
-      })
-      devicons.set_icon_by_filetype({
-        krsnvim = "krsnvim",
-        proto = "proto",
-      })
-    end,
-  },
+	{
+		"nvim-mini/mini.icons",
+		version = false,
+		lazy = false,
+		-- Must configure before bufferline/neo-tree/telescope/devicons.lua ever
+		-- call require("nvim-web-devicons"), so the mock is in place first.
+		priority = 10000,
+		opts = {
+			style = "glyph",
+			extension = {
+				krsnvim = { glyph = "🦊", hl = "MiniIconsOrange" },
+				proto = { glyph = "", hl = "MiniIconsAzure" },
+			},
+			filetype = {
+				krsnvim = { glyph = "🦊", hl = "MiniIconsOrange" },
+				proto = { glyph = "", hl = "MiniIconsAzure" },
+			},
+		},
+		config = function(_, opts)
+			require("mini.icons").setup(opts)
+			require("mini.icons").mock_nvim_web_devicons()
+			apply_mini_icons_palette()
+			vim.api.nvim_create_autocmd("ColorScheme", {
+				group = vim.api.nvim_create_augroup("krs_mini_icons_palette", { clear = true }),
+				callback = apply_mini_icons_palette,
+			})
+		end,
+	},
 }

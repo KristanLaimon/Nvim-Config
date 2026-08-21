@@ -59,6 +59,7 @@ Forgot a shortcut? Press `?` or `<F1>` to see context-aware help, or press `<C-S
 | `<C-o>` | n | Jump back in the jump list |
 | `<CR>` | i | Accept the highlighted completion |
 | `<C-space>` / `<C-@>` / `<C-l>` | i | Force the completion menu / documentation open |
+| `<C-n>` | n | Diagnostic float at cursor line |
 
 ---
 

@@ -286,8 +286,7 @@ return {
 					root_dir = function(bufnr, on_dir)
 						local util = require("lspconfig.util")
 						local fname = vim.api.nvim_buf_get_name(bufnr)
-						local root = util.root_pattern("*.sln")(fname)
-							or util.root_pattern("*.csproj", ".git")(fname)
+						local root = util.root_pattern("*.sln")(fname) or util.root_pattern("*.csproj", ".git")(fname)
 						if root then
 							on_dir(root)
 						else
@@ -474,7 +473,8 @@ return {
 						if is_krs then
 							client.config.settings.Lua = client.config.settings.Lua or {}
 							client.config.settings.Lua.diagnostics = client.config.settings.Lua.diagnostics or {}
-							client.config.settings.Lua.diagnostics.globals = { "vim", "fetch", "console", "import", "krsnvim", "cli", "terminal", "fs" }
+							client.config.settings.Lua.diagnostics.globals =
+								{ "vim", "fetch", "console", "import", "krsnvim", "cli", "terminal", "fs" }
 							pcall(client.notify, "workspace/didChangeConfiguration", { settings = client.config.settings })
 						end
 					end
@@ -620,7 +620,7 @@ return {
 				completion = {
 					list = {
 						selection = {
-							preselect = false,
+							preselect = true,
 							auto_insert = false,
 						},
 					},
