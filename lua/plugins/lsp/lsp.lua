@@ -606,7 +606,6 @@ return {
 				end,
 				snippets = {
 					preset = "default",
-					search_paths = { vim.fn.stdpath("config") .. "/snippets" },
 				},
 				keymap = {
 					preset = "default",
@@ -687,6 +686,11 @@ return {
 					per_filetype = { ["dap-repl"] = { "dap" } },
 					providers = {
 						dap = { name = "DAP", module = "krs.lsp.dap_repl_source", async = true },
+						snippets = {
+							opts = {
+								search_paths = { vim.fn.stdpath("config") .. "/snippets" },
+							},
+						},
 					},
 				},
 				fuzzy = {

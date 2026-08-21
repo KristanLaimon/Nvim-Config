@@ -37,15 +37,14 @@ M.settings = {
 		quit = { "<C-q>" },
 	},
 
-	--- Command-line abbreviations rerouted to smart quit. `force` picks the
-	--- `qa!`/`close!` variants.
+	--- Command-line abbreviations rerouted to smart quit. Each maps the bare
+	--- command to a `-bang`-aware user command below, so typing `!` after the
+	--- abbreviation expands (e.g. `q!` -> `KrsQ!`) instead of being swallowed
+	--- by the word-boundary trigger that fires the abbrev in the first place.
 	abbreviations = {
-		{ lhs = "q", force = false },
-		{ lhs = "q!", force = true },
-		{ lhs = "bd", force = false },
-		{ lhs = "bd!", force = true },
-		{ lhs = "bdelete", force = false },
-		{ lhs = "bdelete!", force = true },
+		{ lhs = "q", user_cmd = "KrsQ" },
+		{ lhs = "bd", user_cmd = "KrsBd" },
+		{ lhs = "bdelete", user_cmd = "KrsBd" },
 	},
 }
 
@@ -290,14 +289,25 @@ function M.setup()
 		end, { noremap = true, silent = true, desc = "Close current buffer/tab" })
 	end
 
+	vim.api.nvim_create_user_command("KrsQ", function(opts)
+		_G.Neotree_Smart_Quit(opts.bang)
+	end, { bang = true, desc = "Smart quit (bang = force)" })
+
+	vim.api.nvim_create_user_command("KrsBd", function(opts)
+		_G.Smart_Close_Buffer(vim.api.nvim_get_current_buf(), opts.bang)
+	end, { bang = true, desc = "Smart close buffer (bang = force)" })
+
 	-- `cnoreabbrev` with a guard, so the reroute only fires for the bare command
 	-- (`:q`), never inside something longer like `:qall` or a search for "q".
+	-- Only the bare word is remapped; a trailing `!` is left untouched so it
+	-- attaches to the expanded user command's own `-bang` handling instead of
+	-- being swallowed by the abbrev's word-boundary trigger.
 	for _, abbrev in ipairs(M.settings.abbreviations) do
 		vim.cmd(string.format(
-			"cnoreabbrev <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? 'lua _G.Neotree_Smart_Quit(%s)' : '%s'",
+			"cnoreabbrev <expr> %s (getcmdtype() == ':' && getcmdline() ==# '%s') ? '%s' : '%s'",
 			abbrev.lhs,
 			abbrev.lhs,
-			tostring(abbrev.force),
+			abbrev.user_cmd,
 			abbrev.lhs
 		))
 	end
