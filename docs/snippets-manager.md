@@ -43,6 +43,8 @@ nvim/
 
 > [!TIP]
 > The filetype name to use is exactly what Neovim reports as `vim.bo.filetype`. Common ones: `lua`, `typescript`, `javascript`, `typescriptreact`, `php`, `python`, `go`, `cs`, `html`, `css`, `sh`, `markdown`.
+>
+> Filetype often differs from file extension (`.js` → `javascript`, `.md` → `markdown`, `.cpp`/`.h` → `cpp`/`c`). Check current buffer's filetype with `:set filetype?`.
 
 ---
 
