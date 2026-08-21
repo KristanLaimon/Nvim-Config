@@ -13,17 +13,21 @@ return {
 	"windwp/nvim-autopairs",
 	event = "InsertEnter",
 	config = function()
-		local is_mobile = false
+		local is_native_termux = false
 		local env_ok, env_mod = pcall(require, "krs.core.environment")
 		if env_ok then
 			local env = env_mod.detect()
-			is_mobile = env.is_mobile or env.is_termux or env.is_proot
+			-- proot Ubuntu is a full Linux container — TS-aware pairs work fine there.
+			-- Only disable check_ts on bare native Termux (no proot overlay).
+			is_native_termux = env.is_termux and not env.is_proot
 		else
-			is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+			is_native_termux = vim.env.TERMUX_VERSION ~= nil
+				and vim.fn.isdirectory("/data/data/com.termux") == 1
+				and vim.fn.filereadable("/etc/os-release") == 0
 		end
 
 		require("nvim-autopairs").setup({
-			check_ts = not is_mobile,
+			check_ts = not is_native_termux,
 			disable_filetype = { "TelescopePrompt", "vim" },
 		})
 	end,

@@ -546,6 +546,12 @@ return {
 									fileMatch = { "biome.json", "biome.jsonc" },
 									url = get_schema_uri("json", "biome.json"),
 								},
+								{
+									name = "KrsVim Snippets Schema",
+									description = "VSCode-compatible snippet file schema",
+									fileMatch = { "snippets/*.json", "snippets/**/*.json" },
+									url = vim.uri_from_fname(vim.fn.stdpath("config") .. "/snippets/snippets.schema.json"),
+								},
 							},
 						}),
 						validate = { enable = true },
@@ -587,9 +593,11 @@ return {
 			local env_ok, env_mod = pcall(require, "krs.core.environment")
 			if env_ok then
 				local env = env_mod.detect()
-				is_mobile = env.is_mobile or env.is_termux or env.is_proot
+				-- proot Ubuntu = full Linux container, treat like desktop.
+				-- Only restrict to mobile mode on bare native Termux (Android, no proot).
+				is_mobile = (env.is_termux and not env.is_proot) or (env.is_mobile and not env.is_proot)
 			else
-				is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+				is_mobile = vim.env.TERMUX_VERSION ~= nil and vim.fn.isdirectory("/data/data/com.termux") == 1
 			end
 
 			return {

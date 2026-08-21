@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VSCode Snippets Schema",
+  "description": "User Snippets configuration schema for KrsVim & VSCode",
+  "type": "object",
+  "patternProperties": {
+    "^(?!\\$schema$).*$": {
+      "type": "object",
+      "description": "A code snippet entry",
+      "properties": {
+        "prefix": {
+          "description": "The trigger prefix / word that expands the snippet in autocompletion.",
+          "type": ["string", "array"],
+          "items": { "type": "string" }
+        },
+        "body": {
+          "description": "The snippet body line(s). Supports tabstops (${1:default}, ${2}), variables ($TM_FILENAME, $CURRENT_YEAR), and exit point (${0}).",
+          "type": ["string", "array"],
+          "items": { "type": "string" }
+        },
+        "description": {
+          "description": "Human-readable description shown in completion details.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Optional language identifiers where this snippet applies (e.g., 'lua', 'typescript').",
+          "type": "string"
+        }
+      },
+      "required": ["prefix", "body"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI of the JSON schema for validation."
+    }
+  }
+}

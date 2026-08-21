@@ -28,17 +28,21 @@ return {
 	event = { "BufReadPost", "BufNewFile" },
 	config = function()
 		local env_ok, env_mod = pcall(require, "krs.core.environment")
-		local is_mobile = false
+		local is_native_termux = false -- only true for bare Termux (Android, no proot)
 		if env_ok then
 			local env = env_mod.detect()
-			is_mobile = env.is_mobile or env.is_termux or env.is_proot
+			-- proot Ubuntu is a full Linux container — treat it like desktop Linux.
+			-- Only skip heavy installs on native Termux (no /etc/os-release distro).
+			is_native_termux = env.is_termux and not env.is_proot
 		else
-			is_mobile = vim.env.TERMUX_VERSION ~= nil or vim.fn.isdirectory("/data/data/com.termux") == 1
+			is_native_termux = vim.env.TERMUX_VERSION ~= nil
+				and vim.fn.isdirectory("/data/data/com.termux") == 1
+				and vim.fn.filereadable("/etc/os-release") == 0
 		end
 
 		local ts = require("nvim-treesitter")
 		ts.setup({})
-		if not is_mobile then
+		if not is_native_termux then
 			pcall(ts.install, core_parsers)
 		end
 

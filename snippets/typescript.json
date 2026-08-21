@@ -1,4 +1,5 @@
 {
+  "$schema": "./snippets.schema.json",
   "Console Log": {
     "prefix": "clog",
     "body": [
