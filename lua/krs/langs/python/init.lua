@@ -7,6 +7,7 @@
 --   server, the debugpy DAP adapter, and the `python` launch-profile runtime.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server name(s) this language owns. basedpyright: types,

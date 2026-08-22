@@ -12,6 +12,7 @@
 --   - If NO project formatter config exists, fallback 2-space defaults are applied.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server names this language owns.

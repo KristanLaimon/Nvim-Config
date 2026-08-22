@@ -9,6 +9,7 @@
 --     formatters: settings, Mason package names, and filetype assignment.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 M.composer = require("krs.langs.php.composer")

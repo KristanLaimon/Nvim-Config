@@ -7,6 +7,7 @@
 --   server and the beautysh formatter: settings, Mason names, filetypes.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server name(s) this language owns.

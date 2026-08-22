@@ -7,6 +7,7 @@
 --   and buf_ls (disabled) LSP servers, and the protolint formatter.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server name(s) this language owns.

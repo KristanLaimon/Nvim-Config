@@ -7,6 +7,7 @@
 --   (which also serves `.krsnvim` scripts) and the stylua formatter.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server name(s) this language owns.

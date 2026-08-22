@@ -8,6 +8,7 @@
 --   here beyond root markers/filetypes.
 -- ============================================================================
 
+---@type KrsLangModule
 local M = {}
 
 --- The lspconfig/mason server name this language owns.
