@@ -10,6 +10,13 @@
 --   <F2>             Rename: LSP symbol, neo-tree entry, or the file on disk
 --   [d / ]d          Previous / next diagnostic (built-in Neovim)
 --   gl               Diagnostic under the cursor (built-in Neovim)
+--
+-- TERMINAL COMPAT (Termux / xterm / SSH)
+--   <C-.> has no standard ASCII escape. In TUI mode we register the raw
+--   sequences that xterm-compatible terminals actually send so the action
+--   still works across the Termux → Ubuntu → nvim chain.
+--   The aliases are only registered when Neovim is NOT running as a GUI
+--   (Neovide, gvim, etc.), so desktop behaviour is completely untouched.
 -- ============================================================================
 
 local M = {}
@@ -94,6 +101,36 @@ end
 vim.keymap.set({ "n", "i", "v" }, M.settings.keys.code_action, function()
 	require("krs.lsp.code_action_menu").request()
 end, opts("Quick Fix / Code Actions (Dropdown at Caret)"))
+
+-- ============================================================================
+-- TERMINAL COMPAT: <C-.> aliases for Termux / xterm / SSH (TUI only)
+-- ============================================================================
+-- In a GUI (Neovide, gvim) the terminal emulation layer is bypassed and
+-- <C-.> reaches Neovim directly -- nothing to do there.
+--
+-- In a plain TUI the key has no standard ASCII code, so different terminals
+-- send different raw escape sequences.  We map the two most common ones to
+-- the same action so the shortcut works regardless of which terminal is used.
+--
+-- How to find YOUR terminal's sequence if neither works:
+--   1. Inside nvim insert-mode, press Ctrl-V then Ctrl-.
+--   2. Whatever appears (e.g. ^[. or ^[[46;5u) is the sequence to map.
+--   3. Add it below following the same pattern.
+if not vim.g.neovide and vim.fn.has("gui_running") == 0 then
+	local code_action_fn = function()
+		require("krs.lsp.code_action_menu").request()
+	end
+
+	-- CSI-u (Kitty Keyboard Protocol) — sent by Kitty, foot, WezTerm, and
+	-- newer xterm / Termux when the protocol is active: ESC [ 46 ; 5 u
+	vim.keymap.set({ "n", "i", "v" }, "\x1b[46;5u", code_action_fn,
+		opts("Quick Fix / Code Actions (TUI CSI-u alias)"))
+
+	-- Legacy xterm / Termux fallback: ESC followed by literal '.'
+	-- (many xterm-256color builds send this for Ctrl+.)
+	vim.keymap.set({ "n", "i", "v" }, "\x1b.", code_action_fn,
+		opts("Quick Fix / Code Actions (TUI xterm alias)"))
+end
 
 -- ============================================================================
 -- NAVIGATION
