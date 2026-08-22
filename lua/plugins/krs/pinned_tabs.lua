@@ -2,7 +2,7 @@
 -- KRS PLUGIN: Pinned Tabs -- `.krsnvim/pins.json` & Workspaces
 -- ============================================================================
 -- WHAT IT DOES
---   * Pins / unpins the active code buffer tab when `<C-p>` is pressed.
+--   * Pins / unpins the active code buffer tab (`<C-p>` bound in editor.lua).
 --   * Restricts pinning to code buffer tabs only (buftype == "", valid file).
 --   * Stores pinned tab paths in `.krsnvim/pins.json` (or workspace-specific
 --     `.krsnvim/pins_<ws_id>.json` if a workspace is loaded).
@@ -284,11 +284,8 @@ return setmetatable({
 	name = "krs_pinned_tabs",
 	dir = require("krs.core.lazyspec").for_module(),
 	event = { "BufReadPost", "DirChanged" },
-	keys = {
-		{ "<C-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
-		{ "<C-P>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
-		{ "<A-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
-		{ "<M-p>", mode = { "n", "v", "i" }, desc = "Toggle Pin Tab" },
-	},
+	-- NOTE: keybindings are owned by lua/config/keymaps/editor.lua (pin_tab).
+	-- Do NOT add `keys` here — lazy placeholder mappings would silently
+	-- overwrite editor.lua's vim.keymap.set and break <C-p> pinning.
 	config = M.setup,
 }, { __index = M })
