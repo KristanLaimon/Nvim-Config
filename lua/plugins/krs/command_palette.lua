@@ -133,10 +133,9 @@ M.commands = {
 	-- --------------------------------------------------------------------------
 	-- ⚙️ Setup & Dependencies
 	-- --------------------------------------------------------------------------
-	{ name = "🌐 Language Tooling Manager (Install / Uninstall Per Language)", cmd = "LanguageManager", category = "Setup" },
 	{ name = "🛠️ Create New .NET Project (dotnet new template picker)", cmd = "DotnetNew", category = "C#" },
 	{ name = "📦 Open NuGet Package Manager (.csproj references)", cmd = "NugetManager", category = "C#" },
-	{ name = "📦 Install Dependencies & Toolchains (Interactive Toggle UI)", cmd = "KrsInstallDependencies", category = "Setup" },
+	{ name = "📦 Install Dependencies & Toolchains (Per-Language Bundles)", cmd = "KrsInstallDependencies", category = "Setup" },
 	{ name = "🔑 Run System Setup (Sudo/Root UI Password Prompt)", cmd = "KrsSystemSetup", category = "Setup" },
 	{ name = "🚀 Install Google Antigravity CLI (agy)", cmd = "KrsInstallAgy", category = "Setup" },
 	{ name = "🤖 Install Claude Code CLI (claude)", cmd = "KrsInstallClaude", category = "Setup" },

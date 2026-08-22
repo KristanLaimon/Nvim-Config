@@ -91,6 +91,21 @@ M.heavy_runtimes = {
 	{ cmd = "dotnet", name = ".NET SDK" },
 }
 
+--- CLIs checked in the bundle manager's PATH health check footer.
+M.cli_healthcheck = {
+	{ cmd = "git" },
+	{ cmd = "gcc", alt = "clang" },
+	{ cmd = "node" },
+	{ cmd = "bun" },
+	{ cmd = "go" },
+	{ cmd = "dotnet" },
+	{ cmd = "python", alt = "python3" },
+	{ cmd = "php" },
+	{ cmd = "composer" },
+	{ cmd = "rg" },
+	{ cmd = "fd", alt = "fdfind" },
+}
+
 -------------------------------------------------------------------------------
 -- UI STATE & LIVE ACTIVITY LOGGING
 -------------------------------------------------------------------------------
@@ -276,288 +291,13 @@ function M.open_ui()
 end
 
 -------------------------------------------------------------------------------
--- INTERACTIVE TOGGLE SELECTION MENU UI
+-- BUNDLE MANAGER UI STATE
 -------------------------------------------------------------------------------
-
-local toggle_buf = nil
-local toggle_win = nil
-local toggle_items = {}
-local toggle_line_map = {}
 
 local lang_buf = nil
 local lang_win = nil
 local lang_items = {}
 local lang_line_map = {}
-
---- Renders the content of the Interactive Toggle Selection Menu UI.
-function M.render_toggle_menu_buffer()
-	if not toggle_buf or not vim.api.nvim_buf_is_valid(toggle_buf) then
-		return
-	end
-
-	local cols = vim.o.columns or 80
-	local width = math.max(38, math.min(74, cols - 6))
-	local lines = {}
-	toggle_line_map = {}
-
-	table.insert(lines, "  📦 KRS DEPENDENCIES & TOOLCHAINS - TOGGLE MENU")
-	table.insert(lines, "  " .. string.rep("─", width - 4))
-	table.insert(lines, "  [Space/Enter: Toggle | 'a': Select All | 'n': Select None | 'i': Install]")
-	table.insert(lines, "")
-
-	local lsp_items = {}
-	local fmt_items = {}
-
-	for _, item in ipairs(toggle_items) do
-		if item.type == "LSP" then
-			table.insert(lsp_items, item)
-		else
-			table.insert(fmt_items, item)
-		end
-	end
-
-	local selected_count = 0
-
-	-- Section 1: LSPs
-	table.insert(lines, "  ── 🧠 LSPs & LANGUAGE SERVERS ──────────────────────────────────────")
-	for _, item in ipairs(lsp_items) do
-		local line_str = ""
-		if item.installed then
-			line_str = string.format("   [✓ INSTALLED]  %s", item.label)
-		elseif item.selected then
-			selected_count = selected_count + 1
-			line_str = string.format("   [x] SELECTED   %s", item.label)
-		else
-			line_str = string.format("   [ ] DESELECTED %s", item.label)
-		end
-		table.insert(lines, line_str)
-		toggle_line_map[#lines] = item
-	end
-
-	table.insert(lines, "")
-
-	-- Section 2: Formatters & Linters
-	table.insert(lines, "  ── 🎨 FORMATTERS & LINTERS ─────────────────────────────────────────")
-	for _, item in ipairs(fmt_items) do
-		local line_str = ""
-		if item.installed then
-			line_str = string.format("   [✓ INSTALLED]  %s", item.label)
-		elseif item.selected then
-			selected_count = selected_count + 1
-			line_str = string.format("   [x] SELECTED   %s", item.label)
-		else
-			line_str = string.format("   [ ] DESELECTED %s", item.label)
-		end
-		table.insert(lines, line_str)
-		toggle_line_map[#lines] = item
-	end
-
-	table.insert(lines, "")
-	table.insert(lines, "  " .. string.rep("─", width - 4))
-
-	local btn_str = string.format("  👉 [ PRESS 'i' OR ENTER HERE TO START INSTALLING (%d SELECTED) ]", selected_count)
-	table.insert(lines, btn_str)
-	toggle_line_map[#lines] = "INSTALL_BUTTON"
-
-	table.insert(lines, "  [Press q or Esc to close window]")
-
-	pcall(function()
-		vim.bo[toggle_buf].modifiable = true
-		vim.api.nvim_buf_set_lines(toggle_buf, 0, -1, false, lines)
-		vim.bo[toggle_buf].modifiable = false
-	end)
-end
-
---- Opens the Interactive Toggle Selection Menu UI.
-function M.open_toggle_menu()
-	local ui = require("krs.core.ui")
-
-	if toggle_win and vim.api.nvim_win_is_valid(toggle_win) then
-		vim.api.nvim_set_current_win(toggle_win)
-		return
-	end
-
-	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
-	toggle_items = {}
-
-	for _, pkg in ipairs(M.mason_packages) do
-		local mason_pkg = M.get_mason_package_name(pkg)
-		local pkg_dir = mason_share .. "/" .. mason_pkg
-		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
-
-		local info = M.tools[pkg] or {}
-		local bin_cmd = info.cmd or pkg
-		local is_installed = (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1)
-
-		local label = pkg
-		if info.lang then
-			label = string.format("%s (%s)", info.lang, pkg)
-		elseif info.name then
-			label = string.format("%s", info.name)
-		end
-
-		local item_type = "LSP"
-		if info.type == "formatter" then
-			item_type = "Formatter"
-		end
-
-		table.insert(toggle_items, {
-			pkg = pkg,
-			label = label,
-			type = item_type,
-			installed = is_installed,
-			selected = not is_installed,
-		})
-	end
-
-	local cols = vim.o.columns or 80
-	local lines_cnt = vim.o.lines or 24
-	local width = math.max(38, math.min(76, cols - 4))
-	local height = math.max(14, math.min(26, lines_cnt - 4))
-
-	toggle_buf, toggle_win = ui.float({
-		width = width,
-		height = height,
-		title = " 📦 KRS Dependencies Installer - Toggle Menu ",
-		focusable = true,
-		modifiable = false,
-	})
-
-	ui.close_on_keys(toggle_buf, toggle_win)
-	M.render_toggle_menu_buffer()
-
-	local opts = { buffer = toggle_buf, silent = true, noremap = true }
-
-	local function toggle_current_item()
-		local cursor = vim.api.nvim_win_get_cursor(toggle_win)
-		local line_idx = cursor[1]
-		local item = toggle_line_map[line_idx]
-
-		if item == "INSTALL_BUTTON" then
-			M.start_toggle_installation()
-			return
-		end
-
-		if not item or type(item) ~= "table" then
-			return
-		end
-
-		if item.installed then
-			vim.notify("✓ " .. item.label .. " is ALREADY INSTALLED on your system/Mason and cannot be toggled off.", vim.log.levels.INFO, {
-				title = "Already Installed",
-			})
-			return
-		end
-
-		item.selected = not item.selected
-		M.render_toggle_menu_buffer()
-		pcall(vim.api.nvim_win_set_cursor, toggle_win, cursor)
-	end
-
-	vim.keymap.set("n", "<space>", toggle_current_item, opts)
-	vim.keymap.set("n", "<CR>", toggle_current_item, opts)
-	vim.keymap.set("n", "<2-LeftMouse>", toggle_current_item, opts)
-
-	vim.keymap.set("n", "a", function()
-		for _, item in ipairs(toggle_items) do
-			if not item.installed then
-				item.selected = true
-			end
-		end
-		M.render_toggle_menu_buffer()
-	end, opts)
-
-	vim.keymap.set("n", "n", function()
-		for _, item in ipairs(toggle_items) do
-			if not item.installed then
-				item.selected = false
-			end
-		end
-		M.render_toggle_menu_buffer()
-	end, opts)
-
-	local function start_install()
-		M.start_toggle_installation()
-	end
-
-	vim.keymap.set("n", "i", start_install, opts)
-	vim.keymap.set("n", "I", start_install, opts)
-	vim.keymap.set("n", "<C-i>", start_install, opts)
-end
-
---- Starts installation of items selected in the Toggle Selection Menu UI.
-function M.start_toggle_installation()
-	local selected_pkgs = {}
-	for _, item in ipairs(toggle_items) do
-		if not item.installed and item.selected then
-			table.insert(selected_pkgs, item.pkg)
-		end
-	end
-
-	if #selected_pkgs == 0 then
-		vim.notify("⚠️ No uninstalled items are selected for installation.", vim.log.levels.WARN, {
-			title = "Selection Empty",
-		})
-		return
-	end
-
-	if toggle_win and vim.api.nvim_win_is_valid(toggle_win) then
-		pcall(vim.api.nvim_win_close, toggle_win, true)
-	end
-	toggle_win = nil
-	toggle_buf = nil
-
-	M.ensure_sudo_pass(function(sudo_pass)
-		M.install_selected(selected_pkgs, sudo_pass)
-	end)
-end
-
---- Performs automated installation of a specific list of selected packages.
---- @param selected_pkgs string[] List of Mason package names
-function M.install_selected(selected_pkgs)
-	M.open_ui()
-	add_log(string.format("Starting batch installation for %d selected packages...", #selected_pkgs))
-
-	vim.schedule(function()
-		local has_lazy, lazy = pcall(require, "lazy")
-		if has_lazy then
-			pcall(function()
-				lazy.load({ plugins = { "mason.nvim", "mason-lspconfig.nvim", "nvim-treesitter" } })
-			end)
-		end
-
-		pcall(function()
-			require("mason").setup()
-		end)
-
-		local missing_mason_names = {}
-		for _, item in ipairs(selected_pkgs) do
-			table.insert(missing_mason_names, M.get_mason_package_name(item))
-		end
-
-		add_log("Triggering Mason package installer for selected items...")
-		pcall(vim.cmd, "MasonInstall " .. table.concat(missing_mason_names, " "))
-
-		local start_time = (vim.uv or vim.loop).now()
-		local max_wait_ms = 90000
-		local timer = (vim.uv or vim.loop).new_timer()
-
-		timer:start(500, 500, vim.schedule_wrap(function()
-			local scan_now = M.scan_status()
-			local remaining_queued = scan_now.missing_lsps
-
-			local active_pkg = remaining_queued[1] or "Treesitter & final validation"
-			update_ui_buffer(active_pkg, scan_now.installed_items, remaining_queued, scan_now.percentage)
-
-			local elapsed = (vim.uv or vim.loop).now() - start_time
-			if #remaining_queued == 0 or elapsed >= max_wait_ms then
-				timer:stop()
-				timer:close()
-				M.finish_setup(scan_now.installed_items)
-			end
-		end))
-	end)
-end
 
 -------------------------------------------------------------------------------
 -- ROOT / SUDO SYSTEM SETUP EXECUTION WITH UI PASSWORD PROMPT
@@ -1050,6 +790,10 @@ end
 --- bundle's `mason_pkgs` is resolved straight from that language's own
 --- `mason_order` via `M.get_mason_package_name`, so the two can never drift.
 --- @return table[] bundles
+--- Human-readable abbreviation for a mason component's `type`, used as the
+--- column label when a bundle is expanded in the UI.
+local COMPONENT_TYPE_LABEL = { lsp = "LSP", formatter = "FMT", dap = "DAP", extra = "PKG" }
+
 local function build_language_bundles()
 	local langs_mod = require("krs.langs")
 	local bundles = {}
@@ -1058,16 +802,30 @@ local function build_language_bundles()
 		local lang = langs_mod.langs[key]
 		if lang and lang.bundle_name then
 			local mason_pkgs = {}
+			local mason_components = {}
+
 			for _, tool_key in ipairs(lang.mason_order or {}) do
-				table.insert(mason_pkgs, M.get_mason_package_name(tool_key))
+				local pkg_name = M.get_mason_package_name(tool_key)
+				local info = M.tools[tool_key] or {}
+				table.insert(mason_pkgs, pkg_name)
+				table.insert(mason_components, {
+					pkg = pkg_name,
+					type = info.type or "lsp",
+					label = info.lang or info.name or tool_key,
+				})
 			end
-			vim.list_extend(mason_pkgs, lang.bundle_extra_mason_pkgs or {})
+
+			for _, pkg_name in ipairs(lang.bundle_extra_mason_pkgs or {}) do
+				table.insert(mason_pkgs, pkg_name)
+				table.insert(mason_components, { pkg = pkg_name, type = "extra", label = pkg_name })
+			end
 
 			table.insert(bundles, {
 				name = lang.bundle_name,
 				is_minimal = lang.is_minimal,
 				requires = lang.requires or {},
 				mason_pkgs = mason_pkgs,
+				mason_components = mason_components,
 				treesitter = lang.treesitter or {},
 				dotnet_tools = lang.dotnet_tools,
 			})
@@ -1097,6 +855,35 @@ local function category_badge(label, installed, total)
 	return string.format("[❌ %s %d/%d]", label, installed, total)
 end
 
+--- Checks whether a resolved Mason package name is installed on disk or its
+--- CLI binary is on `$PATH`. Shared by `get_bundle_status` and the expanded
+--- per-component rows so the two can never disagree.
+--- @param pkg string Mason package directory name.
+--- @return boolean
+local function is_mason_pkg_installed(pkg)
+	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
+	local pkg_dir = mason_share .. "/" .. pkg
+	local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
+	local info = M.tools[pkg] or {}
+	local bin_cmd = info.cmd or pkg
+	return (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1)
+end
+M.is_mason_pkg_installed = is_mason_pkg_installed
+
+--- Returns a set of installed Treesitter parser names (nvim-treesitter `main` branch API).
+--- @return table<string, boolean>
+local function get_installed_ts_parsers()
+	local set = {}
+	local ts_ok, ts_config = pcall(require, "nvim-treesitter.config")
+	if ts_ok and ts_config.get_installed then
+		for _, name in ipairs(ts_config.get_installed()) do
+			set[name] = true
+		end
+	end
+	return set
+end
+M.get_installed_ts_parsers = get_installed_ts_parsers
+
 --- Computes real-time installation status for a given language bundle.
 --- Checks required system runtimes first; if any are missing the bundle is
 --- marked as blocked and no Mason/TS counts are reported. Mason packages and
@@ -1107,8 +894,6 @@ end
 --- @param bundle table
 --- @return table { installed_count, total_count, badge, missing_runtimes, blocked, mason_installed, mason_total, ts_installed, ts_total }
 function M.get_bundle_status(bundle)
-	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
-
 	-- 1. Check required system runtimes
 	local missing_runtimes = {}
 	for _, req in ipairs(bundle.requires or {}) do
@@ -1139,11 +924,7 @@ function M.get_bundle_status(bundle)
 
 	for _, pkg in ipairs(bundle.mason_pkgs or {}) do
 		mason_total = mason_total + 1
-		local pkg_dir = mason_share .. "/" .. pkg
-		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
-		local info = M.tools[pkg] or {}
-		local bin_cmd = info.cmd or pkg
-		if (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1) then
+		if is_mason_pkg_installed(pkg) then
 			mason_installed = mason_installed + 1
 		end
 	end
@@ -1151,11 +932,11 @@ function M.get_bundle_status(bundle)
 	-- 3. Count Treesitter parsers
 	local ts_installed = 0
 	local ts_total = 0
+	local installed_parsers = get_installed_ts_parsers()
 
 	for _, parser in ipairs(bundle.treesitter or {}) do
 		ts_total = ts_total + 1
-		local ok, parsers_mod = pcall(require, "nvim-treesitter.parsers")
-		if ok and parsers_mod.has_parser and parsers_mod.has_parser(parser) then
+		if installed_parsers[parser] then
 			ts_installed = ts_installed + 1
 		end
 	end
@@ -1183,117 +964,160 @@ function M.get_bundle_status(bundle)
 	}
 end
 
---- Installs all packages and treesitter parsers in a language bundle.
---- Aborts with a warning if any required system runtimes are missing.
+--- Installs or uninstalls a specific subset of a language bundle's components.
+--- Shared by the full-bundle convenience functions and the per-component
+--- selection made from the expanded bundle row in the UI.
 --- @param bundle table
-function M.install_language_bundle(bundle)
-	-- Guard: check required system runtimes before attempting install
-	local missing = {}
-	for _, req in ipairs(bundle.requires or {}) do
-		local ok = vim.fn.executable(req.cmd) == 1
-			or (req.alt and vim.fn.executable(req.alt) == 1)
-		if not ok then
-			local entry = req.name
-			if req.hint then
-				entry = entry .. " → " .. req.hint
+--- @param sel table { mason: string[], ts: string[], dotnet: string[] } names to act on
+--- @param action "install"|"uninstall"
+local function run_bundle_components(bundle, sel, action)
+	if action == "install" then
+		local missing = {}
+		for _, req in ipairs(bundle.requires or {}) do
+			local ok = vim.fn.executable(req.cmd) == 1
+				or (req.alt and vim.fn.executable(req.alt) == 1)
+			if not ok then
+				local entry = req.name
+				if req.hint then
+					entry = entry .. " → " .. req.hint
+				end
+				table.insert(missing, entry)
 			end
-			table.insert(missing, entry)
+		end
+
+		if #missing > 0 then
+			vim.notify(
+				string.format(
+					"⚠️  Cannot install %s\n\nMissing system runtime(s):\n  • %s\n\nInstall the listed runtime(s), restart Neovim, then try again.",
+					bundle.name,
+					table.concat(missing, "\n  • ")
+				),
+				vim.log.levels.WARN,
+				{ title = "Missing Runtime — " .. bundle.name }
+			)
+			return
 		end
 	end
 
-	if #missing > 0 then
-		vim.notify(
-			string.format(
-				"⚠️  Cannot install %s\n\nMissing system runtime(s):\n  • %s\n\nInstall the listed runtime(s), restart Neovim, then try again.",
-				bundle.name,
-				table.concat(missing, "\n  • ")
-			),
-			vim.log.levels.WARN,
-			{ title = "Missing Runtime — " .. bundle.name }
-		)
-		return
-	end
+	local installing = action == "install"
+	vim.notify(
+		string.format("%s toolchain components for %s...", installing and "📥 Installing" or "🗑️ Uninstalling", bundle.name),
+		vim.log.levels.INFO,
+		{ title = "Install Dependencies & Toolchains" }
+	)
 
-	vim.notify("📥 Installing toolchain for " .. bundle.name .. "...", vim.log.levels.INFO, {
-		title = "Language Tooling Manager",
-	})
-
-	-- 1. Install Mason packages
+	-- 1. Mason packages
 	local mr_ok, mr = pcall(require, "mason-registry")
-	if mr_ok then
-		mr.refresh(function()
-			for _, pkg_name in ipairs(bundle.mason_pkgs or {}) do
+	if mr_ok and #(sel.mason or {}) > 0 then
+		local function apply()
+			for _, pkg_name in ipairs(sel.mason) do
 				if mr.has_package(pkg_name) then
 					local pkg = mr.get_package(pkg_name)
-					if not pkg:is_installed() then
+					if installing and not pkg:is_installed() then
 						pkg:install()
+					elseif not installing and pkg:is_installed() then
+						pcall(function()
+							pkg:uninstall()
+						end)
 					end
 				end
 			end
-		end)
+		end
+		if installing then
+			mr.refresh(apply)
+		else
+			apply()
+		end
 	end
 
-	-- 2. Install Treesitter parsers
+	-- 2. Treesitter parsers
 	local ts_ok, ts = pcall(require, "nvim-treesitter")
 	if ts_ok then
-		for _, parser in ipairs(bundle.treesitter or {}) do
-			pcall(ts.install, { parser })
+		local ts_fn = installing and ts.install or ts.uninstall
+		for _, parser in ipairs(sel.ts or {}) do
+			pcall(ts_fn, { parser })
 		end
 	end
 
-	-- 3. Install dotnet global tools if applicable
-	if bundle.dotnet_tools and vim.fn.executable("dotnet") == 1 then
-		for _, tool in ipairs(bundle.dotnet_tools) do
-			vim.system({ "dotnet", "tool", "install", "-g", tool })
+	-- 3. Dotnet global tools
+	if vim.fn.executable("dotnet") == 1 then
+		for _, tool in ipairs(sel.dotnet or {}) do
+			vim.system({ "dotnet", "tool", action, "-g", tool })
 		end
 	end
 
-	vim.notify("✅ Toolchain installation triggered for " .. bundle.name, vim.log.levels.INFO, {
-		title = "Language Tooling Manager",
-	})
+	vim.notify(
+		string.format("%s selected components for %s", installing and "✅ Installed" or "🗑️ Uninstalled", bundle.name),
+		installing and vim.log.levels.INFO or vim.log.levels.WARN,
+		{ title = "Install Dependencies & Toolchains" }
+	)
 end
 
---- Uninstalls all packages and treesitter parsers in a language bundle.
+--- Installs every package, parser, and dotnet tool in a language bundle.
+--- Aborts with a warning if any required system runtimes are missing.
+--- @param bundle table
+function M.install_language_bundle(bundle)
+	run_bundle_components(bundle, { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools }, "install")
+end
+
+--- Uninstalls every package, parser, and dotnet tool in a language bundle.
 --- @param bundle table
 function M.uninstall_language_bundle(bundle)
-	vim.notify("🗑️ Uninstalling toolchain for " .. bundle.name .. "...", vim.log.levels.INFO, {
-		title = "Language Tooling Manager",
-	})
-
-	-- 1. Uninstall Mason packages
-	local mr_ok, mr = pcall(require, "mason-registry")
-	if mr_ok then
-		for _, pkg_name in ipairs(bundle.mason_pkgs or {}) do
-			if mr.has_package(pkg_name) then
-				local pkg = mr.get_package(pkg_name)
-				if pkg:is_installed() then
-					pcall(function()
-						pkg:uninstall()
-					end)
-				end
-			end
-		end
-	end
-
-	-- 2. Uninstall Treesitter parsers
-	local ts_ok, ts = pcall(require, "nvim-treesitter")
-	if ts_ok then
-		for _, parser in ipairs(bundle.treesitter or {}) do
-			pcall(ts.uninstall, { parser })
-		end
-	end
-
-	-- 3. Uninstall dotnet global tools if applicable
-	if bundle.dotnet_tools and vim.fn.executable("dotnet") == 1 then
-		for _, tool in ipairs(bundle.dotnet_tools) do
-			vim.system({ "dotnet", "tool", "uninstall", "-g", tool })
-		end
-	end
-
-	vim.notify("🗑️ Toolchain uninstalled for " .. bundle.name, vim.log.levels.WARN, {
-		title = "Language Tooling Manager",
-	})
+	run_bundle_components(bundle, { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools }, "uninstall")
 end
+
+--- Installs only the given component subset of a language bundle.
+--- @param bundle table
+--- @param sel table { mason: string[], ts: string[], dotnet: string[] }
+function M.install_bundle_components(bundle, sel)
+	run_bundle_components(bundle, sel, "install")
+end
+
+--- Uninstalls only the given component subset of a language bundle.
+--- @param bundle table
+--- @param sel table { mason: string[], ts: string[], dotnet: string[] }
+function M.uninstall_bundle_components(bundle, sel)
+	run_bundle_components(bundle, sel, "uninstall")
+end
+
+--- Counts how many of an item's per-component checkboxes are selected.
+--- @param item table entry from `lang_items`
+--- @return integer selected, integer total
+local function count_selected_components(item)
+	local sel, tot = 0, 0
+	for _, v in pairs(item.comp.mason) do
+		tot = tot + 1
+		if v then sel = sel + 1 end
+	end
+	for _, v in pairs(item.comp.ts) do
+		tot = tot + 1
+		if v then sel = sel + 1 end
+	end
+	for _, v in pairs(item.comp.dotnet) do
+		tot = tot + 1
+		if v then sel = sel + 1 end
+	end
+	return sel, tot
+end
+M.count_selected_components = count_selected_components
+
+--- Sets every component checkbox of an item to `val` in one go. Used by the
+--- bundle-row bulk toggle and the `a`/`n`/`p` select-all keymaps.
+--- @param item table entry from `lang_items`
+--- @param val boolean
+local function set_item_components(item, val)
+	for k in pairs(item.comp.mason) do
+		item.comp.mason[k] = val
+	end
+	for k in pairs(item.comp.ts) do
+		item.comp.ts[k] = val
+	end
+	for k in pairs(item.comp.dotnet) do
+		item.comp.dotnet[k] = val
+	end
+	item.selected = val
+end
+M.set_item_components = set_item_components
 
 --- Renders the Interactive Language Manager UI floating buffer.
 function M.render_language_manager_buffer()
@@ -1307,9 +1131,9 @@ function M.render_language_manager_buffer()
 	local width = (lang_win and vim.api.nvim_win_is_valid(lang_win)) and vim.api.nvim_win_get_width(lang_win) or 76
 
 	table.insert(lines, "  ==========================================================================")
-	table.insert(lines, "   🌐 KRS LANGUAGE TOOLING MANAGER -- PER-LANGUAGE SETUP & TEARDOWN")
+	table.insert(lines, "   📦 KRS INSTALL DEPENDENCIES & TOOLCHAINS -- PER-LANGUAGE SETUP & TEARDOWN")
 	table.insert(lines, "  ==========================================================================")
-	table.insert(lines, "   Fresh setup defaults to Minimal Core (Lua only). Select optional bundles below.")
+	table.insert(lines, "   Fresh setup defaults to Minimal Core (Lua only). [Enter] a row to pick individual components.")
 	table.insert(lines, "")
 
 	local selected_count = 0
@@ -1326,31 +1150,79 @@ function M.render_language_manager_buffer()
 			pending_count = pending_count + 1
 		end
 
+		local sel_n, tot_n = count_selected_components(item)
+
 		-- Blocked bundles get a lock symbol instead of a checkbox
 		local checkbox
 		if status.blocked then
 			checkbox = "[🔒]"
-		elseif item.selected then
+		elseif tot_n == 0 or sel_n == 0 then
+			checkbox = "[ ]"
+		elseif sel_n == tot_n then
 			checkbox = "[x]"
 		else
-			checkbox = "[ ]"
+			checkbox = "[~]"
 		end
-		if item.selected and not status.blocked then
+		if sel_n > 0 and not status.blocked then
 			selected_count = selected_count + 1
 		end
 
+		local arrow = item.expanded and "▾" or "▸"
 		local tag = item.bundle.is_minimal and " (Core)" or ""
-		local line_str = string.format("   %s  %-42s %s%s", checkbox, item.bundle.name, status.badge, tag)
+		local line_str = string.format("  %s %s  %-40s %s%s", arrow, checkbox, item.bundle.name, status.badge, tag)
 		table.insert(lines, line_str)
-		lang_line_map[#lines] = item
+		lang_line_map[#lines] = { kind = "bundle", item = item }
+
+		if item.expanded and not status.blocked then
+			local installed_ts = get_installed_ts_parsers()
+
+			for _, comp in ipairs(item.bundle.mason_components or {}) do
+				local sel_mark = item.comp.mason[comp.pkg] and "[x]" or "[ ]"
+				local mark = is_mason_pkg_installed(comp.pkg) and "✓" or "❌"
+				local type_label = COMPONENT_TYPE_LABEL[comp.type] or comp.type:upper()
+				table.insert(lines, string.format("        %s %-4s %-32s %s", sel_mark, type_label, comp.label, mark))
+				lang_line_map[#lines] = { kind = "component", item = item, ctype = "mason", key = comp.pkg }
+			end
+
+			for _, parser in ipairs(item.bundle.treesitter or {}) do
+				local sel_mark = item.comp.ts[parser] and "[x]" or "[ ]"
+				local mark = installed_ts[parser] and "✓" or "❌"
+				table.insert(lines, string.format("        %s %-4s %-32s %s", sel_mark, "TS", parser, mark))
+				lang_line_map[#lines] = { kind = "component", item = item, ctype = "ts", key = parser }
+			end
+
+			for _, tool in ipairs(item.bundle.dotnet_tools or {}) do
+				local sel_mark = item.comp.dotnet[tool] and "[x]" or "[ ]"
+				table.insert(lines, string.format("        %s %-4s %-32s %s", sel_mark, "NET", tool, "?"))
+				lang_line_map[#lines] = { kind = "component", item = item, ctype = "dotnet", key = tool }
+			end
+
+			table.insert(lines, "")
+		end
 	end
 
 	table.insert(lines, "")
 	table.insert(lines, "  " .. string.rep("─", width - 4))
-	table.insert(lines, string.format("  👉 [ PRESS 'i' OR ENTER TO INSTALL SELECTED BUNDLES (%d SELECTED) ]", selected_count))
-	table.insert(lines, "  [Space/Enter] Toggle Row             |  [d] Show Component Details")
+	table.insert(lines, string.format("  👉 [ PRESS 'i' OR ENTER TO INSTALL SELECTED COMPONENTS (%d BUNDLES) ]", selected_count))
+	table.insert(lines, "  [Enter] Expand/Toggle Row            |  [Space] Toggle Checkbox  |  [d] Show Details")
 	table.insert(lines, string.format("  [a] Select All    [n] Select None   |  [p] Select All Pending (%d bundles)", pending_count))
 	table.insert(lines, "  [i] Install Selected                |  [u] Uninstall Selected  |  [q/Esc] Close")
+
+	table.insert(lines, "")
+	table.insert(lines, "  " .. string.rep("─", width - 4))
+	table.insert(lines, "   🩺 CLI HEALTH CHECK -- found in $PATH?")
+	local health_parts = {}
+	for _, tool in ipairs(M.cli_healthcheck) do
+		local found = vim.fn.executable(tool.cmd) == 1 or (tool.alt and vim.fn.executable(tool.alt) == 1)
+		table.insert(health_parts, (found and "✅ " or "❌ ") .. tool.cmd)
+		if #health_parts >= 5 then
+			table.insert(lines, "   " .. table.concat(health_parts, "   "))
+			health_parts = {}
+		end
+	end
+	if #health_parts > 0 then
+		table.insert(lines, "   " .. table.concat(health_parts, "   "))
+	end
 
 	pcall(function()
 		vim.bo[lang_buf].modifiable = true
@@ -1375,10 +1247,24 @@ function M.open_language_manager()
 		-- Partial or missing bundles start deselected — user must opt-in.
 		local auto_select = bundle.is_minimal
 			or (status.installed_count == status.total_count and status.total_count > 0)
+
+		local comp = { mason = {}, ts = {}, dotnet = {} }
+		for _, c in ipairs(bundle.mason_components or {}) do
+			comp.mason[c.pkg] = auto_select
+		end
+		for _, parser in ipairs(bundle.treesitter or {}) do
+			comp.ts[parser] = auto_select
+		end
+		for _, tool in ipairs(bundle.dotnet_tools or {}) do
+			comp.dotnet[tool] = auto_select
+		end
+
 		table.insert(lang_items, {
 			bundle = bundle,
 			selected = auto_select,
 			status = status,
+			expanded = false,
+			comp = comp,
 		})
 	end
 
@@ -1390,7 +1276,7 @@ function M.open_language_manager()
 	lang_buf, lang_win = ui.float({
 		width = width,
 		height = height,
-		title = " 🌐 KRS Language Tooling Manager ",
+		title = " 📦 KRS Install Dependencies & Toolchains ",
 		focusable = true,
 		modifiable = false,
 	})
@@ -1400,7 +1286,7 @@ function M.open_language_manager()
 
 	local opts = { buffer = lang_buf, silent = true, noremap = true }
 
-	local function get_current_item()
+	local function get_current_entry()
 		if not lang_win or not vim.api.nvim_win_is_valid(lang_win) then
 			return nil, nil
 		end
@@ -1408,32 +1294,86 @@ function M.open_language_manager()
 		return lang_line_map[cursor[1]], cursor
 	end
 
+	--- Toggles exactly one checkbox: the single component under the cursor,
+	--- or every component of a bundle row at once (bulk select/deselect).
 	local function toggle_checkbox()
-		local item, cursor = get_current_item()
-		if item and type(item) == "table" then
-			item.selected = not item.selected
-			M.render_language_manager_buffer()
-			if cursor and lang_win and vim.api.nvim_win_is_valid(lang_win) then
-				pcall(vim.api.nvim_win_set_cursor, lang_win, cursor)
-			end
+		local entry, cursor = get_current_entry()
+		if not entry then
+			return
+		end
+
+		if entry.kind == "bundle" then
+			local sel_n, tot_n = count_selected_components(entry.item)
+			set_item_components(entry.item, sel_n < tot_n)
+		elseif entry.kind == "component" then
+			local map = entry.item.comp[entry.ctype]
+			map[entry.key] = not map[entry.key]
+		end
+
+		M.render_language_manager_buffer()
+		if cursor and lang_win and vim.api.nvim_win_is_valid(lang_win) then
+			pcall(vim.api.nvim_win_set_cursor, lang_win, cursor)
 		end
 	end
 
-	local function install_action()
-		local item, cursor = get_current_item()
-		local count_selected = 0
-		for _, it in ipairs(lang_items) do
-			if it.selected then count_selected = count_selected + 1 end
+	--- <CR>: expands/collapses a bundle row; on a component row it's the same
+	--- as <Space> (toggle that one component).
+	local function expand_or_toggle()
+		local entry, cursor = get_current_entry()
+		if not entry then
+			return
 		end
 
-		if count_selected > 0 then
+		if entry.kind == "bundle" then
+			entry.item.expanded = not entry.item.expanded
+		elseif entry.kind == "component" then
+			local map = entry.item.comp[entry.ctype]
+			map[entry.key] = not map[entry.key]
+		end
+
+		M.render_language_manager_buffer()
+		if cursor and lang_win and vim.api.nvim_win_is_valid(lang_win) then
+			pcall(vim.api.nvim_win_set_cursor, lang_win, cursor)
+		end
+	end
+
+	local function collect_selection(item)
+		local mason, ts, dotnet = {}, {}, {}
+		for pkg, v in pairs(item.comp.mason) do
+			if v then table.insert(mason, pkg) end
+		end
+		for parser, v in pairs(item.comp.ts) do
+			if v then table.insert(ts, parser) end
+		end
+		for tool, v in pairs(item.comp.dotnet) do
+			if v then table.insert(dotnet, tool) end
+		end
+		return { mason = mason, ts = ts, dotnet = dotnet }
+	end
+
+	local function has_any_selection(item)
+		local sel_n = count_selected_components(item)
+		return sel_n > 0
+	end
+
+	local function install_action()
+		local entry, cursor = get_current_entry()
+		local any_global = false
+		for _, it in ipairs(lang_items) do
+			if has_any_selection(it) then
+				any_global = true
+				break
+			end
+		end
+
+		if any_global then
 			for _, it in ipairs(lang_items) do
-				if it.selected then
-					M.install_language_bundle(it.bundle)
+				if has_any_selection(it) then
+					M.install_bundle_components(it.bundle, collect_selection(it))
 				end
 			end
-		elseif item and type(item) == "table" then
-			M.install_language_bundle(item.bundle)
+		elseif entry and entry.item then
+			M.install_language_bundle(entry.item.bundle)
 		else
 			vim.notify("⚠️ Move cursor to a language row or select checkboxes with <Space> to install.", vim.log.levels.WARN)
 			return
@@ -1448,20 +1388,23 @@ function M.open_language_manager()
 	end
 
 	local function uninstall_action()
-		local item, cursor = get_current_item()
-		local count_selected = 0
+		local entry, cursor = get_current_entry()
+		local any_global = false
 		for _, it in ipairs(lang_items) do
-			if it.selected then count_selected = count_selected + 1 end
+			if has_any_selection(it) then
+				any_global = true
+				break
+			end
 		end
 
-		if count_selected > 0 then
+		if any_global then
 			for _, it in ipairs(lang_items) do
-				if it.selected then
-					M.uninstall_language_bundle(it.bundle)
+				if has_any_selection(it) then
+					M.uninstall_bundle_components(it.bundle, collect_selection(it))
 				end
 			end
-		elseif item and type(item) == "table" then
-			M.uninstall_language_bundle(item.bundle)
+		elseif entry and entry.item then
+			M.uninstall_language_bundle(entry.item.bundle)
 		else
 			vim.notify("⚠️ Move cursor to a language row or select checkboxes with <Space> to uninstall.", vim.log.levels.WARN)
 			return
@@ -1476,8 +1419,9 @@ function M.open_language_manager()
 	end
 
 	local function show_details()
-		local item, _ = get_current_item()
-		if item and type(item) == "table" then
+		local entry = get_current_entry()
+		if entry and entry.item then
+			local item = entry.item
 			local details = {
 				"Language Bundle: " .. item.bundle.name,
 				"Mason Packages: " .. table.concat(item.bundle.mason_pkgs or {}, ", "),
@@ -1493,8 +1437,8 @@ function M.open_language_manager()
 	end
 
 	vim.keymap.set("n", "<space>", toggle_checkbox, opts)
-	vim.keymap.set("n", "<CR>", toggle_checkbox, opts)
-	vim.keymap.set("n", "<2-LeftMouse>", toggle_checkbox, opts)
+	vim.keymap.set("n", "<CR>", expand_or_toggle, opts)
+	vim.keymap.set("n", "<2-LeftMouse>", expand_or_toggle, opts)
 
 	vim.keymap.set("n", "i", install_action, opts)
 	vim.keymap.set("n", "I", install_action, opts)
@@ -1506,7 +1450,7 @@ function M.open_language_manager()
 		for _, item in ipairs(lang_items) do
 			local status = item.status or M.get_bundle_status(item.bundle)
 			if not status.blocked then
-				item.selected = true
+				set_item_components(item, true)
 			end
 		end
 		M.render_language_manager_buffer()
@@ -1514,7 +1458,7 @@ function M.open_language_manager()
 
 	vim.keymap.set("n", "n", function()
 		for _, item in ipairs(lang_items) do
-			item.selected = (item.bundle.is_minimal == true)
+			set_item_components(item, item.bundle.is_minimal == true)
 		end
 		M.render_language_manager_buffer()
 	end, opts)
@@ -1527,7 +1471,7 @@ function M.open_language_manager()
 				and not status.blocked
 				and status.installed_count < status.total_count
 			then
-				item.selected = true
+				set_item_components(item, true)
 			end
 		end
 		M.render_language_manager_buffer()
@@ -1539,27 +1483,27 @@ function M.init()
 	-- Register User Commands immediately
 	vim.api.nvim_create_user_command("LanguageManager", function()
 		M.open_language_manager()
-	end, { desc = "Open interactive Language Tooling Manager to install or uninstall language bundles" })
+	end, { desc = "Open interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("KrsLanguageManager", function()
 		M.open_language_manager()
-	end, { desc = "Open interactive Language Tooling Manager to install or uninstall language bundles" })
+	end, { desc = "Open interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("LanguageTooling", function()
 		M.open_language_manager()
-	end, { desc = "Open interactive Language Tooling Manager to install or uninstall language bundles" })
+	end, { desc = "Open interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("KrsInstallDependencies", function()
-		M.open_toggle_menu()
-	end, { desc = "Open interactive Toggle Selection Menu UI for system dependencies and LSPs" })
+		M.open_language_manager()
+	end, { desc = "Open interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("KrsInstaller", function()
-		M.open_toggle_menu()
-	end, { desc = "Open interactive Toggle Selection Menu UI for system dependencies and LSPs" })
+		M.open_language_manager()
+	end, { desc = "Open interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("KrsSetup", function()
-		M.open_toggle_menu()
-	end, { desc = "Run interactive system setup with Toggle Selection Menu UI" })
+		M.open_language_manager()
+	end, { desc = "Run interactive Install Dependencies & Toolchains UI for per-language bundles" })
 
 	vim.api.nvim_create_user_command("KrsSystemSetup", function()
 		M.run_system_setup_interactive()
