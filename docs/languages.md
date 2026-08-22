@@ -18,6 +18,7 @@ Nothing below installs automatically on first start: `mason-lspconfig` is config
 | **HTML / CSS** | `html`, `cssls`, `emmet_ls`, `tailwindcss` | `prettierd` → `prettier` → `biome` | `html`, `css` | browser adapters |
 | **Svelte** | `svelte` | `prettierd` → `prettier` → `biome` | `svelte` | browser adapters |
 | **Astro** | `astro` | `prettier` (always) | `astro` | browser adapters |
+| **Angular** | `angularls` | `prettierd` → `prettier` → `biome` | `html`, `scss` | browser adapters |
 | **Go** | `gopls` | `goimports`, `gofumpt` | `go`, `gomod`, `gowork`, `gosum` | `delve` (via `nvim-dap-go`) |
 | **Python** | — (debug only) | — | `python` | `debugpy` |
 | **PHP / Blade** | `intelephense` | `pint` → `php_cs_fixer`; Blade uses `blade-formatter` → `pint` | `php`, `phpdoc`, `blade` | `php-debug-adapter` (Xdebug) |

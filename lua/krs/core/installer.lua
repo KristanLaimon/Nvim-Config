@@ -1116,6 +1116,15 @@ M.language_bundles = {
 		treesitter = { "html", "css", "svelte", "astro" },
 	},
 	{
+		name = "🅰️ Angular",
+		lang = "Angular",
+		requires = {
+			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+		},
+		mason_pkgs = { "angular-language-server" },
+		treesitter = { "html", "scss" },
+	},
+	{
 		name = "🐳 Docker & Proto",
 		lang = "Docker/Proto",
 		requires = {}, -- dockerfile-language-server & protolint are standalone Mason binaries

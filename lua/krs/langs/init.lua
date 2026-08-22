@@ -86,6 +86,7 @@ M.langs = {
 	php = require("krs.langs.php"),
 	typescript = require("krs.langs.typescript"),
 	web = require("krs.langs.web"),
+	angular = require("krs.langs.angular"),
 	csharp = require("krs.langs.csharp"),
 	go = require("krs.langs.go"),
 	python = require("krs.langs.python"),
