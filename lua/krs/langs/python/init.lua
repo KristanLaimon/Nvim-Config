@@ -23,6 +23,12 @@ M.lsp_config = {
 				analysis = {
 					typeCheckingMode = "strict",
 					autoImportCompletions = true,
+					inlayHints = {
+						variableTypes = true,
+						functionReturnTypes = true,
+						callArgumentNames = true,
+						pytestParameters = true,
+					},
 				},
 			},
 		},
