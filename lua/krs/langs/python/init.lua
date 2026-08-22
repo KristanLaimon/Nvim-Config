@@ -9,17 +9,17 @@
 
 local M = {}
 
---- The lspconfig/mason server name(s) this language owns. pyright: types,
---- hover, go-to-def. ruff: lint + import-sort diagnostics/code actions (its
---- formatting runs through conform below, not the LSP formatter capability).
-M.lsp_server = { "pyright", "ruff" }
+--- The lspconfig/mason server name(s) this language owns. basedpyright: types,
+--- hover, go-to-def, inlay hints. ruff: lint + import-sort diagnostics/code
+--- actions (its formatting runs through conform below, not the LSP formatter capability).
+M.lsp_server = { "basedpyright", "ruff" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
 ---@type table<string, vim.lsp.Config>
 M.lsp_config = {
-	pyright = {
+	basedpyright = {
 		settings = {
-			python = {
+			basedpyright = {
 				analysis = {
 					typeCheckingMode = "strict",
 					autoImportCompletions = true,
@@ -28,6 +28,7 @@ M.lsp_config = {
 						functionReturnTypes = true,
 						callArgumentNames = true,
 						pytestParameters = true,
+						genericTypes = true,
 					},
 				},
 			},
@@ -72,12 +73,12 @@ M.dap_configs = {
 
 --- Mason package metadata, keyed by tool name.
 M.mason = {
-	pyright = { mason = "pyright", lang = "Python", type = "lsp", cmd = "pyright-langserver" },
+	basedpyright = { mason = "basedpyright", lang = "Python", type = "lsp", cmd = "basedpyright-langserver" },
 	ruff = { mason = "ruff", lang = "Python (Ruff)", type = "lsp", cmd = "ruff" },
 	debugpy = { mason = "debugpy", lang = "Python Debugger", type = "dap", cmd = "debugpy-adapter" },
 }
 
-M.mason_order = { "pyright", "ruff", "debugpy" }
+M.mason_order = { "basedpyright", "ruff", "debugpy" }
 
 --- conform.nvim formatter list per filetype: ruff sorts imports then formats
 --- (Black-compatible), in one already-installed tool.
