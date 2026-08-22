@@ -13,6 +13,7 @@ local settings = {
 		{ "f", "📁", "File Explorer", ":TelescopeFileBrowserDesktop<CR>" },
 		{ "p", "💼", "Recent projects", ":Telescope projects<CR>" },
 		{ "s", "📦", "Dependencies & Toolchains", ":KrsInstallDependencies<CR>" },
+		{ "h", "🩺", "Health Check", ":KrsHealthCheck<CR>" },
 		{ "w", "📚", "Wiki & Docs (Ctrl+Shift+D)", ":KrsWiki<CR>" },
 		{ "e", "🧩", "Plugins & Extensions", ":Lazy<CR>" },
 		{ "m", "⚙️", "Server Manager (Mason)", ":Mason<CR>" },

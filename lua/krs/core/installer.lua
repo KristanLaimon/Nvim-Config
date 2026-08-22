@@ -91,20 +91,51 @@ M.heavy_runtimes = {
 	{ cmd = "dotnet", name = ".NET SDK" },
 }
 
---- CLIs checked in the bundle manager's PATH health check footer.
-M.cli_healthcheck = {
-	{ cmd = "git" },
-	{ cmd = "gcc", alt = "clang" },
-	{ cmd = "node" },
-	{ cmd = "bun" },
-	{ cmd = "go" },
-	{ cmd = "dotnet" },
-	{ cmd = "python", alt = "python3" },
-	{ cmd = "php" },
-	{ cmd = "composer" },
-	{ cmd = "rg" },
-	{ cmd = "fd", alt = "fdfind" },
+--- Full health-check catalogue, grouped by category. Single source of truth
+--- for both the compact bundle-manager footer (flattened, see
+--- `M.cli_healthcheck` below) and the standalone `:KrsHealthCheck` page.
+--- Each tool: `{ cmd, name, alt?, note? }` -- `note` explains which plugin
+--- or feature needs it, shown only on the full health-check page.
+M.health_categories = {
+	{
+		label = "🧱 Essential Tools",
+		tools = {
+			{ cmd = "git", name = "Git version control", note = "version control, lazy.nvim plugin installs" },
+			{ cmd = "gcc", name = "C/C++ Compiler (gcc/clang)", alt = "clang", note = "compiles Treesitter parsers" },
+			{ cmd = "rg", name = "Ripgrep", note = "Telescope live-grep & find-files" },
+			{ cmd = "fd", name = "fd", alt = "fdfind", note = "Telescope file finder" },
+		},
+	},
+	{
+		label = "🚀 Language Runtimes",
+		tools = {
+			{ cmd = "node", name = "Node.js runtime", note = "JS/TS, Angular, web, most Mason LSPs" },
+			{ cmd = "bun", name = "Bun runtime", note = "faster JS package installs/DAP" },
+			{ cmd = "go", name = "Go programming language" },
+			{ cmd = "dotnet", name = ".NET SDK", note = "C# LSP, dotnet global tools" },
+			{ cmd = "python", name = "Python", alt = "python3" },
+			{ cmd = "php", name = "PHP" },
+			{ cmd = "composer", name = "Composer", note = "PHP package manager" },
+		},
+	},
+	{
+		label = "🔌 External Plugin Dependencies",
+		tools = {
+			{ cmd = "curl", name = "curl", note = "lua/plugins/krs/doc_manager.lua DevDocs downloader" },
+			{ cmd = "npm", name = "npm", note = "lua/plugins/krs/type_injector.lua schema package installer" },
+			{ cmd = "yarn", name = "yarn", note = "lua/plugins/krs/dev_server.lua alt JS runner (optional if npm/bun present)" },
+		},
+	},
 }
+
+--- Flattened `{cmd, alt}` view of `M.health_categories`, for the compact
+--- bundle-manager footer's single-line pass/fail row.
+M.cli_healthcheck = {}
+for _, category in ipairs(M.health_categories) do
+	for _, tool in ipairs(category.tools) do
+		table.insert(M.cli_healthcheck, { cmd = tool.cmd, alt = tool.alt })
+	end
+end
 
 -------------------------------------------------------------------------------
 -- UI STATE & LIVE ACTIVITY LOGGING
@@ -298,6 +329,9 @@ local lang_buf = nil
 local lang_win = nil
 local lang_items = {}
 local lang_line_map = {}
+
+local health_buf = nil
+local health_win = nil
 
 -------------------------------------------------------------------------------
 -- ROOT / SUDO SYSTEM SETUP EXECUTION WITH UI PASSWORD PROMPT
@@ -527,6 +561,96 @@ end
 --- Displays detailed setup status report toast.
 function M.show_status()
 	M.open_ui()
+end
+
+--- Renders the full `:KrsHealthCheck` page: every CLI in `M.health_categories`
+--- plus editor-core plugin manager checks, grouped by category with a pass
+--- count per section and an overall summary at the bottom.
+local function render_health_check_buffer()
+	if not health_buf or not vim.api.nvim_buf_is_valid(health_buf) then
+		return
+	end
+
+	local width = (health_win and vim.api.nvim_win_is_valid(health_win)) and vim.api.nvim_win_get_width(health_win) or 78
+	local lines = {}
+
+	table.insert(lines, "  ==========================================================================")
+	table.insert(lines, "   🩺 KRS HEALTH CHECK -- EVERYTHING NEEDED FOR THIS CONFIG TO WORK 100%")
+	table.insert(lines, "  ==========================================================================")
+	table.insert(lines, "")
+
+	local total_found, total_count = 0, 0
+
+	-- Editor core: lazy.nvim itself, Mason.
+	table.insert(lines, "  📦 Editor Core")
+	local lazy_installed = (vim.uv or vim.loop).fs_stat(vim.fn.stdpath("data") .. "/lazy/lazy.nvim") ~= nil
+	local mason_ok = pcall(require, "mason")
+	for _, row in ipairs({
+		{ "lazy.nvim plugin manager", lazy_installed },
+		{ "mason.nvim (LSP/tool installer)", mason_ok },
+	}) do
+		total_count = total_count + 1
+		if row[2] then total_found = total_found + 1 end
+		table.insert(lines, string.format("     %s %s", row[2] and "✅" or "❌", row[1]))
+	end
+	table.insert(lines, "")
+
+	for _, category in ipairs(M.health_categories) do
+		local found_n, total_n = 0, 0
+		local rows = {}
+		for _, tool in ipairs(category.tools) do
+			local found = vim.fn.executable(tool.cmd) == 1 or (tool.alt and vim.fn.executable(tool.alt) == 1)
+			total_n = total_n + 1
+			if found then found_n = found_n + 1 end
+			local note = tool.note and ("  -- " .. tool.note) or ""
+			table.insert(rows, string.format("     %s %-14s %s", found and "✅" or "❌", tool.cmd, (tool.name or "") .. note))
+		end
+		total_found = total_found + found_n
+		total_count = total_count + total_n
+
+		table.insert(lines, string.format("  %s (%d/%d)", category.label, found_n, total_n))
+		vim.list_extend(lines, rows)
+		table.insert(lines, "")
+	end
+
+	table.insert(lines, "  " .. string.rep("─", width - 4))
+	local pct = math.floor((total_found / math.max(1, total_count)) * 100 + 0.5)
+	table.insert(lines, string.format("  📊 OVERALL: %d/%d found (%d%%)", total_found, total_count, pct))
+	table.insert(lines, "  [r] Refresh   |   [q/Esc] Close")
+
+	pcall(function()
+		vim.bo[health_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(health_buf, 0, -1, false, lines)
+		vim.bo[health_buf].modifiable = false
+	end)
+end
+
+--- Opens the full `:KrsHealthCheck` page.
+function M.open_health_check()
+	local ui = require("krs.core.ui")
+
+	if health_win and vim.api.nvim_win_is_valid(health_win) then
+		vim.api.nvim_set_current_win(health_win)
+		return
+	end
+
+	local cols = vim.o.columns or 80
+	local lines_cnt = vim.o.lines or 24
+	local width = math.max(50, math.min(80, cols - 4))
+	local height = math.max(16, math.min(32, lines_cnt - 4))
+
+	health_buf, health_win = ui.float({
+		width = width,
+		height = height,
+		title = " 🩺 KRS Health Check ",
+		focusable = true,
+		modifiable = false,
+	})
+
+	ui.close_on_keys(health_buf, health_win)
+	render_health_check_buffer()
+
+	vim.keymap.set("n", "r", render_health_check_buffer, { buffer = health_buf, silent = true, noremap = true })
 end
 
 --- Performs automated incremental installation (Stage 1 Essentials + Stage 2 Heavy LSPs).
@@ -1618,6 +1742,10 @@ function M.init()
 	vim.api.nvim_create_user_command("KrsSetupStatus", function()
 		M.show_status()
 	end, { desc = "Check detailed installation health status in Live Setup Modal" })
+
+	vim.api.nvim_create_user_command("KrsHealthCheck", function()
+		M.open_health_check()
+	end, { desc = "Open the full KRS health check page (every CLI/tool this config needs)" })
 
 	vim.api.nvim_create_user_command("KrsSetupReset", function()
 		M.reset_state()

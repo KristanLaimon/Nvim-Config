@@ -141,6 +141,7 @@ M.commands = {
 	{ name = "🤖 Install Claude Code CLI (claude)", cmd = "KrsInstallClaude", category = "Setup" },
 	{ name = "⚡ Fast Automated Batch Installer", cmd = "KrsInstallAll", category = "Setup" },
 	{ name = "⚙️ Check System & LSP Installation Health", cmd = "KrsSetupStatus", category = "Setup" },
+	{ name = "🩺 Full Health Check (every CLI this config needs)", cmd = "KrsHealthCheck", category = "Setup" },
 	{ name = "🔄 Reset System Setup Completion State", cmd = "KrsSetupReset", category = "Setup" },
 
 	-- --------------------------------------------------------------------------
