@@ -9,13 +9,25 @@
 
 local M = {}
 
---- The lspconfig/mason server name(s) this language owns.
-M.lsp_server = { "pyright" }
+--- The lspconfig/mason server name(s) this language owns. pyright: types,
+--- hover, go-to-def. ruff: lint + import-sort diagnostics/code actions (its
+--- formatting runs through conform below, not the LSP formatter capability).
+M.lsp_server = { "pyright", "ruff" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
 ---@type table<string, vim.lsp.Config>
 M.lsp_config = {
-	pyright = {},
+	pyright = {
+		settings = {
+			python = {
+				analysis = {
+					typeCheckingMode = "strict",
+					autoImportCompletions = true,
+				},
+			},
+		},
+	},
+	ruff = {},
 }
 
 --- Prefers the project's virtualenv interpreter over whatever `python` resolves
@@ -55,10 +67,17 @@ M.dap_configs = {
 --- Mason package metadata, keyed by tool name.
 M.mason = {
 	pyright = { mason = "pyright", lang = "Python", type = "lsp", cmd = "pyright-langserver" },
+	ruff = { mason = "ruff", lang = "Python (Ruff)", type = "lsp", cmd = "ruff" },
 	debugpy = { mason = "debugpy", lang = "Python Debugger", type = "dap", cmd = "debugpy-adapter" },
 }
 
-M.mason_order = { "pyright", "debugpy" }
+M.mason_order = { "pyright", "ruff", "debugpy" }
+
+--- conform.nvim formatter list per filetype: ruff sorts imports then formats
+--- (Black-compatible), in one already-installed tool.
+M.formatters_by_ft = {
+	python = { "ruff_fix", "ruff_format" },
+}
 
 --- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
 M.bundle_name = "🐍 Python"
