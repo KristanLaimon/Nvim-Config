@@ -123,7 +123,8 @@ M.health_categories = {
 		tools = {
 			{ cmd = "curl", name = "curl", note = "lua/plugins/krs/doc_manager.lua DevDocs downloader" },
 			{ cmd = "npm", name = "npm", note = "lua/plugins/krs/type_injector.lua schema package installer" },
-			{ cmd = "yarn", name = "yarn", note = "lua/plugins/krs/dev_server.lua alt JS runner (optional if npm/bun present)" },
+			{ cmd = "pnpm", name = "pnpm", note = "lua/plugins/krs/dev_server.lua alt JS runner (optional, only needed for pnpm-lock.yaml projects)" },
+			{ cmd = "yarn", name = "yarn", note = "lua/plugins/krs/dev_server.lua alt JS runner (optional, only needed for yarn.lock projects)" },
 		},
 	},
 }

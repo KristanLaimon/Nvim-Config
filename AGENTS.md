@@ -2,7 +2,7 @@
 
 This file defines mandatory guidelines and reference links for AI coding assistants working in or customizing this Neovim distribution (**KrsVim**).
 
-> 🌐 **Per-Language Documentation Reference**: Individual language toolchain guides, debug profiles, and LSP/formatter commands are documented under [`docs/languages/`](docs/languages/) (e.g., [`php.md`](docs/languages/php.md), [`typescript.md`](docs/languages/typescript.md), [`csharp.md`](docs/languages/csharp.md), [`go.md`](docs/languages/go.md), [`python.md`](docs/languages/python.md), [`lua.md`](docs/languages/lua.md), [`web.md`](docs/languages/web.md), [`docker-proto.md`](docs/languages/docker-proto.md), [`bash.md`](docs/languages/bash.md)).
+> 🌐 **Per-Language Documentation Reference**: Individual language toolchain guides, debug profiles, and LSP/formatter commands are documented under [`docs/languages/`](docs/languages/) (e.g., [`php.md`](docs/languages/php.md), [`typescript.md`](docs/languages/typescript.md), [`csharp.md`](docs/languages/csharp.md), [`go.md`](docs/languages/go.md), [`python.md`](docs/languages/python.md), [`lua.md`](docs/languages/lua.md), [`web.md`](docs/languages/web.md), [`angular.md`](docs/languages/angular.md), [`docker-proto.md`](docs/languages/docker-proto.md), [`bash.md`](docs/languages/bash.md)).
 
 ---
 
@@ -115,6 +115,7 @@ Detailed setup, Ex commands, DAP debug profiles, and plugin integrations for eac
 * 🐍 [**Python Guide**](docs/languages/python.md) — `pyright`, `debugpy` DAP, `black`, `isort`, `ruff`.
 * 🌙 [**Lua & KrsVim Scripts Guide**](docs/languages/lua.md) — `lua_ls`, `stylua`, `type_injector`, `krsnvimtranspiler` (`:KrsTranspile`).
 * 🌐 [**Web Frontend Guide**](docs/languages/web.md) — HTML, CSS, Svelte, Astro, Tailwind CSS, Emmet, `autotag`, `:TailwindOrganize`.
+* 🅰️ [**Angular Guide**](docs/languages/angular.md) — `angular-language-server`, SCSS diagnostics via `css-lsp`, HTML/SCSS Treesitter parsers.
 * 🐳 [**Docker & Proto Guide**](docs/languages/docker-proto.md) — `dockerls`, `dockerfmt`, `protolint`.
 * 🐚 [**Shell & Bash Guide**](docs/languages/bash.md) — `bashls`, `bash-debug-adapter`, `beautysh`, ShellCheck.
 

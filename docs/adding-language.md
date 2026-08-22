@@ -82,7 +82,17 @@ Skip this step only if the language should ship as part of `core_parsers` (the f
 ---
 
 ### Step 3: (Optional) Debug Adapter
-Register the DAP adapter in [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua) and, if the language needs a run/debug launch profile, in [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua). See [`docs/debug-adapters.md`](debug-adapters.md).
+
+Add the DAP config to the **same lang module** from Step 1. Two shapes are supported:
+
+- **Static list** (most languages — see `php`, `csharp`, `python`): add `M.dap_filetypes` (array of filetypes) and `M.dap_configs` (array of nvim-dap config tables).
+- **Function** (languages that register an adapter at runtime — see `bash`, `go`, `lua`): add `M.dap_setup = function(dap) ... end`.
+
+Then add the language key to the iteration list in [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua) (the `ipairs({ "python", "csharp", ... })` line) to control where in the debugger picker this language's configs appear.
+
+For a **launch-profile runtime** (`M.launch_runtimes`): the runtime definition also goes in the lang module — [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua) auto-merges every language's `launch_runtimes`. The only edit needed there is adding the runtime key to `M.order` so the profile form can cycle to it.
+
+See [`docs/debug-adapters.md`](debug-adapters.md) for the full DAP setup guide.
 
 ---
 
@@ -93,7 +103,7 @@ Register the DAP adapter in [`lua/plugins/editor/dap.lua`](../lua/plugins/editor
 | **LSP Server + Formatter + Mason metadata** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) | `M.lsp_config`, `M.formatters_by_ft`, `M.mason`/`M.mason_order` |
 | **Register the module** | [`lua/krs/langs/init.lua`](../lua/krs/langs/init.lua) | Add to `M.langs` |
 | **Install bundle (Mason pkgs + Treesitter parsers)** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) | `M.bundle_name`, `M.requires`, `M.treesitter` |
-| **Debug Adapter (optional)** | [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua), [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua) | See [debug-adapters.md](debug-adapters.md) |
+| **Debug Adapter (optional)** | [`lua/krs/langs/<language>/init.lua`](../lua/krs/langs/) (primary) · [`lua/plugins/editor/dap.lua`](../lua/plugins/editor/dap.lua) (add key to picker order) · [`lua/krs/launch/runtimes.lua`](../lua/krs/launch/runtimes.lua) (add key to `M.order`, if adding a launch runtime) | See [debug-adapters.md](debug-adapters.md) |
 
 `lua/plugins/lsp/lsp.lua`, `lua/plugins/lsp/formatting.lua`, `lua/plugins/lsp/treesitter.lua`, and `lua/krs/core/installer.lua` need **no edits** for a new language — they only aggregate what the language module declares (`installer.lua`'s `M.language_bundles` is built from it automatically).
 
