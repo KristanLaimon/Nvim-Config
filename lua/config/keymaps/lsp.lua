@@ -164,7 +164,11 @@ local function goto_definition()
 					local item = options.items[1]
 					if item.filename and item.filename ~= "" then
 						if item.filename ~= vim.api.nvim_buf_get_name(0) then
-							vim.cmd("edit " .. vim.fn.fnameescape(item.filename))
+							if vim.bo.modified then
+								vim.cmd("split " .. vim.fn.fnameescape(item.filename))
+							else
+								vim.cmd("edit " .. vim.fn.fnameescape(item.filename))
+							end
 						end
 						pcall(vim.api.nvim_win_set_cursor, 0, { item.lnum, math.max(0, item.col - 1) })
 					end

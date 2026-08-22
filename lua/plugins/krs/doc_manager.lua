@@ -320,6 +320,14 @@ end
 -- DEVDOCS DOWNLOAD -- pull real documentation offline from devdocs.io
 -- ============================================================================
 
+local BAR_WIDTH = 24
+
+--- Renders an ASCII block progress bar [████░░░░] for a 0-1 fraction.
+local function make_bar(frac)
+	local filled = math.floor(frac * BAR_WIDTH)
+	return "[" .. string.rep("█", filled) .. string.rep("░", BAR_WIDTH - filled) .. "]"
+end
+
 --- Fetches the list of every documentation set devdocs.io serves.
 --- @param callback fun(list: table[]) Called with the decoded docs.json array.
 function M.fetch_available(callback)
@@ -339,63 +347,89 @@ function M.fetch_available(callback)
 	end)
 end
 
---- Downloads one devdocs.io doc set and writes one `.html` file per page.
+--- Downloads one devdocs.io doc set, writing one `.html` file per page.
+--- Progress is shown as a single updating toast (no new toast per tick).
+---
 --- @param slug string devdocs slug, e.g. "python~3.12", "lua~5.4", "node".
 --- @param callback fun(ok: boolean, lang: string|nil, version: string|nil)|nil
 function M.download(slug, callback)
 	slug = vim.trim(slug or "")
-	if slug == "" then
-		return
-	end
+	if slug == "" then return end
 
-	notify("⬇️ Downloading " .. slug .. " from devdocs.io ...")
+	local krs_notify = require("krs.core.notify")
+	local toast_id   = "doc_download_" .. slug
+	local toast_opts  = { title = "📥 DocManager" }
+
+	krs_notify.notify_progress(toast_id, "⬇️  " .. slug .. "\nFetching from devdocs.io…", vim.log.levels.INFO, toast_opts)
+
 	local db_url = M.settings.devdocs_documents_base .. "/" .. slug .. "/db.json"
 
 	vim.system({ "curl", "-sL", db_url }, { text = true }, function(obj)
 		vim.schedule(function()
 			if obj.code ~= 0 or not obj.stdout or obj.stdout == "" then
-				notify("Failed to download " .. slug .. ": " .. (obj.stderr or "unknown error"), vim.log.levels.ERROR)
-				if callback then
-					callback(false)
-				end
+				krs_notify.notify_progress(toast_id,
+					"❌  " .. slug .. "\nFailed: " .. (obj.stderr or "unknown error"),
+					vim.log.levels.ERROR, toast_opts)
+				krs_notify.finish_progress(toast_id)
+				if callback then callback(false) end
 				return
 			end
 
 			local ok, pages = pcall(vim.json.decode, obj.stdout)
 			if not ok or type(pages) ~= "table" then
-				notify("Failed to parse downloaded docs for " .. slug, vim.log.levels.ERROR)
-				if callback then
-					callback(false)
-				end
+				krs_notify.notify_progress(toast_id,
+					"❌  " .. slug .. "\nFailed to parse response.",
+					vim.log.levels.ERROR, toast_opts)
+				krs_notify.finish_progress(toast_id)
+				if callback then callback(false) end
 				return
 			end
 
 			local lang, version = slug:match("^([^~]+)~?(.*)$")
-			if not version or version == "" then
-				version = "latest"
-			end
+			if not version or version == "" then version = "latest" end
 
 			local target_dir = M.settings.docs_dir .. "/" .. lang .. "/" .. version
 			vim.fn.mkdir(target_dir, "p")
 
-			local count = 0
+			-- Flatten pages so we can write in scheduled chunks
+			local page_list = {}
 			for page_path, html in pairs(pages) do
-				local filename = page_path:gsub("[^%w_%-]", "_")
-				if filename == "" then
-					filename = "index"
+				table.insert(page_list, { path = page_path, html = html })
+			end
+
+			local total = #page_list
+			local done  = 0
+			local CHUNK = 20  -- files per scheduler tick
+
+			local function write_chunk()
+				local limit = math.min(done + CHUNK, total)
+				while done < limit do
+					done = done + 1
+					local entry = page_list[done]
+					local fname = entry.path:gsub("[^%w_%-]", "_")
+					if fname == "" then fname = "index" end
+					local f = io.open(target_dir .. "/" .. fname .. ".html", "w")
+					if f then f:write(entry.html); f:close() end
 				end
-				local f = io.open(target_dir .. "/" .. filename .. ".html", "w")
-				if f then
-					f:write(html)
-					f:close()
-					count = count + 1
+
+				local frac = total > 0 and (done / total) or 0
+				local pct  = math.floor(frac * 100)
+				krs_notify.notify_progress(toast_id,
+					string.format("⬇️  %s\n%s  %d%%  (%d / %d)", slug, make_bar(frac), pct, done, total),
+					vim.log.levels.INFO, toast_opts)
+
+				if done < total then
+					vim.schedule(write_chunk)
+				else
+					krs_notify.notify_progress(toast_id,
+						string.format("✅  %s\n%d pages saved → %s", slug, done, target_dir),
+						vim.log.levels.INFO, toast_opts)
+					krs_notify.finish_progress(toast_id)
+					if callback then callback(true, lang, version) end
 				end
 			end
 
-			notify("✅ Downloaded " .. count .. " pages: " .. lang .. " " .. version .. " -> " .. target_dir)
-			if callback then
-				callback(true, lang, version)
-			end
+			vim.schedule(write_chunk)
 		end)
 	end)
 end
@@ -408,7 +442,7 @@ function M.browse_and_download()
 		end)
 
 		pick("📥 Download DevDocs Documentation (Offline)", list, function(entry)
-			return "📘 " .. entry.name .. (entry.version ~= "" and (" " .. entry.version) or "") .. "  [" .. entry.slug .. "]"
+			return "📘 " .. entry.name .. ((entry.version or "") ~= "" and (" " .. entry.version) or "") .. "  [" .. entry.slug .. "]"
 		end, function(entry)
 			M.download(entry.slug)
 		end)

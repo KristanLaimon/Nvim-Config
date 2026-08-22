@@ -291,6 +291,108 @@ function M.notify(msg, level, opts)
 	end, timeout)
 end
 
+--- Persistent progress toast: first call creates one toast, subsequent calls
+--- with the same `id` update the existing buffer in-place -- no new float.
+--- Call `M.finish_progress(id)` when done so the toast auto-dismisses normally.
+---
+--- @param id      string   Unique key for this progress stream (e.g. "doc_download").
+--- @param msg     string   New message text to show.
+--- @param level   number|nil  vim.log.levels.*  (default INFO)
+--- @param opts    table|nil   { title?, timeout? }
+M._progress_toasts = {}
+
+function M.notify_progress(id, msg, level, opts)
+	opts  = opts or {}
+	level = level or vim.log.levels.INFO
+	local msg_str = tostring(msg or "")
+
+	local icon = "ℹ️ "
+	if level == vim.log.levels.WARN  then icon = "⚠️ "  end
+	if level == vim.log.levels.ERROR then icon = "❌ " end
+
+	local title = opts.title or "Neovim"
+	local new_lines = { string.format("%s %s", icon, title),
+	                    string.rep("─", math.max(20, #title + 4)) }
+	for line in msg_str:gmatch("[^\r\n]+") do
+		table.insert(new_lines, " " .. line)
+	end
+
+	local existing = M._progress_toasts[id]
+	if existing and vim.api.nvim_buf_is_valid(existing.buf) then
+		-- Patch the existing buffer in-place — no new toast, no animation
+		vim.bo[existing.buf].modifiable = true
+		vim.api.nvim_buf_set_lines(existing.buf, 0, -1, false, new_lines)
+		vim.bo[existing.buf].modifiable = false
+		return
+	end
+
+	-- First call for this id: suppress throttle, create a sticky toast
+	-- Override the timeout to something very long so it doesn't self-dismiss
+	local long_opts = vim.tbl_extend("force", opts, { timeout = 3600000 })
+	-- Temporarily bypass the dedup filter
+	M.last_messages[msg_str] = nil
+	M.notify(msg_str, level, long_opts)
+
+	-- Grab the toast that was just pushed onto active_wins
+	local item = M.active_wins[#M.active_wins]
+	if item then
+		M._progress_toasts[id] = { buf = item.buf, win = item.win, item = item }
+	end
+end
+
+--- Lets the progress toast for `id` auto-dismiss with a normal timeout.
+--- @param id string
+function M.finish_progress(id)
+	local existing = M._progress_toasts[id]
+	M._progress_toasts[id] = nil
+	if not existing then return end
+	if not vim.api.nvim_win_is_valid(existing.win) then return end
+
+	-- Schedule a normal auto-dismiss (2.5s slide-out)
+	local win = existing.win
+	local buf = existing.buf
+	local win_item = existing.item
+	local timeout = 2500
+
+	vim.defer_fn(function()
+		local exit_steps = 5
+		local exit_step  = 0
+		local exit_timer = uv.new_timer()
+		local exit_start_col = win_item.current_col or 0
+		local exit_end_col   = vim.o.columns
+
+		exit_timer:start(0, 25, vim.schedule_wrap(function()
+			exit_step = exit_step + 1
+			local t      = math.min(1.0, exit_step / exit_steps)
+			local factor = ease_in_out(t)
+			local col    = math.floor(exit_start_col + (exit_end_col - exit_start_col) * factor + 0.5)
+			local blend  = math.floor(15 + (90 - 15) * factor + 0.5)
+
+			if win and vim.api.nvim_win_is_valid(win) then
+				pcall(vim.api.nvim_win_set_config, win, {
+					relative = "editor", row = math.max(0, win_item.current_row),
+					col = col, focusable = false, noautocmd = true,
+				})
+				pcall(vim.api.nvim_win_set_option, win, "winblend", math.min(100, blend))
+			end
+
+			if exit_step >= exit_steps then
+				exit_timer:stop(); exit_timer:close()
+				if win and vim.api.nvim_win_is_valid(win) then
+					pcall(vim.api.nvim_win_close, win, true)
+				end
+				if buf and vim.api.nvim_buf_is_valid(buf) then
+					pcall(vim.api.nvim_buf_delete, buf, { force = true })
+				end
+				for idx, item in ipairs(M.active_wins) do
+					if item.win == win then table.remove(M.active_wins, idx); break end
+				end
+				M.reposition_wins()
+			end
+		end))
+	end, timeout)
+end
+
 function M.setup()
 	vim.notify = M.notify
 

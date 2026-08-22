@@ -99,6 +99,7 @@ M.commands = {
 		cmd = "KrsUsagesTheme",
 		category = "LSP",
 	},
+	{ name = "🩺 LSP Info (Active Clients & Interpreter Paths)", cmd = "LspInfo", category = "LSP" },
 	{ name = "💉 Modular Type Injector (Lua & TS/JS)", cmd = "TypeInjector", category = "LSP" },
 	{ name = "🚫 Add .krsnvim Ignore to .gitignore", cmd = "KrsGitignoreGenerated", category = "LSP" },
 
