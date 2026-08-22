@@ -1140,11 +1140,33 @@ M.language_bundles = {
 	},
 }
 
+--- Renders a `[✅ Installed (n/n)]` / `[🟡 Partial (n/n)]` / `[❌ Not Installed (0/n)]`
+--- badge fragment for one category (Mason packages or Treesitter parsers).
+--- @param label string Category label, e.g. "LSP" or "TS".
+--- @param installed integer
+--- @param total integer
+--- @return string|nil badge `nil` when the bundle has no items in this category.
+local function category_badge(label, installed, total)
+	if total == 0 then
+		return nil
+	end
+	if installed == total then
+		return string.format("[✅ %s %d/%d]", label, installed, total)
+	elseif installed > 0 then
+		return string.format("[🟡 %s %d/%d]", label, installed, total)
+	end
+	return string.format("[❌ %s %d/%d]", label, installed, total)
+end
+
 --- Computes real-time installation status for a given language bundle.
 --- Checks required system runtimes first; if any are missing the bundle is
---- marked as blocked and no Mason/TS counts are reported.
+--- marked as blocked and no Mason/TS counts are reported. Mason packages and
+--- Treesitter parsers are tracked -- and badged -- separately: the toggle-menu
+--- (`KrsInstallDependencies`) only ever installs/checks Mason packages, so a
+--- bundle whose LSPs came from there would otherwise sit at a misleading
+--- "🟡 Partial" forever just because its Treesitter parser was never pulled in.
 --- @param bundle table
---- @return table { installed_count: number, total_count: number, badge: string, missing_runtimes: string[], blocked: boolean }
+--- @return table { installed_count, total_count, badge, missing_runtimes, blocked, mason_installed, mason_total, ts_installed, ts_total }
 function M.get_bundle_status(bundle)
 	local mason_share = vim.fn.stdpath("data") .. "/mason/packages"
 
@@ -1165,48 +1187,60 @@ function M.get_bundle_status(bundle)
 			badge = string.format("[ ⚠️  needs: %s ]", table.concat(missing_runtimes, ", ")),
 			missing_runtimes = missing_runtimes,
 			blocked = true,
+			mason_installed = 0,
+			mason_total = 0,
+			ts_installed = 0,
+			ts_total = 0,
 		}
 	end
 
 	-- 2. Count Mason packages
-	local installed = 0
-	local total = 0
+	local mason_installed = 0
+	local mason_total = 0
 
 	for _, pkg in ipairs(bundle.mason_pkgs or {}) do
-		total = total + 1
+		mason_total = mason_total + 1
 		local pkg_dir = mason_share .. "/" .. pkg
 		local pkg_stat = (vim.uv or vim.loop).fs_stat(pkg_dir)
 		local info = M.tools[pkg] or {}
 		local bin_cmd = info.cmd or pkg
 		if (pkg_stat and pkg_stat.type == "directory") or (vim.fn.executable(bin_cmd) == 1) then
-			installed = installed + 1
+			mason_installed = mason_installed + 1
 		end
 	end
 
 	-- 3. Count Treesitter parsers
+	local ts_installed = 0
+	local ts_total = 0
+
 	for _, parser in ipairs(bundle.treesitter or {}) do
-		total = total + 1
+		ts_total = ts_total + 1
 		local ok, parsers_mod = pcall(require, "nvim-treesitter.parsers")
 		if ok and parsers_mod.has_parser and parsers_mod.has_parser(parser) then
-			installed = installed + 1
+			ts_installed = ts_installed + 1
 		end
 	end
 
-	local badge = ""
-	if installed == total and total > 0 then
-		badge = string.format("[✅ Installed (%d/%d)]", installed, total)
-	elseif installed > 0 then
-		badge = string.format("[🟡 Partial (%d/%d)]", installed, total)
-	else
-		badge = string.format("[❌ Not Installed (0/%d)]", total)
+	local badge_parts = {}
+	local lsp_badge = category_badge("LSP", mason_installed, mason_total)
+	local ts_badge = category_badge("TS", ts_installed, ts_total)
+	if lsp_badge then
+		table.insert(badge_parts, lsp_badge)
+	end
+	if ts_badge then
+		table.insert(badge_parts, ts_badge)
 	end
 
 	return {
-		installed_count = installed,
-		total_count = total,
-		badge = badge,
+		installed_count = mason_installed + ts_installed,
+		total_count = mason_total + ts_total,
+		badge = table.concat(badge_parts, " "),
 		missing_runtimes = {},
 		blocked = false,
+		mason_installed = mason_installed,
+		mason_total = mason_total,
+		ts_installed = ts_installed,
+		ts_total = ts_total,
 	}
 end
 

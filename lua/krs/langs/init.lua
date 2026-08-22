@@ -24,6 +24,32 @@
 --   settings -- swapping a server or formatter is a one-file edit.
 -- ============================================================================
 
+--- Mason package metadata, keyed by lspconfig/formatter/tool name -- see any
+--- language module's `M.mason` table.
+---@class KrsMasonToolInfo
+---@field mason string Mason package/registry name.
+---@field type "lsp"|"formatter"|"dap" Drives the Language Tooling Manager UI grouping.
+---@field cmd string CLI binary used to detect an already-installed tool.
+---@field lang? string Human-readable language label (lsp/dap tools).
+---@field name? string Human-readable tool label (formatter tools).
+
+--- Shape every `lua/krs/langs/<lang>/init.lua` submodule may export. Every
+--- field is optional -- see docs/adding-language.md for which ones a new
+--- language actually needs.
+---@class KrsLangModule
+---@field lsp_server? string[] lspconfig/mason server name(s) this language owns.
+---@field lsp_config? table<string, table> lspconfig opts, keyed by server name; merged into lsp.lua's opts.servers.
+---@field mason? table<string, KrsMasonToolInfo> Mason package metadata, keyed by lspconfig/formatter/tool name.
+---@field mason_order? string[] Preferred Mason install/display order for this language's tools.
+---@field formatters_by_ft? table<string, table> conform.nvim formatter list, keyed by filetype.
+---@field conform_formatters? table<string, table> conform.nvim per-formatter option overrides, keyed by formatter name.
+---@field formatter_configs? string[] Formatter/tool config filenames that indicate a project-managed code style.
+---@field defaults? table<string, any> Fallback `vim.bo` options applied when no project formatter config exists.
+---@field apply_defaults? fun(buf: integer) Applies `defaults` to `buf` unless a project config overrides them.
+---@field setup? fun() Registers this language's autocmds; called once by `M.setup()` below.
+---@field dap_setup? fun(dap: table) Registers this language's DAP adapter(s).
+---@field launch_runtimes? table<string, table> Launch-profile runtimes this language owns (see lua/krs/launch/runtimes.lua).
+
 local M = {}
 
 --- Helper to check if an `.editorconfig` file has applied settings to the buffer,
@@ -82,6 +108,7 @@ function M.has_project_config(buf, config_files)
 end
 
 --- Registered per-language configuration submodules.
+---@type table<string, KrsLangModule>
 M.langs = {
 	php = require("krs.langs.php"),
 	typescript = require("krs.langs.typescript"),
