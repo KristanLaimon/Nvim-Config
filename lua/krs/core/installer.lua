@@ -964,58 +964,112 @@ function M.get_bundle_status(bundle)
 	}
 end
 
---- Installs or uninstalls a specific subset of a language bundle's components.
---- Shared by the full-bundle convenience functions and the per-component
---- selection made from the expanded bundle row in the UI.
---- @param bundle table
---- @param sel table { mason: string[], ts: string[], dotnet: string[] } names to act on
+--- Installs or uninstalls component subsets across one or more bundles in a
+--- single batch, firing exactly one "starting" toast and one "finished" toast
+--- for the whole batch -- never one pair per bundle. If nothing in the
+--- selection actually needs work (already installed / already gone), fires a
+--- single "nothing to do" toast instead of a start+finish pair.
+--- @param jobs table[] { { bundle = bundle, sel = {mason=,ts=,dotnet=} }, ... }
 --- @param action "install"|"uninstall"
-local function run_bundle_components(bundle, sel, action)
-	if action == "install" then
+local function run_batch(jobs, action)
+	local installing = action == "install"
+
+	-- 1. Drop bundles missing a required runtime (install only); summarize once.
+	local runnable, blocked_names = {}, {}
+	for _, job in ipairs(jobs) do
 		local missing = {}
-		for _, req in ipairs(bundle.requires or {}) do
-			local ok = vim.fn.executable(req.cmd) == 1
-				or (req.alt and vim.fn.executable(req.alt) == 1)
-			if not ok then
-				local entry = req.name
-				if req.hint then
-					entry = entry .. " → " .. req.hint
+		if installing then
+			for _, req in ipairs(job.bundle.requires or {}) do
+				local ok = vim.fn.executable(req.cmd) == 1
+					or (req.alt and vim.fn.executable(req.alt) == 1)
+				if not ok then
+					table.insert(missing, req.name)
 				end
-				table.insert(missing, entry)
 			end
 		end
-
 		if #missing > 0 then
-			vim.notify(
-				string.format(
-					"⚠️  Cannot install %s\n\nMissing system runtime(s):\n  • %s\n\nInstall the listed runtime(s), restart Neovim, then try again.",
-					bundle.name,
-					table.concat(missing, "\n  • ")
-				),
-				vim.log.levels.WARN,
-				{ title = "Missing Runtime — " .. bundle.name }
-			)
-			return
+			table.insert(blocked_names, job.bundle.name)
+		else
+			table.insert(runnable, job)
 		end
 	end
 
-	local installing = action == "install"
+	if #blocked_names > 0 then
+		vim.notify(
+			string.format("⚠️ Skipped (missing runtime): %s", table.concat(blocked_names, ", ")),
+			vim.log.levels.WARN,
+			{ title = "Install Dependencies & Toolchains" }
+		)
+	end
+
+	-- 2. Split the selection into "already done" vs. actual work, so the
+	-- toasts only ever describe what's really about to happen.
+	local installed_ts = get_installed_ts_parsers()
+	local todo_mason, todo_ts, todo_dotnet = {}, {}, {}
+	local bundle_names = {}
+
+	for _, job in ipairs(runnable) do
+		local any_for_bundle = false
+
+		for _, pkg in ipairs(job.sel.mason or {}) do
+			local pkg_installed = is_mason_pkg_installed(pkg)
+			if installing ~= pkg_installed then
+				table.insert(todo_mason, pkg)
+				any_for_bundle = true
+			end
+		end
+
+		for _, parser in ipairs(job.sel.ts or {}) do
+			local parser_installed = installed_ts[parser] or false
+			if installing ~= parser_installed then
+				table.insert(todo_ts, parser)
+				any_for_bundle = true
+			end
+		end
+
+		-- Dotnet tool install state isn't tracked, so treat every selected
+		-- tool as work to do (see `M.cli_healthcheck`'s ponytail note for why).
+		for _, tool in ipairs(job.sel.dotnet or {}) do
+			table.insert(todo_dotnet, tool)
+			any_for_bundle = true
+		end
+
+		if any_for_bundle then
+			table.insert(bundle_names, job.bundle.name)
+		end
+	end
+
+	local total_todo = #todo_mason + #todo_ts + #todo_dotnet
+	if total_todo == 0 then
+		vim.notify(
+			string.format("ℹ️ Nothing to %s -- selection is already %s.", action, installing and "installed" or "removed"),
+			vim.log.levels.INFO,
+			{ title = "Install Dependencies & Toolchains" }
+		)
+		return
+	end
+
 	vim.notify(
-		string.format("%s toolchain components for %s...", installing and "📥 Installing" or "🗑️ Uninstalling", bundle.name),
+		string.format(
+			"%s %d component(s) for %s...",
+			installing and "📥 Installing" or "🗑️ Uninstalling",
+			total_todo,
+			table.concat(bundle_names, ", ")
+		),
 		vim.log.levels.INFO,
 		{ title = "Install Dependencies & Toolchains" }
 	)
 
-	-- 1. Mason packages
+	-- 3. Mason packages
 	local mr_ok, mr = pcall(require, "mason-registry")
-	if mr_ok and #(sel.mason or {}) > 0 then
+	if mr_ok and #todo_mason > 0 then
 		local function apply()
-			for _, pkg_name in ipairs(sel.mason) do
+			for _, pkg_name in ipairs(todo_mason) do
 				if mr.has_package(pkg_name) then
 					local pkg = mr.get_package(pkg_name)
-					if installing and not pkg:is_installed() then
+					if installing then
 						pkg:install()
-					elseif not installing and pkg:is_installed() then
+					else
 						pcall(function()
 							pkg:uninstall()
 						end)
@@ -1030,54 +1084,70 @@ local function run_bundle_components(bundle, sel, action)
 		end
 	end
 
-	-- 2. Treesitter parsers
+	-- 4. Treesitter parsers
 	local ts_ok, ts = pcall(require, "nvim-treesitter")
 	if ts_ok then
 		local ts_fn = installing and ts.install or ts.uninstall
-		for _, parser in ipairs(sel.ts or {}) do
+		for _, parser in ipairs(todo_ts) do
 			pcall(ts_fn, { parser })
 		end
 	end
 
-	-- 3. Dotnet global tools
+	-- 5. Dotnet global tools
 	if vim.fn.executable("dotnet") == 1 then
-		for _, tool in ipairs(sel.dotnet or {}) do
+		for _, tool in ipairs(todo_dotnet) do
 			vim.system({ "dotnet", "tool", action, "-g", tool })
 		end
 	end
 
 	vim.notify(
-		string.format("%s selected components for %s", installing and "✅ Installed" or "🗑️ Uninstalled", bundle.name),
+		string.format(
+			"%s %d component(s) for %s",
+			installing and "✅ Install triggered for" or "🗑️ Uninstall triggered for",
+			total_todo,
+			table.concat(bundle_names, ", ")
+		),
 		installing and vim.log.levels.INFO or vim.log.levels.WARN,
 		{ title = "Install Dependencies & Toolchains" }
 	)
 end
 
 --- Installs every package, parser, and dotnet tool in a language bundle.
---- Aborts with a warning if any required system runtimes are missing.
 --- @param bundle table
 function M.install_language_bundle(bundle)
-	run_bundle_components(bundle, { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools }, "install")
+	run_batch({ { bundle = bundle, sel = { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools } } }, "install")
 end
 
 --- Uninstalls every package, parser, and dotnet tool in a language bundle.
 --- @param bundle table
 function M.uninstall_language_bundle(bundle)
-	run_bundle_components(bundle, { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools }, "uninstall")
+	run_batch({ { bundle = bundle, sel = { mason = bundle.mason_pkgs, ts = bundle.treesitter, dotnet = bundle.dotnet_tools } } }, "uninstall")
 end
 
 --- Installs only the given component subset of a language bundle.
 --- @param bundle table
 --- @param sel table { mason: string[], ts: string[], dotnet: string[] }
 function M.install_bundle_components(bundle, sel)
-	run_bundle_components(bundle, sel, "install")
+	run_batch({ { bundle = bundle, sel = sel } }, "install")
 end
 
 --- Uninstalls only the given component subset of a language bundle.
 --- @param bundle table
 --- @param sel table { mason: string[], ts: string[], dotnet: string[] }
 function M.uninstall_bundle_components(bundle, sel)
-	run_bundle_components(bundle, sel, "uninstall")
+	run_batch({ { bundle = bundle, sel = sel } }, "uninstall")
+end
+
+--- Installs component subsets across many bundles in one batch (one toast pair total).
+--- @param jobs table[] { { bundle = bundle, sel = {mason=,ts=,dotnet=} }, ... }
+function M.install_batch(jobs)
+	run_batch(jobs, "install")
+end
+
+--- Uninstalls component subsets across many bundles in one batch (one toast pair total).
+--- @param jobs table[] { { bundle = bundle, sel = {mason=,ts=,dotnet=} }, ... }
+function M.uninstall_batch(jobs)
+	run_batch(jobs, "uninstall")
 end
 
 --- Counts how many of an item's per-component checkboxes are selected.

@@ -19,12 +19,17 @@ M.lsp_config = {
 	angularls = {},
 }
 
---- Mason package metadata, keyed by lspconfig name.
+--- Mason package metadata, keyed by lspconfig name. `cssls` is owned by
+--- `lua/krs/langs/web/init.lua` (its `lsp_config`/settings apply regardless
+--- of which bundle installs the package) -- listed again here only so the
+--- Angular bundle can install it without requiring the separate Web Frontend
+--- bundle for `.scss` diagnostics/completion.
 M.mason = {
 	angularls = { mason = "angular-language-server", lang = "Angular", type = "lsp", cmd = "ngserver" },
+	cssls = { mason = "css-lsp", lang = "CSS", type = "lsp", cmd = "vscode-css-language-server" },
 }
 
-M.mason_order = { "angularls" }
+M.mason_order = { "angularls", "cssls" }
 
 --- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
 M.bundle_name = "🅰️ Angular"
