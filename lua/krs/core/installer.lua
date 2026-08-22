@@ -147,7 +147,8 @@ local ui_win = nil
 local live_logs = {}
 
 local function add_log(msg)
-	table.insert(live_logs, string.format("[%s] %s", os.date("%H:%M:%S"), msg))
+	local clean_msg = tostring(msg):gsub("[\r\n]+", " ")
+	table.insert(live_logs, string.format("[%s] %s", os.date("%H:%M:%S"), clean_msg))
 	if #live_logs > 12 then
 		table.remove(live_logs, 1)
 	end

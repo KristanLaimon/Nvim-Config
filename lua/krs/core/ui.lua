@@ -66,7 +66,29 @@ end
 -- Buffers & windows
 -- ---------------------------------------------------------------------------
 
+--- Splits any string containing `\r` or `\n` into multiple strings so the
+--- result is safe to pass to `nvim_buf_set_lines`, which rejects entries
+--- that contain newline characters.
+---
+--- @param lines string[] Raw lines (may contain embedded newlines).
+--- @return string[] clean Lines guaranteed to be newline-free.
+function M.sanitize_lines(lines)
+	local out = {}
+	for _, line in ipairs(lines) do
+		if type(line) == "string" and (line:find("\r") or line:find("\n")) then
+			for part in (line:gsub("\r\n", "\n"):gsub("\r", "\n") .. "\n"):gmatch("([^\n]*)\n") do
+				table.insert(out, part)
+			end
+		else
+			table.insert(out, line or "")
+		end
+	end
+	return out
+end
+
 --- Creates an unlisted scratch buffer, optionally filled with `lines`.
+--- Lines are sanitized via `M.sanitize_lines` before being written, so
+--- callers do not need to strip embedded newlines themselves.
 ---
 --- @param opts table|nil { lines?: string[], filetype?: string, modifiable?: boolean }
 --- @return integer buf Buffer handle.
@@ -79,7 +101,7 @@ function M.scratch_buffer(opts)
 		vim.bo[buf].filetype = opts.filetype
 	end
 	if opts.lines then
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, opts.lines)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.sanitize_lines(opts.lines))
 	end
 	vim.bo[buf].modifiable = opts.modifiable == true
 	return buf

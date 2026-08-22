@@ -103,6 +103,7 @@ function M.select(items, opts, on_choice)
 	local labels = {}
 	for index, item in ipairs(items) do
 		local text = opts.format_item and opts.format_item(item) or tostring(item)
+		text = text:gsub("[\r\n]+", " ")
 		table.insert(labels, string.format("%d. %s", index, text))
 	end
 
