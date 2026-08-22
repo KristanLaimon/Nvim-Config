@@ -38,7 +38,7 @@
 --- language actually needs.
 ---@class KrsLangModule
 ---@field lsp_server? string[] lspconfig/mason server name(s) this language owns.
----@field lsp_config? table<string, table> lspconfig opts, keyed by server name; merged into lsp.lua's opts.servers.
+---@field lsp_config? table<string, vim.lsp.Config> lspconfig opts, keyed by server name; merged into lsp.lua's opts.servers. Annotate each module's own `M.lsp_config` the same way for field-level completion/hover while authoring it.
 ---@field mason? table<string, KrsMasonToolInfo> Mason package metadata, keyed by lspconfig/formatter/tool name.
 ---@field mason_order? string[] Preferred Mason install/display order for this language's tools.
 ---@field formatters_by_ft? table<string, table> conform.nvim formatter list, keyed by filetype.
@@ -49,6 +49,12 @@
 ---@field setup? fun() Registers this language's autocmds; called once by `M.setup()` below.
 ---@field dap_setup? fun(dap: table) Registers this language's DAP adapter(s).
 ---@field launch_runtimes? table<string, table> Launch-profile runtimes this language owns (see lua/krs/launch/runtimes.lua).
+---@field bundle_name? string Display name (with icon) for this language's entry in the Language Tooling Manager (`:LanguageManager`).
+---@field is_minimal? boolean Marks the always-on core bundle (Lua only); pre-selected and excluded from the "pending" count.
+---@field requires? { cmd: string, name: string, alt?: string, hint?: string }[] System runtimes the bundle needs before Mason packages can install; missing ones block the bundle with a lock icon.
+---@field treesitter? string[] Treesitter parser names the Language Tooling Manager installs alongside this language's Mason packages.
+---@field bundle_extra_mason_pkgs? string[] Mason package names the bundle installs beyond what `mason_order` resolves -- for tools intentionally absent from `M.mason` (e.g. a DAP tool installed through a different mechanism, a standalone linter).
+---@field dotnet_tools? string[] `dotnet tool install -g` package names the Language Tooling Manager installs for this language.
 
 local M = {}
 
@@ -121,6 +127,13 @@ M.langs = {
 	bash = require("krs.langs.bash"),
 	docker_proto = require("krs.langs.docker_proto"),
 }
+
+--- Display order for `M.langs` in the Language Tooling Manager (`:LanguageManager`)
+--- -- `pairs()` over `M.langs` has no stable order, and this is otherwise the only
+--- language-agnostic thing left to declare once; everything else per bundle
+--- (name, requires, Mason packages, Treesitter parsers) comes from the module
+--- itself, see lua/krs/core/installer.lua's `M.language_bundles`.
+M.lang_order = { "lua", "php", "typescript", "go", "python", "csharp", "web", "angular", "docker_proto", "bash" }
 
 --- Initialize all per-language configuration submodules.
 function M.setup()

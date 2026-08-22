@@ -16,6 +16,7 @@ M.lsp_server = { "omnisharp", "csharp_ls" }
 --- lspconfig server settings, keyed by server name (see M.lsp_server). `csharp_ls`
 --- is disabled: omnisharp is the one that runs, kept here only so a future switch
 --- is a one-line `enabled` flip.
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	omnisharp = {
 		cmd = { "omnisharp", "--languageserver", "--hostPID", tostring(vim.fn.getpid()) },
@@ -76,6 +77,14 @@ M.mason = {
 }
 
 M.mason_order = { "omnisharp", "netcoredbg", "csharpier" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🎯 C# / .NET"
+M.requires = {
+	{ cmd = "dotnet", name = ".NET SDK", hint = "https://dot.net" },
+}
+M.treesitter = { "c_sharp" }
+M.dotnet_tools = { "csharp-ls" }
 
 --- conform.nvim formatter list per filetype.
 M.formatters_by_ft = {

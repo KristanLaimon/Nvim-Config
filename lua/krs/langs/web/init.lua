@@ -27,6 +27,7 @@ local function build_formatter_configs()
 end
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	html = {
 		filetypes = { "html", "templ", "hbs", "php", "blade" },
@@ -145,6 +146,13 @@ M.mason = {
 }
 
 M.mason_order = { "svelte", "astro", "html", "cssls", "tailwindcss", "emmet_ls" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🌐 Web Frontend (HTML, CSS, Svelte, Astro)"
+M.requires = {
+	{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+}
+M.treesitter = { "html", "css", "svelte", "astro" }
 
 --- conform.nvim formatter list per filetype. Astro always runs prettier (see
 --- lua/krs/langs/typescript's conform_formatters.prettier for why); biome mangles

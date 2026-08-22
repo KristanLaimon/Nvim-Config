@@ -14,6 +14,7 @@ local M = {}
 M.lsp_server = { "angularls" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	angularls = {},
 }
@@ -24,5 +25,12 @@ M.mason = {
 }
 
 M.mason_order = { "angularls" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🅰️ Angular"
+M.requires = {
+	{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+}
+M.treesitter = { "html", "scss" }
 
 return M

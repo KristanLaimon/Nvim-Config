@@ -32,9 +32,8 @@ A handful of truly generic, cross-language things have no owning module and stay
 Don't invent a language module, or force a field into one, just to host something that doesn't actually belong to a single language.
 
 When adding support for a new programming language (or updating an existing one):
-1. **Update `installer.lua` (`M.language_bundles`)**: Add the language bundle specifying its Mason packages (`mason_pkgs`) and Treesitter parsers (`treesitter`) -- this is the install-wizard grouping, separate from the per-language config above.
-2. **Add to Interactive Selection UI**: Ensure the language appears as an **optional selectable bundle** in the Language Tooling Manager (`:LanguageManager`, `:KrsLanguageManager`, `:KrsInstallDependencies`, `:KrsSetup`).
-3. **Put everything in `lua/krs/langs/<language>/init.lua`**: LSP server settings, Mason metadata, formatter assignment, debugger config, launch-profile runtimes, indentation defaults, environment path resolution, and setup hooks -- see the field table above. Register the submodule in `lua/krs/langs/init.lua`. Document the language in a dedicated file under [`docs/languages/<lang>.md`](docs/languages/).
+1. **Put everything in `lua/krs/langs/<language>/init.lua`**: LSP server settings, Mason metadata, formatter assignment, debugger config, launch-profile runtimes, indentation defaults, environment path resolution, and setup hooks -- see the field table above. This includes the install-wizard grouping: `M.bundle_name`, `M.requires`, `M.treesitter` (`M.bundle_extra_mason_pkgs`/`M.dotnet_tools` when needed). Register the submodule in `lua/krs/langs/init.lua`'s `M.langs` (and its `M.lang_order`). Document the language in a dedicated file under [`docs/languages/<lang>.md`](docs/languages/).
+2. **Nothing to touch in `installer.lua`**: `M.language_bundles` is built automatically from every module's `bundle_name`/`requires`/`treesitter`, and its `mason_pkgs` is resolved straight from the `mason_order` you already wrote -- the two can never drift. The language appears as an optional selectable bundle in the Language Tooling Manager (`:LanguageManager`, `:KrsLanguageManager`) the moment `M.bundle_name` is set.
 
 
 ### 🌙 1.2 Minimal Fresh Setup Rule (Lua Only)

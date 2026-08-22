@@ -3,12 +3,20 @@
 -- ============================================================================
 -- WHAT IT DOES
 --   Sets standard PEP 8 4-space indentation defaults for Python buffers when no
---   .editorconfig file specifies buffer settings. Also owns the debugpy DAP
---   adapter (no LSP is configured for Python in this setup) and the `python`
---   launch-profile runtime.
+--   .editorconfig file specifies buffer settings. Also owns the pyright LSP
+--   server, the debugpy DAP adapter, and the `python` launch-profile runtime.
 -- ============================================================================
 
 local M = {}
+
+--- The lspconfig/mason server name(s) this language owns.
+M.lsp_server = { "pyright" }
+
+--- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
+M.lsp_config = {
+	pyright = {},
+}
 
 --- Prefers the project's virtualenv interpreter over whatever `python` resolves
 --- to on PATH, so imports match what the project actually installed.
@@ -46,10 +54,18 @@ M.dap_configs = {
 
 --- Mason package metadata, keyed by tool name.
 M.mason = {
+	pyright = { mason = "pyright", lang = "Python", type = "lsp", cmd = "pyright-langserver" },
 	debugpy = { mason = "debugpy", lang = "Python Debugger", type = "dap", cmd = "debugpy-adapter" },
 }
 
-M.mason_order = { "debugpy" }
+M.mason_order = { "pyright", "debugpy" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🐍 Python"
+M.requires = {
+	{ cmd = "python3", name = "Python 3", alt = "python", hint = "https://python.org" },
+}
+M.treesitter = { "python" }
 
 --- Launch-profile runtimes this language owns (see lua/krs/launch/runtimes.lua).
 M.launch_runtimes = {

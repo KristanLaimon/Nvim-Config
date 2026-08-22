@@ -13,6 +13,7 @@ local M = {}
 M.lsp_server = { "bashls" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	bashls = {
 		filetypes = { "sh", "bash", "zsh", "csh", "ksh" },
@@ -32,6 +33,11 @@ M.mason = {
 }
 
 M.mason_order = { "bashls", "beautysh", "bash-debug-adapter" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🐚 Shell / Bash"
+M.requires = {} -- bash-language-server is a standalone Mason binary
+M.treesitter = { "bash" }
 
 --- conform.nvim formatter list per filetype.
 M.formatters_by_ft = {

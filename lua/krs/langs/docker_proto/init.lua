@@ -15,6 +15,7 @@ M.lsp_server = { "dockerls", "buf_ls" }
 --- lspconfig server settings, keyed by server name (see M.lsp_server). `buf_ls` is
 --- disabled: nothing currently needs Buf's language server, kept here only so
 --- enabling it is a one-line `enabled` flip.
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	dockerls = {},
 	buf_ls = { enabled = false },
@@ -31,6 +32,11 @@ M.mason = {
 --- `buf_ls` is excluded from the Mason install order: it's disabled, so never
 --- auto-installed.
 M.mason_order = { "dockerls", "protolint" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🐳 Docker & Proto"
+M.requires = {} -- dockerfile-language-server & protolint are standalone Mason binaries
+M.treesitter = { "editorconfig", "proto" }
 
 --- conform.nvim formatter list per filetype.
 M.formatters_by_ft = {

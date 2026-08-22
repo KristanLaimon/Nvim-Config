@@ -54,7 +54,7 @@ Nothing below installs automatically on first start: `mason-lspconfig` is config
 `nvim-treesitter` is pinned to the `main` branch (the rewrite), which dropped `highlight.enable`. Highlighting is started per-buffer by a `FileType` autocmd calling `vim.treesitter.start()`, wrapped in `pcall` — parser names don't always match filetype names (`tsx` → `typescriptreact`, `vimdoc` → `help`), so the autocmd matches every filetype and lets `pcall` skip the ones with no parser.
 
 - **Editor-internal filetype** (part of the fresh-install default, e.g. Lua/markdown/vimdoc): add it to `core_parsers` at the top of `lua/plugins/lsp/treesitter.lua`, then `:TSUpdate` or restart.
-- **Real language**: add it to that language's bundle's `treesitter = { ... }` list in `lua/krs/core/installer.lua`'s `M.language_bundles`, then install via `:LanguageManager` (parsers are opt-in per bundle, not installed on startup).
+- **Real language**: add it to that language's own `M.treesitter = { ... }` list in `lua/krs/langs/<language>/init.lua` (`lua/krs/core/installer.lua`'s `M.language_bundles` picks it up automatically), then install via `:LanguageManager` (parsers are opt-in per bundle, not installed on startup).
 
 No autocmd or pattern edits needed either way. For a full new language (server + formatter + parser), see [Adding a Language / LSP](adding-language.md).
 

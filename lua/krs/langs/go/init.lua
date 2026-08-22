@@ -13,6 +13,7 @@ local M = {}
 M.lsp_server = { "gopls" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	gopls = {
 		settings = {
@@ -55,6 +56,17 @@ M.mason = {
 }
 
 M.mason_order = { "gopls", "gofumpt", "goimports" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🟦 Go"
+M.requires = {
+	{ cmd = "go", name = "Go runtime", hint = "https://go.dev/dl" },
+}
+M.treesitter = { "go", "gomod", "gowork", "gosum" }
+--- Extra Mason packages the bundle installs that aren't part of `M.mason`:
+--- `delve` is normally installed via mason-nvim-dap (see `M.dap_tool` below),
+--- and `golangci-lint` is a standalone linter with no LSP/formatter role.
+M.bundle_extra_mason_pkgs = { "delve", "golangci-lint" }
 
 --- conform.nvim formatter list per filetype.
 M.formatters_by_ft = {

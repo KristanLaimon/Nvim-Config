@@ -18,6 +18,7 @@ M.modal = require("plugins.krs.php_tools_modal")
 M.lsp_server = { "intelephense" }
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	intelephense = {
 		filetypes = { "php", "blade" },
@@ -70,6 +71,14 @@ M.mason = {
 }
 
 M.mason_order = { "intelephense", "blade-formatter", "php-debug-adapter" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🐘 PHP & Laravel"
+M.requires = {
+	{ cmd = "php", name = "PHP" },
+	{ cmd = "composer", name = "Composer" },
+}
+M.treesitter = { "php", "phpdoc", "blade" }
 
 --- Xdebug connects to the editor, not the other way round: nvim listens on this
 --- port and the request being debugged attaches to it.

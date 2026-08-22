@@ -192,9 +192,9 @@ To add full IDE support for a new programming language (e.g., Elixir, Zig, Scala
 
 > ⚠️ There is no `servers = {}` table or `ensure_installed` list to edit in `lsp.lua`/`treesitter.lua` — those files only merge what each language declares. See [Adding a Language / LSP](adding-language.md) for the real, current steps; summary below.
 
-1. **Create `lua/krs/langs/<language>/init.lua`**, exporting `M.lsp_config` (lspconfig opts, keyed by server name), `M.mason`/`M.mason_order` (Mason package metadata), and `M.formatters_by_ft` (conform formatter list per filetype). Register it in `lua/krs/langs/init.lua`'s `M.langs` table — `lsp.lua` and `formatting.lua` auto-merge from there.
+1. **Create `lua/krs/langs/<language>/init.lua`**, exporting `M.lsp_config` (lspconfig opts, keyed by server name), `M.mason`/`M.mason_order` (Mason package metadata), and `M.formatters_by_ft` (conform formatter list per filetype). Register it in `lua/krs/langs/init.lua`'s `M.langs` table (and `M.lang_order`) — `lsp.lua` and `formatting.lua` auto-merge from there.
 
-2. **Add a Language Bundle in `lua/krs/core/installer.lua`**'s `M.language_bundles`, listing `mason_pkgs` (LSP/DAP/formatter) and `treesitter` (parser names). Nothing installs automatically — the user opts in per language via `:LanguageManager`.
+2. **Add bundle metadata to the same `init.lua`**: `M.bundle_name`, `M.requires`, `M.treesitter`. `lua/krs/core/installer.lua`'s `M.language_bundles` builds itself from these — its `mason_pkgs` resolves straight from the `M.mason_order` in Step 1, no separate list to keep in sync. Nothing installs automatically — the user opts in per language via `:LanguageManager`.
 
 3. **Debug Adapter (DAP) (`lua/plugins/editor/dap.lua` & `lua/krs/launch/runtimes.lua`)**:
    Register DAP adapter configuration in `lua/plugins/editor/dap.lua` and launch command in `runtimes.lua`.

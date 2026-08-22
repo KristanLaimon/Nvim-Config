@@ -1043,102 +1043,41 @@ end
 --- Language Toolchain Bundles for Language Tooling Manager.
 --- Each bundle may declare `requires`: system runtimes that must be in PATH
 --- before any Mason package from this bundle can be installed.
-M.language_bundles = {
-	{
-		name = "🌙 Minimal Core (Lua & Neovim Editing)",
-		lang = "Lua",
-		is_minimal = true,
-		requires = {}, -- lua-language-server ships as a self-contained binary via Mason
-		mason_pkgs = { "lua-language-server", "stylua" },
-		treesitter = { "lua", "vim", "vimdoc", "markdown", "markdown_inline" },
-	},
-	{
-		name = "🐘 PHP & Laravel",
-		lang = "PHP",
-		requires = {
-			{ cmd = "php", name = "PHP" },
-			{ cmd = "composer", name = "Composer" },
-		},
-		mason_pkgs = { "intelephense", "php-debug-adapter", "blade-formatter", "php-cs-fixer" },
-		treesitter = { "php", "phpdoc", "blade" },
-	},
-	{
-		name = "🟨 TypeScript / JavaScript",
-		lang = "TypeScript",
-		requires = {
-			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
-		},
-		mason_pkgs = {
-			require("krs.langs.typescript").lsp_server[1],
-			"eslint-lsp",
-			"biome",
-			"js-debug-adapter",
-			"prettier",
-			"prettierd",
-		},
-		treesitter = { "typescript", "javascript", "tsx", "jsx" },
-	},
-	{
-		name = "🟦 Go",
-		lang = "Go",
-		requires = {
-			{ cmd = "go", name = "Go runtime", hint = "https://go.dev/dl" },
-		},
-		mason_pkgs = { "gopls", "delve", "gofumpt", "goimports", "golangci-lint" },
-		treesitter = { "go", "gomod", "gowork", "gosum" },
-	},
-	{
-		name = "🐍 Python",
-		lang = "Python",
-		requires = {
-			{ cmd = "python3", name = "Python 3", alt = "python", hint = "https://python.org" },
-		},
-		mason_pkgs = { "pyright", "debugpy", "black", "isort", "ruff" },
-		treesitter = { "python" },
-	},
-	{
-		name = "🎯 C# / .NET",
-		lang = "C#",
-		requires = {
-			{ cmd = "dotnet", name = ".NET SDK", hint = "https://dot.net" },
-		},
-		mason_pkgs = { "omnisharp", "csharp_ls", "netcoredbg", "csharpier" },
-		treesitter = { "c_sharp" },
-		dotnet_tools = { "csharp-ls" },
-	},
-	{
-		name = "🌐 Web Frontend (HTML, CSS, Svelte, Astro)",
-		lang = "Web",
-		requires = {
-			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
-		},
-		mason_pkgs = { "html-lsp", "css-lsp", "tailwindcss-language-server", "svelte-language-server", "astro-language-server", "emmet-ls" },
-		treesitter = { "html", "css", "svelte", "astro" },
-	},
-	{
-		name = "🅰️ Angular",
-		lang = "Angular",
-		requires = {
-			{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
-		},
-		mason_pkgs = { "angular-language-server" },
-		treesitter = { "html", "scss" },
-	},
-	{
-		name = "🐳 Docker & Proto",
-		lang = "Docker/Proto",
-		requires = {}, -- dockerfile-language-server & protolint are standalone Mason binaries
-		mason_pkgs = { "dockerfile-language-server", "dockerfmt", "protolint" },
-		treesitter = { "editorconfig", "proto" },
-	},
-	{
-		name = "🐚 Shell / Bash",
-		lang = "Bash",
-		requires = {}, -- bash-language-server is a standalone Mason binary
-		mason_pkgs = { "bash-language-server", "bash-debug-adapter", "beautysh", "shellcheck" },
-		treesitter = { "bash" },
-	},
-}
+--- Builds `M.language_bundles` from each language module's own metadata --
+--- `bundle_name`, `requires`, `treesitter`, `is_minimal`, `dotnet_tools` and
+--- `bundle_extra_mason_pkgs` (see lua/krs/langs/init.lua's `KrsLangModule`) --
+--- instead of hand-duplicating package names installer.lua doesn't own. A
+--- bundle's `mason_pkgs` is resolved straight from that language's own
+--- `mason_order` via `M.get_mason_package_name`, so the two can never drift.
+--- @return table[] bundles
+local function build_language_bundles()
+	local langs_mod = require("krs.langs")
+	local bundles = {}
+
+	for _, key in ipairs(langs_mod.lang_order) do
+		local lang = langs_mod.langs[key]
+		if lang and lang.bundle_name then
+			local mason_pkgs = {}
+			for _, tool_key in ipairs(lang.mason_order or {}) do
+				table.insert(mason_pkgs, M.get_mason_package_name(tool_key))
+			end
+			vim.list_extend(mason_pkgs, lang.bundle_extra_mason_pkgs or {})
+
+			table.insert(bundles, {
+				name = lang.bundle_name,
+				is_minimal = lang.is_minimal,
+				requires = lang.requires or {},
+				mason_pkgs = mason_pkgs,
+				treesitter = lang.treesitter or {},
+				dotnet_tools = lang.dotnet_tools,
+			})
+		end
+	end
+
+	return bundles
+end
+
+M.language_bundles = build_language_bundles()
 
 --- Renders a `[✅ Installed (n/n)]` / `[🟡 Partial (n/n)]` / `[❌ Not Installed (0/n)]`
 --- badge fragment for one category (Mason packages or Treesitter parsers).

@@ -64,6 +64,7 @@ function M.has_prettier_config(filename)
 end
 
 --- lspconfig server settings, keyed by server name (see M.lsp_server).
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	[M.lsp_server[1]] = {
 		root_dir = function(bufnr, on_dir)
@@ -144,6 +145,13 @@ M.mason["js-debug-adapter"] = {
 
 --- Preferred Mason install/display order for this language's tools.
 M.mason_order = { M.lsp_server[1], "jsonls", "biome", "eslint", "prettierd", "prettier", "js-debug-adapter" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🟨 TypeScript / JavaScript"
+M.requires = {
+	{ cmd = "node", name = "Node.js", hint = "https://nodejs.org" },
+}
+M.treesitter = { "typescript", "javascript", "tsx", "jsx" }
 
 --- Paths js-debug must never step into, so the debugger does not stop inside node
 --- internals or the tsx loader. Shared with lua/plugins/krs/debuggers/_shared.lua.

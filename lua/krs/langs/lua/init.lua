@@ -16,6 +16,7 @@ M.lsp_server = { "lua_ls" }
 --- script globals (fetch, console, import, krsnvim) are re-applied on LspAttach by
 --- lua/plugins/lsp/lsp.lua so they don't show up as undefined; the workspace
 --- library comes from the type injector.
+---@type table<string, vim.lsp.Config>
 M.lsp_config = {
 	lua_ls = {
 		filetypes = { "lua", "krsnvim" },
@@ -60,6 +61,12 @@ M.mason = {
 }
 
 M.mason_order = { "lua_ls", "stylua" }
+
+--- Language Tooling Manager bundle metadata (see lua/krs/core/installer.lua).
+M.bundle_name = "🌙 Minimal Core (Lua & Neovim Editing)"
+M.is_minimal = true
+M.requires = {} -- lua-language-server ships as a self-contained binary via Mason
+M.treesitter = { "lua", "vim", "vimdoc", "markdown", "markdown_inline" }
 
 --- conform.nvim formatter list per filetype.
 M.formatters_by_ft = {
